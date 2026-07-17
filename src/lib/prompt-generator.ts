@@ -3,6 +3,11 @@ import {
   QWEN_NEGATIVE_SYSTEM_PROMPT,
   QWEN_POSITIVE_SYSTEM_PROMPT,
 } from "./qwen-system-prompt";
+import {
+  buildTemplateVariation,
+  buildVariationSeed,
+  pickFewShotExamples,
+} from "./variation-seed";
 
 export type PromptMode = "positive" | "negative";
 
@@ -22,10 +27,37 @@ function buildFewShotMessages(mode: PromptMode): ChatMessage[] {
     return [];
   }
 
-  return QWEN_FEW_SHOT_EXAMPLES.flatMap((example) => [
+  return pickFewShotExamples(QWEN_FEW_SHOT_EXAMPLES, 2).flatMap((example) => [
     { role: "user" as const, content: example.input },
     { role: "assistant" as const, content: example.output },
   ]);
+}
+
+function shouldPreserveSubject(input: string): boolean {
+  return /keep|preserve|same (face|person|subject|pose)/i.test(input);
+}
+
+function buildUserMessage(input: string, mode: PromptMode): string {
+  const trimmed = input.trim();
+  if (mode === "negative" || shouldPreserveSubject(trimmed)) {
+    return trimmed;
+  }
+
+  return `${trimmed}\n\nCreative variation (weave naturally, do not quote): ${buildVariationSeed()}`;
+}
+
+function getLlmTemperature(): number {
+  const configured = Number(process.env.LLM_TEMPERATURE);
+  if (Number.isFinite(configured) && configured >= 0 && configured <= 2) {
+    return configured;
+  }
+  return 0.95;
+}
+
+function getLlmSeed(): number {
+  const array = new Uint32Array(1);
+  crypto.getRandomValues(array);
+  return array[0]! % 2_147_483_647;
 }
 
 function getLlmConfig() {
@@ -51,7 +83,7 @@ export async function generateWithLlm(
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },
     ...buildFewShotMessages(mode),
-    { role: "user", content: input.trim() },
+    { role: "user", content: buildUserMessage(input, mode) },
   ];
 
   const headers: Record<string, string> = {
@@ -68,8 +100,9 @@ export async function generateWithLlm(
     body: JSON.stringify({
       model,
       messages,
-      temperature: 0.85,
+      temperature: getLlmTemperature(),
       max_tokens: 1024,
+      seed: getLlmSeed(),
       stream: false,
     }),
   });
@@ -113,7 +146,7 @@ function parseKeywords(input: string): string[] {
     .filter(Boolean);
 }
 
-function paintSceneFromKeywords(input: string): string {
+function paintSceneFromKeywords(input: string, withVariation = true): string {
   const keywords = parseKeywords(input);
   const primary = keywords[0] ?? input.trim();
   const supporting = keywords.slice(1);
@@ -126,6 +159,10 @@ function paintSceneFromKeywords(input: string): string {
 
   scene +=
     ". Light falls with clear direction across the frame, casting defined shadows that separate foreground from background. Surfaces carry tangible texture and material detail—fabric, stone, skin, water, or metal rendered with physical weight. Colors read rich and intentional, atmosphere building depth from the nearest objects to the far distance. Every element sits in a single frozen moment, arranged so the full picture reads as one unified scene.";
+
+  if (withVariation) {
+    scene += ` ${buildTemplateVariation()}`;
+  }
 
   return scene;
 }
@@ -144,9 +181,7 @@ export function generateWithTemplate(
   }
 
   const lower = trimmed.toLowerCase();
-  const preserveRequested = /keep|preserve|same (face|person|subject|pose)/i.test(
-    trimmed,
-  );
+  const preserveRequested = shouldPreserveSubject(trimmed);
 
   if (/^(remove|delete|erase)\b/.test(lower)) {
     return `Keep the subject's identity, pose, and proportions unchanged. ${capitalize(trimmed)}. Fill the removed area naturally so it matches the surrounding scene in light, texture, and color.`;
@@ -166,7 +201,7 @@ export function generateWithTemplate(
       .replace(/^[,;\s|]+|[,;\s|]+$/g, "")
       .trim();
 
-    const painted = paintSceneFromKeywords(sceneWords || trimmed);
+    const painted = paintSceneFromKeywords(sceneWords || trimmed, false);
     return `Keep the subject's facial features, body proportions, and pose exactly unchanged. ${painted.replace(/^The image shows /, "The surrounding scene becomes ")}`;
   }
 

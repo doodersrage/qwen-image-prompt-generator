@@ -228,6 +228,10 @@ export default function PromptGenerator() {
             fog, shrine, candles&quot;).
           </li>
           <li>
+            Each generation gets a fresh random variation seed—people, lighting,
+            framing, and palette change even with the same keywords.
+          </li>
+          <li>
             Add &quot;keep face/pose&quot; if you want the subject preserved while
             the surroundings are repainted in words.
           </li>

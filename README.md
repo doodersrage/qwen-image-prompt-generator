@@ -30,6 +30,7 @@ The generator calls any **OpenAI-compatible** chat completions API. Configure vi
 | `LLM_API_BASE_URL` | `http://localhost:11434/v1` | API base URL |
 | `LLM_API_KEY` | _(empty)_ | Bearer token if required |
 | `LLM_MODEL` | `dolphin-llama3` | Model name |
+| `LLM_TEMPERATURE` | `0.95` | Sampling temperature (higher = more variation) |
 | `LLM_ENABLED` | `true` | Set `false` for template-only mode |
 | `ALLOW_TEMPLATE_FALLBACK` | `true` | Fall back if LLM is unreachable |
 
