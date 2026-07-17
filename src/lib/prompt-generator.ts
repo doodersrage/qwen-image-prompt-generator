@@ -6,6 +6,8 @@ import {
 import {
   buildTemplateVariation,
   buildVariationSeed,
+  buildVariationSystemAddendum,
+  getSamplingBoost,
   pickFewShotExamples,
 } from "./variation-seed";
 import {
@@ -77,8 +79,26 @@ function getLlmTemperature(variation: VariationSettings): number {
     return Math.max(0, base - 0.1);
   }
 
-  const boost = (variation.strength / 100) * 0.2;
-  return Math.min(2, base + boost);
+  const { temperatureBoost } = getSamplingBoost(variation.strength);
+  return Math.min(2, base + temperatureBoost);
+}
+
+function getLlmSamplingParams(
+  variation: VariationSettings,
+): Record<string, number> {
+  if (!variation.enabled) {
+    return { top_p: 0.9 };
+  }
+
+  const { topP, frequencyPenalty, presencePenalty } = getSamplingBoost(
+    variation.strength,
+  );
+
+  return {
+    top_p: topP,
+    frequency_penalty: frequencyPenalty,
+    presence_penalty: presencePenalty,
+  };
 }
 
 function getLlmSeed(): number {
@@ -103,10 +123,17 @@ export async function generateWithLlm(
   variation: VariationSettings = DEFAULT_VARIATION_SETTINGS,
 ): Promise<string> {
   const { baseUrl, apiKey, model } = getLlmConfig();
-  const systemPrompt =
+  let systemPrompt =
     mode === "negative"
       ? QWEN_NEGATIVE_SYSTEM_PROMPT
       : QWEN_POSITIVE_SYSTEM_PROMPT;
+
+  if (mode === "positive" && variation.enabled) {
+    const addendum = buildVariationSystemAddendum(variation.strength);
+    if (addendum) {
+      systemPrompt = `${systemPrompt}\n\n${addendum}`;
+    }
+  }
 
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },
@@ -128,6 +155,7 @@ export async function generateWithLlm(
     temperature: getLlmTemperature(variation),
     max_tokens: 1024,
     stream: false,
+    ...getLlmSamplingParams(variation),
   };
 
   if (variation.enabled) {

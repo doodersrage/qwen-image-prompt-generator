@@ -230,7 +230,7 @@ export default function PromptGenerator() {
                     { label: "Subtle", value: 20 },
                     { label: "Light", value: 40 },
                     { label: "Balanced", value: 65 },
-                    { label: "Wild", value: 90 },
+                    { label: "Wild", value: 95 },
                   ].map((preset) => (
                     <button
                       key={preset.label}
