@@ -1,4 +1,9 @@
-import { generatePrompt, type PromptMode } from "@/lib/prompt-generator";
+import {
+  generatePrompt,
+  type PromptMode,
+  type VariationSettings,
+} from "@/lib/prompt-generator";
+import { normalizeVariationSettings } from "@/lib/variation-settings";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -6,6 +11,7 @@ export const runtime = "nodejs";
 type GenerateRequestBody = {
   input?: string;
   mode?: PromptMode;
+  variation?: Partial<VariationSettings>;
 };
 
 export async function POST(request: Request) {
@@ -13,6 +19,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as GenerateRequestBody;
     const input = body.input?.trim();
     const mode: PromptMode = body.mode === "negative" ? "negative" : "positive";
+    const variation = normalizeVariationSettings(body.variation);
 
     if (!input) {
       return NextResponse.json(
@@ -28,7 +35,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await generatePrompt(input, mode);
+    const result = await generatePrompt(input, mode, variation);
 
     return NextResponse.json(result);
   } catch (error) {

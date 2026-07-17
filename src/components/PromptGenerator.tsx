@@ -1,6 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import {
+  DEFAULT_VARIATION_SETTINGS,
+  variationStrengthLabel,
+} from "@/lib/variation-settings";
 
 type PromptMode = "positive" | "negative";
 
@@ -26,6 +30,12 @@ export default function PromptGenerator() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [variationEnabled, setVariationEnabled] = useState(
+    DEFAULT_VARIATION_SETTINGS.enabled,
+  );
+  const [variationStrength, setVariationStrength] = useState(
+    DEFAULT_VARIATION_SETTINGS.strength,
+  );
 
   useEffect(() => {
     setMounted(true);
@@ -47,7 +57,14 @@ export default function PromptGenerator() {
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input, mode }),
+        body: JSON.stringify({
+          input,
+          mode,
+          variation: {
+            enabled: mode === "positive" && variationEnabled,
+            strength: variationStrength,
+          },
+        }),
       });
 
       const data = (await response.json()) as GenerateResponse & {
@@ -67,7 +84,7 @@ export default function PromptGenerator() {
     } finally {
       setLoading(false);
     }
-  }, [input, mode]);
+  }, [input, mode, variationEnabled, variationStrength]);
 
   const copyOutput = useCallback(async () => {
     if (!output) return;
@@ -163,6 +180,77 @@ export default function PromptGenerator() {
           ))}
         </div>
 
+        {mode === "positive" && (
+          <div className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-zinc-200">
+                  Variation seed
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Randomize people, lighting, framing, and palette each run.
+                </p>
+              </div>
+              <label className="inline-flex cursor-pointer items-center gap-2">
+                <span className="text-xs text-zinc-400">
+                  {variationEnabled ? "On" : "Off"}
+                </span>
+                <input
+                  type="checkbox"
+                  checked={variationEnabled}
+                  onChange={(e) => setVariationEnabled(e.target.checked)}
+                  className="h-4 w-4 rounded border-zinc-600 bg-zinc-900 text-violet-600 focus:ring-violet-500/30"
+                />
+              </label>
+            </div>
+
+            {variationEnabled && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3 text-xs text-zinc-400">
+                  <span>Subtle</span>
+                  <span className="font-medium text-violet-300">
+                    {variationStrengthLabel(variationStrength)} ({variationStrength})
+                  </span>
+                  <span>Wild</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={variationStrength}
+                  onChange={(e) =>
+                    setVariationStrength(Number(e.target.value))
+                  }
+                  className="h-2 w-full cursor-pointer appearance-none rounded-full bg-zinc-800 accent-violet-500"
+                  aria-label="Variation seed strength"
+                />
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { label: "Subtle", value: 20 },
+                    { label: "Light", value: 40 },
+                    { label: "Balanced", value: 65 },
+                    { label: "Wild", value: 90 },
+                  ].map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => setVariationStrength(preset.value)}
+                      className={`rounded-full border px-3 py-1 text-xs transition ${
+                        variationStrength === preset.value
+                          ? "border-violet-500 bg-violet-500/15 text-violet-200"
+                          : "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <button
           type="button"
           onClick={() => void generate()}
@@ -228,8 +316,9 @@ export default function PromptGenerator() {
             fog, shrine, candles&quot;).
           </li>
           <li>
-            Each generation gets a fresh random variation seed—people, lighting,
-            framing, and palette change even with the same keywords.
+            Use the variation seed toggle to control randomness—off for
+            consistent output, higher strength for more diverse people and
+            scenes.
           </li>
           <li>
             Add &quot;keep face/pose&quot; if you want the subject preserved while

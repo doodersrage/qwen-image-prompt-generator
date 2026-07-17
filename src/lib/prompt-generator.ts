@@ -8,8 +8,13 @@ import {
   buildVariationSeed,
   pickFewShotExamples,
 } from "./variation-seed";
+import {
+  DEFAULT_VARIATION_SETTINGS,
+  type VariationSettings,
+} from "./variation-settings";
 
 export type PromptMode = "positive" | "negative";
+export type { VariationSettings };
 
 export type GenerateResult = {
   prompt: string;
@@ -22,12 +27,19 @@ type ChatMessage = {
   content: string;
 };
 
-function buildFewShotMessages(mode: PromptMode): ChatMessage[] {
+function buildFewShotMessages(
+  mode: PromptMode,
+  variation: VariationSettings,
+): ChatMessage[] {
   if (mode === "negative") {
     return [];
   }
 
-  return pickFewShotExamples(QWEN_FEW_SHOT_EXAMPLES, 2).flatMap((example) => [
+  return pickFewShotExamples(
+    QWEN_FEW_SHOT_EXAMPLES,
+    variation.strength,
+    variation.enabled,
+  ).flatMap((example) => [
     { role: "user" as const, content: example.input },
     { role: "assistant" as const, content: example.output },
   ]);
@@ -37,21 +49,36 @@ function shouldPreserveSubject(input: string): boolean {
   return /keep|preserve|same (face|person|subject|pose)/i.test(input);
 }
 
-function buildUserMessage(input: string, mode: PromptMode): string {
+function buildUserMessage(
+  input: string,
+  mode: PromptMode,
+  variation: VariationSettings,
+): string {
   const trimmed = input.trim();
-  if (mode === "negative" || shouldPreserveSubject(trimmed)) {
+  if (
+    mode === "negative" ||
+    shouldPreserveSubject(trimmed) ||
+    !variation.enabled
+  ) {
     return trimmed;
   }
 
-  return `${trimmed}\n\nCreative variation (weave naturally, do not quote): ${buildVariationSeed()}`;
+  return `${trimmed}\n\nCreative variation (weave naturally, do not quote): ${buildVariationSeed(variation.strength)}`;
 }
 
-function getLlmTemperature(): number {
+function getLlmTemperature(variation: VariationSettings): number {
   const configured = Number(process.env.LLM_TEMPERATURE);
-  if (Number.isFinite(configured) && configured >= 0 && configured <= 2) {
-    return configured;
+  const base =
+    Number.isFinite(configured) && configured >= 0 && configured <= 2
+      ? configured
+      : 0.95;
+
+  if (!variation.enabled) {
+    return Math.max(0, base - 0.1);
   }
-  return 0.95;
+
+  const boost = (variation.strength / 100) * 0.2;
+  return Math.min(2, base + boost);
 }
 
 function getLlmSeed(): number {
@@ -73,6 +100,7 @@ function getLlmConfig() {
 export async function generateWithLlm(
   input: string,
   mode: PromptMode,
+  variation: VariationSettings = DEFAULT_VARIATION_SETTINGS,
 ): Promise<string> {
   const { baseUrl, apiKey, model } = getLlmConfig();
   const systemPrompt =
@@ -82,8 +110,8 @@ export async function generateWithLlm(
 
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },
-    ...buildFewShotMessages(mode),
-    { role: "user", content: buildUserMessage(input, mode) },
+    ...buildFewShotMessages(mode, variation),
+    { role: "user", content: buildUserMessage(input, mode, variation) },
   ];
 
   const headers: Record<string, string> = {
@@ -94,17 +122,22 @@ export async function generateWithLlm(
     headers.Authorization = `Bearer ${apiKey}`;
   }
 
+  const requestBody: Record<string, unknown> = {
+    model,
+    messages,
+    temperature: getLlmTemperature(variation),
+    max_tokens: 1024,
+    stream: false,
+  };
+
+  if (variation.enabled) {
+    requestBody.seed = getLlmSeed();
+  }
+
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers,
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: getLlmTemperature(),
-      max_tokens: 1024,
-      seed: getLlmSeed(),
-      stream: false,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
@@ -146,7 +179,10 @@ function parseKeywords(input: string): string[] {
     .filter(Boolean);
 }
 
-function paintSceneFromKeywords(input: string, withVariation = true): string {
+function paintSceneFromKeywords(
+  input: string,
+  variation: VariationSettings = DEFAULT_VARIATION_SETTINGS,
+): string {
   const keywords = parseKeywords(input);
   const primary = keywords[0] ?? input.trim();
   const supporting = keywords.slice(1);
@@ -160,8 +196,11 @@ function paintSceneFromKeywords(input: string, withVariation = true): string {
   scene +=
     ". Light falls with clear direction across the frame, casting defined shadows that separate foreground from background. Surfaces carry tangible texture and material detail—fabric, stone, skin, water, or metal rendered with physical weight. Colors read rich and intentional, atmosphere building depth from the nearest objects to the far distance. Every element sits in a single frozen moment, arranged so the full picture reads as one unified scene.";
 
-  if (withVariation) {
-    scene += ` ${buildTemplateVariation()}`;
+  if (variation.enabled) {
+    const templateVariation = buildTemplateVariation(variation.strength);
+    if (templateVariation) {
+      scene += ` ${templateVariation}`;
+    }
   }
 
   return scene;
@@ -170,6 +209,7 @@ function paintSceneFromKeywords(input: string, withVariation = true): string {
 export function generateWithTemplate(
   input: string,
   mode: PromptMode,
+  variation: VariationSettings = DEFAULT_VARIATION_SETTINGS,
 ): string {
   const trimmed = input.trim();
   if (!trimmed) {
@@ -201,16 +241,20 @@ export function generateWithTemplate(
       .replace(/^[,;\s|]+|[,;\s|]+$/g, "")
       .trim();
 
-    const painted = paintSceneFromKeywords(sceneWords || trimmed, false);
+    const painted = paintSceneFromKeywords(sceneWords || trimmed, {
+      enabled: false,
+      strength: 0,
+    });
     return `Keep the subject's facial features, body proportions, and pose exactly unchanged. ${painted.replace(/^The image shows /, "The surrounding scene becomes ")}`;
   }
 
-  return paintSceneFromKeywords(trimmed);
+  return paintSceneFromKeywords(trimmed, variation);
 }
 
 export async function generatePrompt(
   input: string,
   mode: PromptMode,
+  variation: VariationSettings = DEFAULT_VARIATION_SETTINGS,
 ): Promise<GenerateResult> {
   const trimmed = input.trim();
   if (!trimmed) {
@@ -221,7 +265,7 @@ export async function generatePrompt(
 
   if (llmEnabled) {
     try {
-      const prompt = await generateWithLlm(trimmed, mode);
+      const prompt = await generateWithLlm(trimmed, mode, variation);
       return { prompt, mode, provider: "llm" };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown LLM error";
@@ -236,7 +280,7 @@ export async function generatePrompt(
   }
 
   return {
-    prompt: generateWithTemplate(trimmed, mode),
+    prompt: generateWithTemplate(trimmed, mode, variation),
     mode,
     provider: "template",
   };

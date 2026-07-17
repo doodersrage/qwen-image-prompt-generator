@@ -90,33 +90,89 @@ function shuffle<T>(items: T[]): T[] {
   return copy;
 }
 
-export function buildVariationSeed(): string {
-  const subject = pick(POOLS.subjects);
-  const lighting = pick(POOLS.lighting);
-  const framing = pick(POOLS.framing);
-  const atmosphere = pick(POOLS.atmosphere);
-  const palette = pick(POOLS.palette);
+export function buildVariationSeed(strength = 65): string {
+  const parts: string[] = [];
 
-  return [
-    "Invent a fresh scene—do not reuse generic stock characters.",
-    `If people belong in the scene, imagine someone like ${subject}; never default to the same young couple or anonymous model.`,
-    `Light the scene with ${lighting}.`,
-    `Compose it as ${framing}.`,
-    `Atmosphere: ${atmosphere}. Color palette leaning toward ${palette}.`,
-    "Vary age, ethnicity, body type, hair, clothing, and expression from prior generations.",
-  ].join(" ");
+  if (strength >= 20) {
+    parts.push(`Light the scene with ${pick(POOLS.lighting)}.`);
+  }
+
+  if (strength >= 35) {
+    parts.push(`Color palette leaning toward ${pick(POOLS.palette)}.`);
+  }
+
+  if (strength >= 50) {
+    parts.push(`Compose it as ${pick(POOLS.framing)}.`);
+    parts.push(`Atmosphere: ${pick(POOLS.atmosphere)}.`);
+  }
+
+  if (strength >= 65) {
+    parts.push(
+      `If people belong in the scene, imagine someone like ${pick(POOLS.subjects)}; avoid generic stock characters.`,
+    );
+  }
+
+  if (strength >= 80) {
+    parts.push(
+      "Invent a radically fresh scene—never reuse the same default faces, couples, or anonymous models.",
+    );
+    parts.push(
+      "Vary age, ethnicity, body type, hair, clothing, and expression aggressively from prior generations.",
+    );
+  } else if (strength >= 45) {
+    parts.push("Keep the scene distinct from generic defaults.");
+  }
+
+  if (parts.length === 0) {
+    parts.push(`Favor ${pick(POOLS.lighting)} with a ${pick(POOLS.palette)} palette.`);
+  }
+
+  return parts.join(" ");
 }
 
-export function pickFewShotExamples<T>(examples: T[], count = 2): T[] {
-  return shuffle(examples).slice(0, Math.min(count, examples.length));
+export function pickFewShotExamples<T>(
+  examples: T[],
+  strength = 65,
+  enabled = true,
+): T[] {
+  if (!enabled) {
+    return examples;
+  }
+
+  const count =
+    strength <= 25
+      ? examples.length
+      : strength <= 50
+        ? Math.min(3, examples.length)
+        : strength <= 75
+          ? Math.min(2, examples.length)
+          : 1;
+
+  return shuffle(examples).slice(0, count);
 }
 
-export function buildTemplateVariation(): string {
-  const subject = pick(POOLS.subjects);
-  const lighting = pick(POOLS.lighting);
-  const palette = pick(POOLS.palette);
+export function buildTemplateVariation(strength = 65): string {
+  const parts: string[] = [];
 
-  return `When figures appear, describe ${subject} with specific, distinct features—not a generic default. ${capitalize(lighting)}. The palette favors ${palette}.`;
+  if (strength >= 65) {
+    parts.push(
+      `When figures appear, describe ${pick(POOLS.subjects)} with specific, distinct features.`,
+    );
+  }
+
+  if (strength >= 35) {
+    parts.push(capitalize(pick(POOLS.lighting)));
+  }
+
+  if (strength >= 20) {
+    parts.push(`The palette favors ${pick(POOLS.palette)}.`);
+  }
+
+  if (parts.length === 0) {
+    return "";
+  }
+
+  return parts.join(" ");
 }
 
 function capitalize(s: string): string {
