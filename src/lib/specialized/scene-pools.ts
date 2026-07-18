@@ -1,6 +1,6 @@
 import {
   composeActionLocation,
-  composeCharacterLocation,
+  composeSceneLocation,
 } from "./location-composer";
 
 const LOCATIONS = [
@@ -636,6 +636,17 @@ const CHARACTER_SETTINGS = [
 
 const SOLO_LOCATION_SUFFIX = ", empty of other people and figures";
 
+const COMPOSED_LOCATION_WEIGHT = 35;
+
+/** Handcrafted location or procedurally composed scene (~35% composed). */
+function pickSceneLocation(): string {
+  if (randomInt(100) < COMPOSED_LOCATION_WEIGHT) {
+    return composeSceneLocation();
+  }
+
+  return pick(LOCATIONS);
+}
+
 function pickCharacterSetting(): string {
   const roll = randomInt(100);
 
@@ -643,11 +654,7 @@ function pickCharacterSetting(): string {
     return pick(CHARACTER_SETTINGS);
   }
 
-  if (roll < 42) {
-    return `${composeCharacterLocation()}${SOLO_LOCATION_SUFFIX}`;
-  }
-
-  return `${pick(LOCATIONS)}${SOLO_LOCATION_SUFFIX}`;
+  return `${pickSceneLocation()}${SOLO_LOCATION_SUFFIX}`;
 }
 
 function pickCharacterActionSetting(): string {
@@ -661,7 +668,7 @@ function pickCharacterActionSetting(): string {
     return `${composeActionLocation()}, empty except the moving subject`;
   }
 
-  return `${pick(LOCATIONS)}, empty except the moving subject`;
+  return `${pickSceneLocation()}, empty except the moving subject`;
 }
 
 const MOODS = [
@@ -741,7 +748,7 @@ export function buildRandomSceneSeed(options: {
   includePeople?: boolean;
 }): string {
   const parts = [
-    pick(LOCATIONS),
+    pickSceneLocation(),
     pick(WEATHER),
     pick(LIGHTING),
     pick(MOODS),
@@ -765,7 +772,7 @@ export function buildRandomBackgroundSeed(options: {
 }): string {
   const parts = [
     options.settingType?.trim() || pick(BACKDROP_TYPES),
-    pick(LOCATIONS),
+    pickSceneLocation(),
     options.timeOfDay?.trim() || pick(LIGHTING),
     options.mood?.trim() || pick(MOODS),
     pick(WEATHER),
@@ -822,7 +829,7 @@ const SEED_TOPIC_ANGLES = [
 ];
 
 export function buildRandomTopicPhrase(seed?: string): string {
-  const location = pick(LOCATIONS);
+  const location = pickSceneLocation();
   const subject = pick(SUBJECTS);
   const mood = pick(MOODS);
   const lighting = pick(LIGHTING);

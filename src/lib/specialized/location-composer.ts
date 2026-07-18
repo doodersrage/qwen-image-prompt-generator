@@ -333,7 +333,7 @@ const ACTION_ENVIRONMENT_BEATS = [
   "with neon reflections streaking in puddles",
 ] as const;
 
-export function composeCharacterLocation(): string {
+export function composeSceneLocation(): string {
   const roll = randomInt(100);
 
   if (roll < 30) {
@@ -355,6 +355,9 @@ export function composeCharacterLocation(): string {
   return `${pick(REGION_EPITHETS)} ${pick(TERRAIN_FEATURES)} ${pick(TIME_AND_WEATHER_PHRASES)}`;
 }
 
+/** @deprecated Use composeSceneLocation */
+export const composeCharacterLocation = composeSceneLocation;
+
 export function composeActionLocation(): string {
   const roll = randomInt(100);
 
@@ -370,5 +373,5 @@ export function composeActionLocation(): string {
     return `${pick(REGION_EPITHETS)} ${pick(TERRAIN_FEATURES)} ${pick(TIME_AND_WEATHER_PHRASES)} ${pick(ACTION_ENVIRONMENT_BEATS)}`;
   }
 
-  return `${composeCharacterLocation()} ${pick(ACTION_ENVIRONMENT_BEATS)}`;
+  return `${composeSceneLocation()} ${pick(ACTION_ENVIRONMENT_BEATS)}`;
 }
