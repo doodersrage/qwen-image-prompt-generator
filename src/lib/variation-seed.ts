@@ -173,38 +173,120 @@ function shuffle<T>(items: T[]): T[] {
   return copy;
 }
 
+export type SubjectGender = "women" | "men" | "mixed" | "any";
+
+const SUBJECTS_WOMEN = [
+  "a young Black woman with box braids, high cheekbones, and gold hoop earrings",
+  "a middle-aged Latina with gray-streaked hair, soft build, and laugh lines",
+  "a pale red-haired woman in her thirties, light freckles, and cropped copper hair",
+  "a slender elderly woman with white hair in a loose bun, reading glasses, and steady posture",
+  "an older South Asian woman in a bright sari, gentle eyes, and henna on her palms",
+  "a lithe dancer in her twenties, deep brown skin, locs tied back, and expressive hands",
+  "a pregnant woman in her late thirties, curly auburn hair, linen dress, and calm focus",
+  "a school-age girl with braids, a gap-toothed grin, and scuffed sneakers",
+];
+
+const SUBJECTS_MEN = [
+  "an elderly man with a creased face, silver stubble, and work-worn hands",
+  "a teenage East Asian boy with messy hair, freckles, and a shy half-smile",
+  "a muscular Polynesian man with traditional arm tattoos and sun-darkened skin",
+  "a stocky Mediterranean man with olive skin, thick beard, and rolled shirtsleeves",
+  "a heavyset middle-aged man with a bald head, warm expression, and paint-stained apron",
+  "a grizzled fisherman with rope-scarred fingers, salt-and-pepper beard, and squinting eyes",
+  "a retired boxer with a flattened nose, gray temples, and quiet stillness",
+  "a monk with a shaved head, deep brown robes, and ink-stained fingers",
+];
+
+export function pickDistinctSubjects(
+  count: number,
+  gender: SubjectGender = "any",
+): string[] {
+  if (gender === "mixed" && count >= 2) {
+    return shuffle([pick(SUBJECTS_MEN), pick(SUBJECTS_WOMEN)]).slice(0, 2);
+  }
+
+  const pool =
+    gender === "women"
+      ? SUBJECTS_WOMEN
+      : gender === "men"
+        ? SUBJECTS_MEN
+        : POOLS.subjects;
+
+  return shuffle(pool).slice(0, Math.min(count, pool.length));
+}
+
 function sessionNonce(): string {
   const array = new Uint32Array(2);
   crypto.getRandomValues(array);
   return `${array[0]!.toString(36)}-${array[1]!.toString(36)}`;
 }
 
-export function buildVariationSeed(strength = 65): string {
+export function buildVariationSeed(
+  strength = 65,
+  options: {
+    distinctPeople?: boolean;
+    impliedPeopleCount?: number | null;
+    gender?: SubjectGender;
+  } = {},
+): string {
   const parts: string[] = [];
   const wild = strength >= 75;
   const chaos = strength >= 90;
+  const distinctPeople = options.distinctPeople ?? false;
+  const peopleCount = options.impliedPeopleCount ?? null;
+  const gender = options.gender ?? "any";
 
   parts.push(`Light the scene with ${pick(POOLS.lighting)}.`);
   parts.push(`Color palette leaning toward ${pick(POOLS.palette)}.`);
   parts.push(`Compose it as ${pick(POOLS.framing)}.`);
   parts.push(`Atmosphere: ${pick(POOLS.atmosphere)}.`);
 
-  if (strength >= 35) {
+  if (!distinctPeople && peopleCount !== null && peopleCount >= 2) {
+    if (gender === "women") {
+      parts.push("Describe two women together as one unified subject—not split into separate catalog entries.");
+    } else if (gender === "men") {
+      parts.push("Describe two men together as one unified subject—not split into separate catalog entries.");
+    } else {
+      parts.push("Describe the pair as one unified couple or ensemble—not separate Person A and Person B.");
+    }
+  } else if (distinctPeople && peopleCount !== null && peopleCount >= 2) {
+    const castGender = gender === "mixed" ? "mixed" : gender;
+    const subjects = pickDistinctSubjects(Math.min(peopleCount, 4), castGender);
+    parts.push(
+      `Cast each person separately: ${subjects.map((subject, index) => `person ${index + 1} like ${subject}`).join("; ")}.`,
+    );
+    if (gender === "women") {
+      parts.push("Both people must be women.");
+    } else if (gender === "men") {
+      parts.push("Both people must be men.");
+    }
+    parts.push(
+      "Describe every person with their own face, body, clothing, and pose—never one merged couple or blob.",
+    );
+  } else if (strength >= 35) {
     parts.push(
       `If people belong in the scene, imagine someone like ${pick(POOLS.subjects)}—specific, not generic.`,
     );
   }
 
   if (wild) {
-    parts.push(
-      `Or someone utterly unlike prior outputs, such as ${pick(POOLS.subjects)}—choose one and commit fully.`,
-    );
+    if (!(distinctPeople && peopleCount !== null && peopleCount >= 2)) {
+      parts.push(
+        `Or someone utterly unlike prior outputs, such as ${pick(POOLS.subjects)}—choose one and commit fully.`,
+      );
+    }
     parts.push(`Visual style: ${pick(POOLS.styles)}.`);
     parts.push(`Era or world texture: ${pick(POOLS.eras)}.`);
     parts.push(`Camera feel: ${pick(POOLS.lenses)}.`);
     parts.push(`Weave in an unexpected detail: ${pick(POOLS.twists)}.`);
     parts.push(`Reinterpret the topic as ${pick(POOLS.reinterpretations)}.`);
     parts.push(pick(POOLS.mandates));
+  }
+
+  if (distinctPeople && peopleCount === null) {
+    parts.push(
+      "If more than one person appears, split them into fully separate individuals with contrasting details.",
+    );
   }
 
   if (chaos) {
@@ -277,14 +359,34 @@ export function pickFewShotExamples<T>(
   return shuffle(examples).slice(0, Math.min(2, examples.length));
 }
 
-export function buildTemplateVariation(strength = 65): string {
+export function buildTemplateVariation(
+  strength = 65,
+  distinctPeople = false,
+  impliedPeopleCount: number | null = null,
+  gender: SubjectGender = "any",
+): string {
   const parts: string[] = [
     capitalize(pick(POOLS.lighting)),
     `Palette favors ${pick(POOLS.palette)}.`,
     `Mood feels ${pick(POOLS.atmosphere)}.`,
   ];
 
-  if (strength >= 45) {
+  if (distinctPeople && impliedPeopleCount !== null && impliedPeopleCount >= 2) {
+    const castGender = gender === "mixed" ? "mixed" : gender;
+    const subjects = pickDistinctSubjects(
+      Math.min(impliedPeopleCount, 2),
+      castGender,
+    );
+    parts.push(
+      `One figure resembles ${subjects[0]}; the other is clearly different—like ${subjects[1] ?? pick(POOLS.subjects)}—each described separately.`,
+    );
+  } else if (
+    !distinctPeople &&
+    impliedPeopleCount !== null &&
+    impliedPeopleCount >= 2
+  ) {
+    parts.push("The pair reads as one unified subject in the frame.");
+  } else if (strength >= 45) {
     parts.push(
       `Figures, if any, resemble ${pick(POOLS.subjects)} with concrete, distinct features.`,
     );

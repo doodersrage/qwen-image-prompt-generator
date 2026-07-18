@@ -30,6 +30,11 @@ export const QWEN_FEW_SHOT_EXAMPLES = [
       "A narrow cyberpunk alley at midnight, the asphalt slick with rain that mirrors magenta and cyan neon signs overhead. Steam curls from sidewalk grates between cracked pavement. In the midground, a sleek black cat crouches on a rusted fire escape, amber eyes catching a stray beam of light. Wet brick walls drip on both sides, and far down the alley a faint red siren glow stains the hazy horizon.",
   },
   {
+    input: "two women, rooftop bar, city lights",
+    output:
+      "A rooftop bar at night, glass railing and a sprawl of city lights below. On the left, a young Black woman with box braids and a cropped leather jacket leans on the rail, laughing mid-sentence, gold hoops catching the glow. On the right, an older white woman with a silver bob and emerald wrap dress listens with a faint smile, one hand wrapped around a sweating glass. Warm string lights trace the canopy above while neon from the street paints their faces in alternating pink and blue.",
+  },
+  {
     input: "tropical beach sunset, couple walking",
     output:
       "A wide tropical beach at golden hour, warm orange sunlight skimming low across turquoise water. Long shadows stretch across pale sand where a couple walks barefoot near the shoreline, wind lifting their hair and clothes. Scattered seashells and gentle foam lace the water's edge in the foreground. Soft clouds streak pink and violet across the sky above a calm, glowing sea.",

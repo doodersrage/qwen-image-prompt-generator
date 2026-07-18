@@ -1,10 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import {
-  DEFAULT_VARIATION_SETTINGS,
-  variationStrengthLabel,
-} from "@/lib/variation-settings";
+import { DEFAULT_GENERATION_SETTINGS } from "@/lib/generation-settings";
+import { variationStrengthLabel } from "@/lib/variation-settings";
 
 type PromptMode = "positive" | "negative";
 
@@ -16,7 +14,7 @@ type GenerateResponse = {
 
 const EXAMPLE_INPUTS = [
   "neon alley, rain, black cat",
-  "tropical beach sunset, couple walking",
+  "two women, rooftop bar, city lights",
   "gothic cathedral, candles, fog",
   "cyberpunk city at night",
 ];
@@ -31,10 +29,13 @@ export default function PromptGenerator() {
   const [copied, setCopied] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [variationEnabled, setVariationEnabled] = useState(
-    DEFAULT_VARIATION_SETTINGS.enabled,
+    DEFAULT_GENERATION_SETTINGS.variation.enabled,
   );
   const [variationStrength, setVariationStrength] = useState(
-    DEFAULT_VARIATION_SETTINGS.strength,
+    DEFAULT_GENERATION_SETTINGS.variation.strength,
+  );
+  const [distinctPeople, setDistinctPeople] = useState(
+    DEFAULT_GENERATION_SETTINGS.distinctPeople,
   );
 
   useEffect(() => {
@@ -64,6 +65,7 @@ export default function PromptGenerator() {
             enabled: mode === "positive" && variationEnabled,
             strength: variationStrength,
           },
+          distinctPeople: mode === "positive" && distinctPeople,
         }),
       });
 
@@ -84,7 +86,7 @@ export default function PromptGenerator() {
     } finally {
       setLoading(false);
     }
-  }, [input, mode, variationEnabled, variationStrength]);
+  }, [input, mode, variationEnabled, variationStrength, distinctPeople]);
 
   const copyOutput = useCallback(async () => {
     if (!output) return;
@@ -182,6 +184,48 @@ export default function PromptGenerator() {
 
         {mode === "positive" && (
           <div className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm font-medium text-zinc-200">
+                  People in scene
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Choose how multiple people (e.g. two men, two women, a pair)
+                  are written into the prompt.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDistinctPeople(true)}
+                  className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
+                    distinctPeople
+                      ? "border-violet-500 bg-violet-500/15 text-violet-200"
+                      : "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+                  }`}
+                >
+                  Distinct individuals
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDistinctPeople(false)}
+                  className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
+                    !distinctPeople
+                      ? "border-violet-500 bg-violet-500/15 text-violet-200"
+                      : "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+                  }`}
+                >
+                  Grouped / couple
+                </button>
+              </div>
+              <p className="text-xs text-zinc-500">
+                {distinctPeople
+                  ? "Splits two men / two women into separate left-right descriptions. Gender from your input is enforced."
+                  : "Writes pairs as one unified couple or ensemble—not split into separate people."}
+              </p>
+            </div>
+
+            <div className="border-t border-zinc-800 pt-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-medium text-zinc-200">
@@ -248,6 +292,7 @@ export default function PromptGenerator() {
                 </div>
               </div>
             )}
+            </div>
           </div>
         )}
 
@@ -316,9 +361,13 @@ export default function PromptGenerator() {
             fog, shrine, candles&quot;).
           </li>
           <li>
+            Use <strong className="font-medium text-zinc-400">Distinct
+            individuals</strong> when your input has two or more people—it
+            breaks them into separate, fully described characters.
+          </li>
+          <li>
             Use the variation seed toggle to control randomness—off for
-            consistent output, higher strength for more diverse people and
-            scenes.
+            consistent output, higher strength for more diverse scenes.
           </li>
           <li>
             Add &quot;keep face/pose&quot; if you want the subject preserved while

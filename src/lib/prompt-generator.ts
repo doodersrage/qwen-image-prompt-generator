@@ -11,12 +11,23 @@ import {
   pickFewShotExamples,
 } from "./variation-seed";
 import {
-  DEFAULT_VARIATION_SETTINGS,
+  buildDistinctPeopleSystemAddendum,
+  buildGroupedPeopleSystemAddendum,
+  countImpliedPeople,
+  paintDistinctPeopleScene,
+  paintGroupedPeopleScene,
+  parsePeopleConstraint,
+} from "./distinct-people";
+import {
+  DEFAULT_GENERATION_SETTINGS,
+  type GenerationSettings,
+} from "./generation-settings";
+import {
   type VariationSettings,
 } from "./variation-settings";
 
 export type PromptMode = "positive" | "negative";
-export type { VariationSettings };
+export type { GenerationSettings, VariationSettings };
 
 export type GenerateResult = {
   prompt: string;
@@ -29,19 +40,59 @@ type ChatMessage = {
   content: string;
 };
 
+const DISTINCT_PEOPLE_FEW_SHOT_INPUT = "two women, rooftop bar, city lights";
+const GROUPED_COUPLE_FEW_SHOT_INPUT = "tropical beach sunset, couple walking";
+
+function isMultiPersonInput(input: string): boolean {
+  return (
+    countImpliedPeople(input) !== null || /\b(couple|pair|duo)\b/i.test(input)
+  );
+}
+
 function buildFewShotMessages(
   mode: PromptMode,
-  variation: VariationSettings,
+  settings: GenerationSettings,
+  input: string,
 ): ChatMessage[] {
   if (mode === "negative") {
     return [];
   }
 
-  return pickFewShotExamples(
-    QWEN_FEW_SHOT_EXAMPLES,
-    variation.strength,
-    variation.enabled,
-  ).flatMap((example) => [
+  let examples = QWEN_FEW_SHOT_EXAMPLES;
+  const multiPerson = isMultiPersonInput(input);
+
+  if (settings.distinctPeople) {
+    examples = examples.filter(
+      (example) => example.input !== GROUPED_COUPLE_FEW_SHOT_INPUT,
+    );
+  } else {
+    examples = examples.filter(
+      (example) => example.input !== DISTINCT_PEOPLE_FEW_SHOT_INPUT,
+    );
+  }
+
+  const pinnedInput = settings.distinctPeople
+    ? DISTINCT_PEOPLE_FEW_SHOT_INPUT
+    : GROUPED_COUPLE_FEW_SHOT_INPUT;
+
+  const pinnedExample = multiPerson
+    ? examples.find((example) => example.input === pinnedInput) ??
+      QWEN_FEW_SHOT_EXAMPLES.find((example) => example.input === pinnedInput)
+    : undefined;
+
+  const pool = pinnedExample
+    ? examples.filter((example) => example.input !== pinnedInput)
+    : examples;
+
+  const selected = pickFewShotExamples(
+    pool,
+    settings.variation.strength,
+    settings.variation.enabled,
+  );
+
+  const messages = pinnedExample ? [pinnedExample, ...selected] : selected;
+
+  return messages.flatMap((example) => [
     { role: "user" as const, content: example.input },
     { role: "assistant" as const, content: example.output },
   ]);
@@ -54,18 +105,31 @@ function shouldPreserveSubject(input: string): boolean {
 function buildUserMessage(
   input: string,
   mode: PromptMode,
-  variation: VariationSettings,
+  settings: GenerationSettings,
 ): string {
   const trimmed = input.trim();
-  if (
-    mode === "negative" ||
-    shouldPreserveSubject(trimmed) ||
-    !variation.enabled
-  ) {
+  if (mode === "negative" || shouldPreserveSubject(trimmed)) {
     return trimmed;
   }
 
-  return `${trimmed}\n\nCreative variation (weave naturally, do not quote): ${buildVariationSeed(variation.strength)}`;
+  const extras: string[] = [];
+  const peopleConstraint = parsePeopleConstraint(trimmed);
+
+  if (settings.variation.enabled) {
+    extras.push(
+      `Creative variation (weave naturally, do not quote): ${buildVariationSeed(settings.variation.strength, {
+        distinctPeople: settings.distinctPeople,
+        impliedPeopleCount: peopleConstraint.count,
+        gender: peopleConstraint.gender,
+      })}`,
+    );
+  }
+
+  if (extras.length === 0) {
+    return trimmed;
+  }
+
+  return `${trimmed}\n\n${extras.join("\n\n")}`;
 }
 
 function getLlmTemperature(variation: VariationSettings): number {
@@ -120,13 +184,22 @@ function getLlmConfig() {
 export async function generateWithLlm(
   input: string,
   mode: PromptMode,
-  variation: VariationSettings = DEFAULT_VARIATION_SETTINGS,
+  settings: GenerationSettings = DEFAULT_GENERATION_SETTINGS,
 ): Promise<string> {
   const { baseUrl, apiKey, model } = getLlmConfig();
+  const { variation } = settings;
   let systemPrompt =
     mode === "negative"
       ? QWEN_NEGATIVE_SYSTEM_PROMPT
       : QWEN_POSITIVE_SYSTEM_PROMPT;
+
+  if (mode === "positive" && isMultiPersonInput(input.trim())) {
+    if (settings.distinctPeople) {
+      systemPrompt = `${systemPrompt}\n\n${buildDistinctPeopleSystemAddendum(input.trim())}`;
+    } else {
+      systemPrompt = `${systemPrompt}\n\n${buildGroupedPeopleSystemAddendum(input.trim())}`;
+    }
+  }
 
   if (mode === "positive" && variation.enabled) {
     const addendum = buildVariationSystemAddendum(variation.strength);
@@ -137,8 +210,8 @@ export async function generateWithLlm(
 
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },
-    ...buildFewShotMessages(mode, variation),
-    { role: "user", content: buildUserMessage(input, mode, variation) },
+    ...buildFewShotMessages(mode, settings, input),
+    { role: "user", content: buildUserMessage(input, mode, settings) },
   ];
 
   const headers: Record<string, string> = {
@@ -152,13 +225,13 @@ export async function generateWithLlm(
   const requestBody: Record<string, unknown> = {
     model,
     messages,
-    temperature: getLlmTemperature(variation),
+    temperature: getLlmTemperature(settings.variation),
     max_tokens: 1024,
     stream: false,
-    ...getLlmSamplingParams(variation),
+    ...getLlmSamplingParams(settings.variation),
   };
 
-  if (variation.enabled) {
+  if (settings.variation.enabled) {
     requestBody.seed = getLlmSeed();
   }
 
@@ -209,11 +282,12 @@ function parseKeywords(input: string): string[] {
 
 function paintSceneFromKeywords(
   input: string,
-  variation: VariationSettings = DEFAULT_VARIATION_SETTINGS,
+  settings: GenerationSettings = DEFAULT_GENERATION_SETTINGS,
 ): string {
   const keywords = parseKeywords(input);
   const primary = keywords[0] ?? input.trim();
   const supporting = keywords.slice(1);
+  const peopleConstraint = parsePeopleConstraint(input);
 
   let scene = `The image shows ${primary.toLowerCase().startsWith("a ") || primary.toLowerCase().startsWith("an ") ? primary : primary.charAt(0).toLowerCase() + primary.slice(1)}`;
 
@@ -224,8 +298,13 @@ function paintSceneFromKeywords(
   scene +=
     ". Light falls with clear direction across the frame, casting defined shadows that separate foreground from background. Surfaces carry tangible texture and material detail—fabric, stone, skin, water, or metal rendered with physical weight. Colors read rich and intentional, atmosphere building depth from the nearest objects to the far distance. Every element sits in a single frozen moment, arranged so the full picture reads as one unified scene.";
 
-  if (variation.enabled) {
-    const templateVariation = buildTemplateVariation(variation.strength);
+  if (settings.variation.enabled) {
+    const templateVariation = buildTemplateVariation(
+      settings.variation.strength,
+      settings.distinctPeople,
+      peopleConstraint.count,
+      peopleConstraint.gender,
+    );
     if (templateVariation) {
       scene += ` ${templateVariation}`;
     }
@@ -237,7 +316,7 @@ function paintSceneFromKeywords(
 export function generateWithTemplate(
   input: string,
   mode: PromptMode,
-  variation: VariationSettings = DEFAULT_VARIATION_SETTINGS,
+  settings: GenerationSettings = DEFAULT_GENERATION_SETTINGS,
 ): string {
   const trimmed = input.trim();
   if (!trimmed) {
@@ -270,19 +349,33 @@ export function generateWithTemplate(
       .trim();
 
     const painted = paintSceneFromKeywords(sceneWords || trimmed, {
-      enabled: false,
-      strength: 0,
+      variation: { enabled: false, strength: 0 },
+      distinctPeople: false,
     });
     return `Keep the subject's facial features, body proportions, and pose exactly unchanged. ${painted.replace(/^The image shows /, "The surrounding scene becomes ")}`;
   }
 
-  return paintSceneFromKeywords(trimmed, variation);
+  if (!settings.distinctPeople && isMultiPersonInput(trimmed)) {
+    const groupedScene = paintGroupedPeopleScene(trimmed, settings);
+    if (groupedScene) {
+      return groupedScene;
+    }
+  }
+
+  if (settings.distinctPeople && isMultiPersonInput(trimmed)) {
+    const distinctScene = paintDistinctPeopleScene(trimmed, settings);
+    if (distinctScene) {
+      return distinctScene;
+    }
+  }
+
+  return paintSceneFromKeywords(trimmed, settings);
 }
 
 export async function generatePrompt(
   input: string,
   mode: PromptMode,
-  variation: VariationSettings = DEFAULT_VARIATION_SETTINGS,
+  settings: GenerationSettings = DEFAULT_GENERATION_SETTINGS,
 ): Promise<GenerateResult> {
   const trimmed = input.trim();
   if (!trimmed) {
@@ -293,7 +386,7 @@ export async function generatePrompt(
 
   if (llmEnabled) {
     try {
-      const prompt = await generateWithLlm(trimmed, mode, variation);
+      const prompt = await generateWithLlm(trimmed, mode, settings);
       return { prompt, mode, provider: "llm" };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown LLM error";
@@ -308,7 +401,7 @@ export async function generatePrompt(
   }
 
   return {
-    prompt: generateWithTemplate(trimmed, mode, variation),
+    prompt: generateWithTemplate(trimmed, mode, settings),
     mode,
     provider: "template",
   };
