@@ -7,6 +7,8 @@ export const SETTINGS_CACHE_KEY = "comfy-prompt-tool-settings-v1";
 export type SharedToolSettings = {
   model: ComfyImageModel;
   detail: DetailLevel;
+  /** Shared across people-focused tools; rolls catalog wardrobe when enabled. */
+  alwaysIncludeClothing?: boolean;
 };
 
 export type GenerateToolCache = {
@@ -73,6 +75,7 @@ export type SettingsCache = {
 export const DEFAULT_SHARED_SETTINGS: SharedToolSettings = {
   model: DEFAULT_QWEN_MODEL,
   detail: "balanced",
+  alwaysIncludeClothing: true,
 };
 
 export const DEFAULT_GENERATE_TOOL_CACHE: GenerateToolCache = {

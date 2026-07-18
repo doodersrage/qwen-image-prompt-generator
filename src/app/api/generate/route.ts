@@ -21,6 +21,7 @@ type GenerateRequestBody = {
   };
   detail?: string;
   distinctPeople?: boolean;
+  alwaysIncludeClothing?: boolean;
   model?: string;
 };
 
@@ -36,6 +37,7 @@ export async function POST(request: Request) {
     const settings = normalizeGenerationSettings({
       variation: body.variation,
       distinctPeople: body.distinctPeople,
+      alwaysIncludeClothing: body.alwaysIncludeClothing,
       detail: body.detail,
       model: body.model,
     });

@@ -43,6 +43,12 @@ import {
 import {
   type VariationSettings,
 } from "./variation-settings";
+import {
+  buildGenerateWardrobeAssignments,
+  buildGenerateWardrobeUserDirective,
+  mergeGenerateWardrobeIntoPrompt,
+  type GenerateWardrobeAssignment,
+} from "./generate-wardrobe";
 
 export type PromptMode = "positive" | "negative";
 export type { GenerationSettings, VariationSettings } from "./generation-settings";
@@ -119,6 +125,7 @@ function buildUserMessage(
   input: string,
   mode: PromptMode,
   settings: GenerationSettings,
+  wardrobeAssignments?: GenerateWardrobeAssignment[] | null,
 ): string {
   const trimmed = input.trim();
   if (mode === "negative" || shouldPreserveSubject(trimmed)) {
@@ -149,6 +156,13 @@ function buildUserMessage(
     if (hint) {
       extras.push(hint);
     }
+  }
+
+  const wardrobeDirective = wardrobeAssignments?.length
+    ? buildGenerateWardrobeUserDirective(wardrobeAssignments)
+    : null;
+  if (wardrobeDirective) {
+    extras.push(wardrobeDirective);
   }
 
   return `${trimmed}\n\n${extras.join("\n\n")}`;
@@ -198,6 +212,7 @@ function finalizePrompt(
   input: string,
   mode: PromptMode,
   settings: GenerationSettings,
+  wardrobeAssignments?: GenerateWardrobeAssignment[] | null,
 ): string {
   const cleaned = sanitizePrompt(raw);
   const withDistinctPeople =
@@ -213,13 +228,17 @@ function finalizePrompt(
       distinctPeople: mode === "positive" && settings.distinctPeople,
     },
   );
-  return formatPromptForModel(sanitized, settings.model, input, mode);
+  const formatted = formatPromptForModel(sanitized, settings.model, input, mode);
+  return wardrobeAssignments?.length
+    ? mergeGenerateWardrobeIntoPrompt(formatted, wardrobeAssignments)
+    : formatted;
 }
 
 export async function generateWithLlm(
   input: string,
   mode: PromptMode,
   settings: GenerationSettings = DEFAULT_GENERATION_SETTINGS,
+  wardrobeAssignments?: GenerateWardrobeAssignment[] | null,
 ): Promise<string> {
   let systemPrompt = buildModelSystemPrompt(settings.model, mode);
 
@@ -240,7 +259,7 @@ export async function generateWithLlm(
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },
     ...buildFewShotMessages(mode, settings, input),
-    { role: "user", content: buildUserMessage(input, mode, settings) },
+    { role: "user", content: buildUserMessage(input, mode, settings, wardrobeAssignments) },
   ];
 
   const extraBody: Record<string, unknown> = {
@@ -258,7 +277,7 @@ export async function generateWithLlm(
     extraBody,
   });
 
-  return finalizePrompt(content, input.trim(), mode, settings);
+  return finalizePrompt(content, input.trim(), mode, settings, wardrobeAssignments);
 }
 
 function sanitizePrompt(raw: string): string {
@@ -385,6 +404,7 @@ export function generateWithTemplate(
   input: string,
   mode: PromptMode,
   settings: GenerationSettings = DEFAULT_GENERATION_SETTINGS,
+  wardrobeAssignments?: GenerateWardrobeAssignment[] | null,
 ): string {
   const trimmed = input.trim();
   if (!trimmed) {
@@ -420,6 +440,7 @@ export function generateWithTemplate(
       trimmed,
       mode,
       settings,
+      wardrobeAssignments,
     );
   }
 
@@ -429,6 +450,7 @@ export function generateWithTemplate(
       trimmed,
       mode,
       settings,
+      wardrobeAssignments,
     );
   }
 
@@ -438,6 +460,7 @@ export function generateWithTemplate(
       trimmed,
       mode,
       settings,
+      wardrobeAssignments,
     );
   }
 
@@ -458,20 +481,21 @@ export function generateWithTemplate(
       trimmed,
       mode,
       settings,
+      wardrobeAssignments,
     );
   }
 
   if (!settings.distinctPeople && isMultiPersonInput(trimmed)) {
     const groupedScene = paintGroupedPeopleScene(trimmed, settings);
     if (groupedScene) {
-      return finalizePrompt(groupedScene, trimmed, mode, settings);
+      return finalizePrompt(groupedScene, trimmed, mode, settings, wardrobeAssignments);
     }
   }
 
   if (settings.distinctPeople && isMultiPersonInput(trimmed)) {
     const distinctScene = paintDistinctPeopleScene(trimmed, settings);
     if (distinctScene) {
-      return finalizePrompt(distinctScene, trimmed, mode, settings);
+      return finalizePrompt(distinctScene, trimmed, mode, settings, wardrobeAssignments);
     }
   }
 
@@ -480,6 +504,7 @@ export function generateWithTemplate(
     trimmed,
     mode,
     settings,
+    wardrobeAssignments,
   );
 }
 
@@ -518,10 +543,17 @@ export async function generatePrompt(
   }
 
   const llmEnabled = process.env.LLM_ENABLED !== "false";
+  const wardrobeAssignments =
+    mode === "positive" ? buildGenerateWardrobeAssignments(trimmed, settings) : null;
 
   if (llmEnabled) {
     try {
-      const prompt = await generateWithLlm(trimmed, mode, settings);
+      const prompt = await generateWithLlm(
+        trimmed,
+        mode,
+        settings,
+        wardrobeAssignments,
+      );
       return buildGenerateResult(prompt, mode, "llm", settings);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown LLM error";
@@ -536,7 +568,7 @@ export async function generatePrompt(
   }
 
   return buildGenerateResult(
-    generateWithTemplate(trimmed, mode, settings),
+    generateWithTemplate(trimmed, mode, settings, wardrobeAssignments),
     mode,
     "template",
     settings,

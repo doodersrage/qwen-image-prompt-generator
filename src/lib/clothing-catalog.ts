@@ -350,8 +350,12 @@ function randomInt(max: number): number {
   return array[0]! % max;
 }
 
-function pick<T>(items: readonly T[]): T {
-  return items[randomInt(items.length)]!;
+function pick<T>(items: readonly T[]): T | undefined {
+  if (items.length === 0) {
+    return undefined;
+  }
+
+  return items[randomInt(items.length)];
 }
 
 function isExcluded(id: string, exclude: readonly string[] | undefined): boolean {
@@ -404,6 +408,10 @@ function pickScoredEntry(
   }
 
   const scenePool = filterPoolByScene(pool, contexts);
+  if (scenePool.length === 0) {
+    return null;
+  }
+
   const scored = scenePool.map((entry) => ({
     entry,
     score: scoreClothingContextMatch(entry.contexts, contexts),
@@ -415,15 +423,25 @@ function pickScoredEntry(
     (item) => item.score >= topScore || (topScore === 0 && item.score === 0),
   );
 
+  if (tier.length === 0) {
+    return null;
+  }
+
   for (let attempt = 0; attempt < 24; attempt += 1) {
-    const candidate = pick(tier).entry;
-    if (!isExcluded(candidate.id, exclude)) {
+    const chosen = pick(tier);
+    const candidate = chosen?.entry;
+    if (candidate && !isExcluded(candidate.id, exclude)) {
       return candidate;
     }
   }
 
   const fallback = tier.find((item) => !isExcluded(item.entry.id, exclude));
-  return fallback?.entry ?? pick(scenePool);
+  if (fallback) {
+    return fallback.entry;
+  }
+
+  const sceneFallback = scenePool.find((entry) => !isExcluded(entry.id, exclude));
+  return sceneFallback ?? null;
 }
 
 function pickWardrobeLayers(
@@ -585,6 +603,57 @@ export function pickRandomCharacterOutfit(
     summary: parts.join(", "),
     filters,
   };
+}
+
+export function mergeAssignedWardrobeIntoPrompt(
+  prompt: string,
+  wardrobeSummary: string,
+): string {
+  const trimmed = prompt.trim();
+  const summary = wardrobeSummary.trim();
+  if (!summary) {
+    return trimmed;
+  }
+
+  const normPrompt = trimmed.toLowerCase();
+  const chunks = summary
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 10);
+
+  const alreadyPresent = chunks.some((chunk) =>
+    normPrompt.includes(chunk.toLowerCase().slice(0, Math.min(28, chunk.length))),
+  );
+
+  if (alreadyPresent) {
+    return trimmed;
+  }
+
+  const clause = summary.endsWith(".") ? `wearing ${summary}` : `wearing ${summary}.`;
+  return trimmed ? `${clause} ${trimmed}` : clause;
+}
+
+export function shouldPickRandomCharacterOutfit(input: {
+  presetOptions: {
+    wardrobe?: string;
+    footwear?: string;
+    accessories?: string;
+    wardrobeCatalog?: string;
+    footwearCatalog?: string;
+    accessoriesCatalog?: string;
+  };
+  hints?: string;
+  alwaysIncludeClothing?: boolean;
+}): boolean {
+  if (hasWardrobeCatalogSelection(input.presetOptions)) {
+    return false;
+  }
+
+  if (input.alwaysIncludeClothing !== false) {
+    return true;
+  }
+
+  return !hintsMentionClothing(input.hints);
 }
 
 const CLOTHING_HINT =

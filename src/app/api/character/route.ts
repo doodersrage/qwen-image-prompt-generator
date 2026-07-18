@@ -18,6 +18,7 @@ type CharacterRequestBody = {
   presetOptions?: Partial<Record<keyof CharacterPresetOptions, string>>;
   recentLocations?: string[];
   recentClothing?: string[];
+  alwaysIncludeClothing?: boolean;
 };
 
 export async function GET() {
@@ -36,6 +37,8 @@ export async function POST(request: Request) {
         ? body.portraitStyle
         : "portrait";
 
+    const alwaysIncludeClothing = body.alwaysIncludeClothing !== false;
+
     const result = await generateCharacterPrompt({
       ...shared,
       hints: body.hints?.trim(),
@@ -47,6 +50,7 @@ export async function POST(request: Request) {
       presetOptions: normalizeCharacterPresetOptions(body.presetOptions),
       recentLocations: normalizeRecentLocations(body.recentLocations),
       recentClothing: normalizeRecentLocations(body.recentClothing),
+      alwaysIncludeClothing,
     });
 
     return apiJson(result);

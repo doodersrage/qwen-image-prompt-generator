@@ -29,9 +29,9 @@ import {
   subjectGenderToClothingGender,
 } from "../clothing-tags";
 import {
-  hasWardrobeCatalogSelection,
-  hintsMentionClothing,
+  mergeAssignedWardrobeIntoPrompt,
   pickRandomCharacterOutfit,
+  shouldPickRandomCharacterOutfit,
 } from "../clothing-catalog";
 import { buildRandomCharacterSeed } from "./scene-pools";
 import { runSpecializedPrompt } from "./runner";
@@ -68,6 +68,7 @@ export async function generateCharacterPrompt(
     portraitStyle,
     options.recentLocations,
   );
+  const alwaysIncludeClothing = options.alwaysIncludeClothing !== false;
   const clothingFilters = buildClothingPickFilters({
     gender: parsed.gender,
     sceneLocation,
@@ -76,11 +77,13 @@ export async function generateCharacterPrompt(
     presetOptions,
     excludeIds: options.recentClothing,
   });
-  const randomOutfit =
-    !hasWardrobeCatalogSelection(presetOptions) &&
-    !hintsMentionClothing(options.hints)
-      ? pickRandomCharacterOutfit(clothingFilters)
-      : null;
+  const randomOutfit = shouldPickRandomCharacterOutfit({
+    presetOptions,
+    hints: options.hints,
+    alwaysIncludeClothing,
+  })
+    ? pickRandomCharacterOutfit(clothingFilters)
+    : null;
   const environmentSeed = randomOutfit
     ? `${seed}, wearing ${randomOutfit.summary}`
     : seed;
@@ -126,12 +129,34 @@ ${soloRules}
 - Do not default to bald or shaved hair unless the mandatory block explicitly requests it.`;
 
   const poseAnchorDirective = buildPoseAnchorUserDirective(presetOptions);
-  const clothingDirective = randomOutfit
-    ? buildClothingCoherenceUserDirective(
-        randomOutfit.filters,
-        randomOutfit.summary,
-      )
-    : null;
+  const clothingDirective =
+    randomOutfit?.summary != null
+      ? buildClothingCoherenceUserDirective(
+          randomOutfit.filters,
+          randomOutfit.summary,
+        )
+      : null;
+
+  const needsWardrobePostProcess =
+    Boolean(randomOutfit?.summary) ||
+    hasPresets ||
+    hasPoseAnchor(presetOptions);
+
+  const postProcessPrompt = needsWardrobePostProcess
+    ? (prompt: string) => {
+        let result = prompt;
+        if (randomOutfit?.summary) {
+          result = mergeAssignedWardrobeIntoPrompt(
+            result,
+            randomOutfit.summary,
+          );
+        }
+        if (hasPresets || hasPoseAnchor(presetOptions)) {
+          result = mergeCharacterPresetsIntoPrompt(result, presetOptions);
+        }
+        return result;
+      }
+    : undefined;
 
   const userParts = [
     presetBlock,
@@ -169,14 +194,24 @@ ${soloRules}
     detail,
     toolInstructions,
     userMessage,
-    templateFallback: () =>
-      buildCharacterTemplate(parsed.raw, portraitStyle, identitySeed, presetOptions),
+    templateFallback: () => {
+      let prompt = buildCharacterTemplate(
+        parsed.raw,
+        portraitStyle,
+        identitySeed,
+        presetOptions,
+      );
+      if (randomOutfit?.summary) {
+        prompt = mergeAssignedWardrobeIntoPrompt(
+          prompt,
+          randomOutfit.summary,
+        );
+      }
+      return prompt;
+    },
     sanitizeInput: sanitizeContext,
     enforceMinimum: !(hasPresets || hasPoseAnchor(presetOptions)),
-    postProcessPrompt:
-      hasPresets || hasPoseAnchor(presetOptions)
-        ? (prompt) => mergeCharacterPresetsIntoPrompt(prompt, presetOptions)
-        : undefined,
+    postProcessPrompt,
     temperature,
     soloSubject: !duoMode,
     seed: environmentSeed,
@@ -187,6 +222,7 @@ ${soloRules}
       sceneLocation,
       seed: environmentSeed,
       randomOutfit,
+      alwaysIncludeClothing,
       identitySeed,
       parsedHints: parsed,
       presetOptions,

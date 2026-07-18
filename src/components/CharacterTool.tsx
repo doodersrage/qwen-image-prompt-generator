@@ -52,6 +52,7 @@ export default function CharacterTool() {
           presetOptions: presetOptionsFromCache(toolSettings),
           recentLocations: getRecent(),
           recentClothing: getRecentClothing(),
+          alwaysIncludeClothing: shared.alwaysIncludeClothing !== false,
         }),
       });
 
@@ -130,6 +131,11 @@ export default function CharacterTool() {
           onModelChange={(model) => updateShared({ model })}
           onDetailChange={(detail) => updateShared({ detail })}
           detailHelp="Rich detail recommended for character sheets and portraits."
+          showWardrobeOption
+          alwaysIncludeClothing={shared.alwaysIncludeClothing !== false}
+          onAlwaysIncludeClothingChange={(value) =>
+            updateShared({ alwaysIncludeClothing: value })
+          }
         />
 
         <div className="space-y-3 border-t border-zinc-800 pt-4">

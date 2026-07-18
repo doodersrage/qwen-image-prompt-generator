@@ -11,6 +11,10 @@ type SharedToolControlsProps = {
   onModelChange: (model: SharedToolSettings["model"]) => void;
   onDetailChange: (detail: DetailLevel) => void;
   detailHelp?: string;
+  showWardrobeOption?: boolean;
+  alwaysIncludeClothing?: boolean;
+  onAlwaysIncludeClothingChange?: (value: boolean) => void;
+  wardrobeHelp?: string;
 };
 
 export default function SharedToolControls({
@@ -18,6 +22,10 @@ export default function SharedToolControls({
   onModelChange,
   onDetailChange,
   detailHelp,
+  showWardrobeOption = false,
+  alwaysIncludeClothing = true,
+  onAlwaysIncludeClothingChange,
+  wardrobeHelp,
 }: SharedToolControlsProps) {
   const selectedModel = getComfyModelDefinition(shared.model);
   const activeLimits = getDetailLimits(shared.detail, shared.model);
@@ -65,6 +73,28 @@ export default function SharedToolControls({
           ))}
         </div>
       </div>
+
+      {showWardrobeOption && onAlwaysIncludeClothingChange && (
+        <div className="space-y-3 border-t border-zinc-800 pt-4">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={alwaysIncludeClothing}
+              onChange={(e) => onAlwaysIncludeClothingChange(e.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-violet-500"
+            />
+            <span className="space-y-1">
+              <span className="text-sm font-medium text-zinc-200">
+                Always include wardrobe
+              </span>
+              <span className="block text-xs leading-relaxed text-zinc-500">
+                {wardrobeHelp ??
+                  "Rolls catalog outfits for people in the prompt and appends assigned clothing if the model omits it. Shared across Generate, Character, and Random Scene."}
+              </span>
+            </span>
+          </label>
+        </div>
+      )}
     </div>
   );
 }

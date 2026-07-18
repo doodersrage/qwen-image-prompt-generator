@@ -47,6 +47,7 @@ export default function RandomSceneTool() {
           includePeople: toolSettings.includePeople,
           wildness: toolSettings.wildness,
           recentLocations: getRecent(),
+          alwaysIncludeClothing: shared.alwaysIncludeClothing !== false,
         }),
       });
 
@@ -106,6 +107,12 @@ export default function RandomSceneTool() {
           shared={shared}
           onModelChange={(model) => updateShared({ model })}
           onDetailChange={(detail) => updateShared({ detail })}
+          showWardrobeOption={toolSettings.includePeople !== false}
+          alwaysIncludeClothing={shared.alwaysIncludeClothing !== false}
+          onAlwaysIncludeClothingChange={(value) =>
+            updateShared({ alwaysIncludeClothing: value })
+          }
+          wardrobeHelp="When random ingredients include people, rolls catalog outfits and appends assigned clothing if the model omits it. Shared with Generate and Character."
         />
 
         <div className="space-y-3 border-t border-zinc-800 pt-4">

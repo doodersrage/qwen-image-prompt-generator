@@ -12,6 +12,7 @@ type RandomSceneRequestBody = {
   includePeople?: boolean;
   wildness?: number;
   recentLocations?: string[];
+  alwaysIncludeClothing?: boolean;
 };
 
 export async function GET() {
@@ -23,6 +24,8 @@ export async function POST(request: Request) {
     const body = (await request.json()) as RandomSceneRequestBody;
     const shared = normalizeSharedGenerationOptions(body);
 
+    const alwaysIncludeClothing = body.alwaysIncludeClothing !== false;
+
     const result = await generateRandomScene({
       ...shared,
       genre: body.genre,
@@ -33,6 +36,7 @@ export async function POST(request: Request) {
           ? Math.min(100, Math.max(0, body.wildness))
           : 65,
       recentLocations: normalizeRecentLocations(body.recentLocations),
+      alwaysIncludeClothing,
     });
 
     return apiJson(result);

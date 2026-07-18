@@ -28,6 +28,7 @@ export type RandomSceneOptions = SharedGenerationOptions & {
   includePeople?: boolean;
   wildness?: number;
   recentLocations?: string[];
+  alwaysIncludeClothing?: boolean;
 };
 
 import type { CharacterPresetOptions } from "../character-options";
@@ -39,6 +40,8 @@ export type CharacterOptions = SharedGenerationOptions & {
   presetOptions?: CharacterPresetOptions;
   recentLocations?: string[];
   recentClothing?: string[];
+  /** When true (default), roll catalog wardrobe unless presets specify clothing. */
+  alwaysIncludeClothing?: boolean;
 };
 
 import type { BackgroundPresetOptions } from "../background-options";

@@ -20,6 +20,8 @@ export type GenerationSettings = {
   distinctPeople: boolean;
   detail: DetailLevel;
   model: QwenImageModel;
+  /** When true (default), roll catalog wardrobe for people in the input. */
+  alwaysIncludeClothing?: boolean;
 };
 
 export const DEFAULT_GENERATION_SETTINGS: GenerationSettings = {
@@ -27,6 +29,7 @@ export const DEFAULT_GENERATION_SETTINGS: GenerationSettings = {
   distinctPeople: true,
   detail: "balanced",
   model: DEFAULT_QWEN_MODEL,
+  alwaysIncludeClothing: true,
 };
 
 export function normalizeGenerationSettings(
@@ -44,5 +47,9 @@ export function normalizeGenerationSettings(
         : DEFAULT_GENERATION_SETTINGS.distinctPeople,
     detail: normalizeDetailLevel(value?.detail),
     model: normalizeQwenModel(value?.model),
+    alwaysIncludeClothing:
+      typeof value?.alwaysIncludeClothing === "boolean"
+        ? value.alwaysIncludeClothing
+        : DEFAULT_GENERATION_SETTINGS.alwaysIncludeClothing,
   };
 }

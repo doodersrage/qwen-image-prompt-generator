@@ -38,7 +38,7 @@ const EXAMPLE_INPUTS = [
 ];
 
 export default function PromptGenerator() {
-  const { mounted, shared, toolSettings, updateShared, updateToolSettings } =
+  const { shared, toolSettings, updateShared, updateToolSettings } =
     useCachedSettings("generate", DEFAULT_GENERATE_TOOL_CACHE);
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<PromptMode>(
@@ -59,6 +59,7 @@ export default function PromptGenerator() {
   const variationEnabled = toolSettings.variationEnabled ?? true;
   const variationStrength = toolSettings.variationStrength ?? 65;
   const distinctPeople = toolSettings.distinctPeople ?? true;
+  const alwaysIncludeClothing = shared.alwaysIncludeClothing !== false;
 
   const setQwenModel = (model: ComfyImageModel) => updateShared({ model });
   const setDetail = (value: DetailLevel) => updateShared({ detail: value });
@@ -89,7 +90,12 @@ export default function PromptGenerator() {
     }
   }, [toolSettings.mode]);
 
-  const submitDisabled = !mounted || loading || !input.trim();
+  const submitDisabled = loading || !input.trim();
+  const submitDisabledReason = !input.trim()
+    ? "Enter scene keywords above to enable generation."
+    : loading
+      ? "Generating…"
+      : null;
 
   const generate = useCallback(async () => {
     if (!input.trim()) {
@@ -113,6 +119,8 @@ export default function PromptGenerator() {
             strength: variationStrength,
           },
           distinctPeople: mode === "positive" && distinctPeople,
+          alwaysIncludeClothing:
+            mode === "positive" && alwaysIncludeClothing,
           detail: mode === "positive" ? detail : "balanced",
           model: qwenModel,
         }),
@@ -141,7 +149,7 @@ export default function PromptGenerator() {
     } finally {
       setLoading(false);
     }
-  }, [input, mode, variationEnabled, variationStrength, distinctPeople, detail, qwenModel]);
+  }, [input, mode, variationEnabled, variationStrength, distinctPeople, alwaysIncludeClothing, detail, qwenModel]);
 
   const copyOutput = useCallback(async () => {
     if (!output) return;
@@ -185,6 +193,31 @@ export default function PromptGenerator() {
           </div>
           <ModelSelector value={qwenModel} onChange={setQwenModel} />
         </div>
+
+        {mode === "positive" && (
+          <div className="space-y-3 border-t border-zinc-800 pt-4">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={alwaysIncludeClothing}
+                onChange={(e) =>
+                  updateShared({ alwaysIncludeClothing: e.target.checked })
+                }
+                className="mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-violet-500"
+              />
+              <span className="space-y-1">
+                <span className="text-sm font-medium text-zinc-200">
+                  Always include wardrobe
+                </span>
+                <span className="block text-xs leading-relaxed text-zinc-500">
+                  When your keywords mention people, rolls catalog outfits and
+                  appends assigned clothing if the model omits it. Shared with
+                  Character and Random Scene.
+                </span>
+              </span>
+            </label>
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <label htmlFor="edit-input" className="text-sm font-medium text-zinc-200">
@@ -411,10 +444,16 @@ export default function PromptGenerator() {
           type="button"
           onClick={() => void generate()}
           disabled={submitDisabled}
+          title={submitDisabledReason ?? undefined}
+          aria-disabled={submitDisabled}
           className="inline-flex h-11 items-center justify-center rounded-xl bg-violet-600 px-6 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? "Painting scene…" : "Generate scene prompt"}
         </button>
+
+        {submitDisabledReason && !loading && (
+          <p className="text-xs text-zinc-500">{submitDisabledReason}</p>
+        )}
 
         {error && (
           <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">

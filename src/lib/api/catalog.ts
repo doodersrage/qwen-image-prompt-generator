@@ -121,6 +121,13 @@ export function buildApiCatalog(baseUrl: string) {
             description:
               "Split multi-person inputs into distinct individuals (positive mode).",
           },
+          alwaysIncludeClothing: {
+            type: "boolean",
+            required: false,
+            default: true,
+            description:
+              "Roll catalog wardrobe when people appear in the input and append it if the model omits clothing (positive mode).",
+          },
           variation: {
             type: "object",
             required: false,
