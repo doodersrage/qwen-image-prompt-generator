@@ -5,6 +5,7 @@ import {
   stripMetaInstructions,
   stripPromptArtifacts,
 } from "./prompt-cleanup";
+import { SOLO_SUBJECT_EXPANSION_BEATS } from "./single-person";
 import {
   buildModelClarityAddendum,
   buildModelUserDirective,
@@ -114,13 +115,16 @@ function expandPromptToMinChars(
   text: string,
   detail: DetailLevel,
   model: ComfyImageModel,
+  soloSubject = false,
 ): string {
   const { minChars, maxChars, maxSentences } = getDetailLimits(detail, model);
   if (!minChars || text.length >= minChars) {
     return text;
   }
 
-  const beats = expansionBeatsForProfile(getComfyModelDefinition(model).profile);
+  const beats = soloSubject
+    ? SOLO_SUBJECT_EXPANSION_BEATS
+    : expansionBeatsForProfile(getComfyModelDefinition(model).profile);
   let expanded = text;
   let beatIndex = 0;
 
@@ -161,12 +165,13 @@ function padPromptToMinimum(
   detail: DetailLevel,
   model: ComfyImageModel,
   input: string,
+  soloSubject = false,
 ): string {
   const { minSentences } = getDetailLimits(detail, model);
   const sentences = splitSentences(text);
 
   if (sentences.length >= minSentences) {
-    return expandPromptToMinChars(text, detail, model);
+    return expandPromptToMinChars(text, detail, model, soloSubject);
   }
 
   const topic = extractShortTopic(input);
@@ -174,20 +179,24 @@ function padPromptToMinimum(
 
   if (detail === "balanced" && sentences.length < minSentences) {
     pads.push(
-      `A single background detail in ${topic.toLowerCase()} adds depth under the same light.`,
+      soloSubject
+        ? "The empty background adds depth under the same light, with no other people visible anywhere."
+        : `A single background detail in ${topic.toLowerCase()} adds depth under the same light.`,
     );
   }
 
   if (shouldEnforceMinPadding(getComfyModelDefinition(model).profile, detail)) {
     while (sentences.length + pads.length < minSentences) {
-      const beats = expansionBeatsForProfile(getComfyModelDefinition(model).profile);
+      const beats = soloSubject
+        ? SOLO_SUBJECT_EXPANSION_BEATS
+        : expansionBeatsForProfile(getComfyModelDefinition(model).profile);
       const index = pads.length % beats.length;
       pads.push(beats[index]!);
     }
   }
 
   const combined = [...sentences, ...pads].join(" ");
-  return expandPromptToMinChars(combined, detail, model);
+  return expandPromptToMinChars(combined, detail, model, soloSubject);
 }
 
 function trimSentencesForDistinctPeople(
@@ -241,6 +250,7 @@ function trimSentencesForDistinctPeople(
 export type SanitizeOptions = {
   enforceMinimum?: boolean;
   distinctPeople?: boolean;
+  soloSubject?: boolean;
 };
 
 export function sanitizeQwenPrompt(
@@ -253,6 +263,7 @@ export function sanitizeQwenPrompt(
   const { maxSentences, maxChars } = getDetailLimits(detail, model);
   const enforceMinimum = options.enforceMinimum !== false;
   const distinctPeople = options.distinctPeople === true;
+  const soloSubject = options.soloSubject === true;
   const effectiveMaxSentences =
     distinctPeople && input.trim()
       ? Math.max(maxSentences, detail === "concise" ? 2 : 3)
@@ -272,16 +283,16 @@ export function sanitizeQwenPrompt(
   text = sentences.join(" ");
 
   if (enforceMinimum && input) {
-    text = padPromptToMinimum(text, detail, model, input);
+    text = padPromptToMinimum(text, detail, model, input, soloSubject);
     sentences = splitSentences(text);
     if (sentences.length > effectiveMaxSentences) {
       text = distinctPeople
         ? trimSentencesForDistinctPeople(sentences, effectiveMaxSentences).join(" ")
         : sentences.slice(0, effectiveMaxSentences).join(" ");
-      text = expandPromptToMinChars(text, detail, model);
+      text = expandPromptToMinChars(text, detail, model, soloSubject);
     }
   } else if (enforceMinimum) {
-    text = expandPromptToMinChars(text, detail, model);
+    text = expandPromptToMinChars(text, detail, model, soloSubject);
   }
 
   if (text.length > maxChars) {

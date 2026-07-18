@@ -25,7 +25,6 @@ class PromptToolsBase:
                 "STRING",
                 {
                     "default": resolve_api_base(""),
-                    "tooltip": "Base URL for the Next.js prompt API. Override with COMFY_PROMPT_API_URL.",
                 },
             ),
         }
@@ -48,7 +47,6 @@ class PromptToolsGenerate(PromptToolsBase):
                     {
                         "multiline": True,
                         "default": "neon alley, rain, black cat",
-                        "tooltip": "Topic, keywords, or scene idea.",
                     },
                 ),
                 **cls.model_detail_inputs(),
@@ -108,7 +106,6 @@ class PromptToolsFormat(PromptToolsBase):
                     {
                         "multiline": True,
                         "default": "1girl, neon alley, rain, masterpiece",
-                        "tooltip": "Existing prompt draft to adapt.",
                     },
                 ),
                 **cls.model_detail_inputs(),

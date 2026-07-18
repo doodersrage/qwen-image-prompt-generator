@@ -83,13 +83,23 @@ On Linux, add `--add-host=host.docker.internal:host-gateway` if Ollama runs on t
 
 Six nodes under **prompt tools** call this app's HTTP API and output a `prompt` string you can wire into `CLIP Text Encode`, `TextEncodeQwenImageEditPlus`, or any text input.
 
-Install by symlinking into ComfyUI:
+Install (recommended):
 
 ```bash
-ln -s "$(pwd)/comfyui/comfyui_image_prompt_tools" /path/to/ComfyUI/custom_nodes/comfyui_image_prompt_tools
+./comfyui/install.sh /path/to/ComfyUI
 ```
 
-Set `COMFY_PROMPT_API_URL=http://127.0.0.1:47832` on the ComfyUI host if the API is not on localhost. See `comfyui/comfyui_image_prompt_tools/README.md` for node list and workflow notes.
+Or symlink manually:
+
+```bash
+ln -sfn "$(pwd)/comfyui" /path/to/ComfyUI/custom_nodes/qwen-image-prompt-tools
+```
+
+Verify with ComfyUI's Python: `python comfyui/verify_install.py`
+
+If nodes do not appear: restart ComfyUI, search the node menu for **Prompt Tools**, and check the ComfyUI terminal for import errors. See `comfyui/comfyui_image_prompt_tools/README.md`.
+
+Set `COMFY_PROMPT_API_URL=http://127.0.0.1:47832` on the ComfyUI host if the API is not on localhost.
 
 ## LLM configuration
 

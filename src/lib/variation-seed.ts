@@ -215,6 +215,38 @@ export function pickDistinctSubjects(
   return shuffle(pool).slice(0, Math.min(count, pool.length));
 }
 
+const MINIMAL_HAIR_PATTERN =
+  /\b(bald|balding|shaved|buzzed|monk|tonsure|hairless)\b/i;
+
+function filterHairPreference(
+  pool: readonly string[],
+  allowMinimalHair: boolean,
+): string[] {
+  if (allowMinimalHair) {
+    return [...pool];
+  }
+
+  return pool.filter((entry) => !MINIMAL_HAIR_PATTERN.test(entry));
+}
+
+export function pickCharacterSubject(
+  gender: SubjectGender = "any",
+  allowMinimalHair = false,
+): string {
+  const pool =
+    gender === "women"
+      ? SUBJECTS_WOMEN
+      : gender === "men"
+        ? SUBJECTS_MEN
+        : POOLS.subjects;
+
+  const filtered = filterHairPreference(pool, allowMinimalHair);
+  const fallback = filterHairPreference(POOLS.subjects, allowMinimalHair);
+  const candidates = filtered.length > 0 ? filtered : fallback;
+
+  return pick(candidates.length > 0 ? candidates : [...POOLS.subjects]);
+}
+
 function sessionNonce(): string {
   const array = new Uint32Array(2);
   crypto.getRandomValues(array);

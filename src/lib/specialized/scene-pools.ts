@@ -34,6 +34,32 @@ const SUBJECTS = [
   "a archivist carrying a stack of old maps",
 ];
 
+const CHARACTER_POSES = [
+  "standing with relaxed contrapposto",
+  "seated on a simple wooden chair",
+  "leaning against a plain wall",
+  "kneeling on worn floorboards",
+  "captured mid-step on empty pavement",
+  "arms crossed with level shoulders",
+  "looking over one shoulder",
+  "hands resting in lap",
+  "standing before a workbench",
+  "perched on a low crate",
+];
+
+const CHARACTER_SETTINGS = [
+  "a plain studio backdrop",
+  "an empty sunlit room",
+  "a quiet alley with no passersby",
+  "a sparse workshop with tools but no staff",
+  "a minimalist interior with clean lines",
+  "a foggy open landscape with no figures in sight",
+  "a rooftop at dusk with an empty skyline",
+  "a soft-lit bedroom corner",
+  "an abandoned corridor with peeling paint",
+  "a small courtyard empty of other people",
+];
+
 const MOODS = [
   "quiet and contemplative",
   "charged with restless energy",
@@ -148,12 +174,16 @@ export function buildRandomBackgroundSeed(options: {
 
 export function buildRandomCharacterSeed(hints?: string): string {
   const parts = [
-    "single person only",
-    pick(SUBJECTS),
-    pick(MOODS),
+    "solo subject only, no other people anywhere",
+    pick(CHARACTER_SETTINGS),
+    pick(CHARACTER_POSES),
     pick(LIGHTING),
-    hints?.trim() || "distinct face, clothing, posture, and expression",
+    pick(MOODS),
   ];
+
+  if (!hints?.trim()) {
+    parts.push("distinct face, clothing, posture, and expression");
+  }
 
   return parts.join(", ");
 }

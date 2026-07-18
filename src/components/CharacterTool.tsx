@@ -86,7 +86,8 @@ export default function CharacterTool() {
         </h1>
         <p className="max-w-2xl text-base leading-relaxed text-zinc-400">
           Builds a highly detailed single-person prompt—face, hair, clothing,
-          pose, and expression—with no extra people in frame.
+          pose, and expression—with no extra people in frame. Include sex/gender
+          and age in hints; they are treated as mandatory.
         </p>
       </header>
 
@@ -105,7 +106,7 @@ export default function CharacterTool() {
           <textarea
             value={toolSettings.hints ?? ""}
             onChange={(e) => updateToolSettings({ hints: e.target.value })}
-            placeholder="e.g. elderly sailor, cyberpunk hacker, Victorian scholar"
+            placeholder="e.g. young woman in her twenties, long dark hair; elderly man with grey beard"
             rows={3}
             className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-sky-500"
           />

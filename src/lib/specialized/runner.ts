@@ -11,6 +11,7 @@ import {
   isLlmEnabled,
 } from "../llm-client";
 import { isThinkingOnlyArtifact, stripPromptArtifacts } from "../prompt-cleanup";
+import { ensureSinglePersonPrompt } from "../single-person";
 import { sanitizeQwenPrompt } from "../qwen-clarity";
 import type { DetailLevel } from "../detail-level";
 import type { ToolGenerateResult, ToolLimits } from "./types";
@@ -51,6 +52,7 @@ export async function runSpecializedPrompt(options: {
   maxTokens?: number;
   metadata?: Record<string, unknown>;
   seed?: string;
+  soloSubject?: boolean;
 }): Promise<ToolGenerateResult> {
   const limits = getDetailLimits(options.detail, options.model);
   const maxTokens = options.maxTokens ?? limits.maxTokens;
@@ -78,6 +80,7 @@ Output ONLY the raw prompt text. No quotes around the whole prompt, labels, mark
         options.detail,
         options.model,
         options.sanitizeInput ?? options.userMessage,
+        options.soloSubject,
       );
 
       return buildToolResult(prompt, "llm", options.model, options.detail, {
@@ -100,6 +103,7 @@ Output ONLY the raw prompt text. No quotes around the whole prompt, labels, mark
     options.detail,
     options.model,
     options.sanitizeInput ?? options.userMessage,
+    options.soloSubject,
   );
 
   return buildToolResult(prompt, "template", options.model, options.detail, {
@@ -113,13 +117,22 @@ function finalizeSpecializedPrompt(
   detail: DetailLevel,
   model: ComfyImageModel,
   input: string,
+  soloSubject = false,
 ): string {
   const cleaned = stripPromptArtifacts(raw);
   if (!cleaned.trim() || isThinkingOnlyArtifact(cleaned)) {
     throw new Error("LLM returned reasoning text instead of a prompt.");
   }
 
-  return sanitizeQwenPrompt(cleaned, detail, input, model);
+  let prompt = sanitizeQwenPrompt(cleaned, detail, input, model, {
+    soloSubject,
+  });
+
+  if (soloSubject) {
+    prompt = ensureSinglePersonPrompt(prompt);
+  }
+
+  return prompt;
 }
 
 export function richDetailLimits(model: ComfyImageModel): ToolLimits {
