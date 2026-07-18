@@ -229,9 +229,12 @@ function finalizePrompt(
     },
   );
   const formatted = formatPromptForModel(sanitized, settings.model, input, mode);
-  return wardrobeAssignments?.length
-    ? mergeGenerateWardrobeIntoPrompt(formatted, wardrobeAssignments)
-    : formatted;
+  if (!wardrobeAssignments?.length) {
+    return formatted;
+  }
+
+  const { maxChars } = getDetailLimits(settings.detail, settings.model);
+  return mergeGenerateWardrobeIntoPrompt(formatted, wardrobeAssignments, maxChars);
 }
 
 export async function generateWithLlm(

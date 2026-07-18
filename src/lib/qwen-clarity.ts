@@ -234,6 +234,11 @@ function trimTextToMaxChars(text: string, maxChars: number): string {
     : `${trimmed.trimEnd()}…`;
 }
 
+/** Trim prose or tag prompts to a model char limit at word or clause boundaries. */
+export function trimPromptToMaxChars(text: string, maxChars: number): string {
+  return trimTextToMaxChars(text.trim(), maxChars);
+}
+
 function sanitizeTagPrompt(
   text: string,
   detail: DetailLevel,

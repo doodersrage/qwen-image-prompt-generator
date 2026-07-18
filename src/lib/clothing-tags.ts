@@ -434,7 +434,8 @@ export function buildClothingCoherenceUserDirective(
     `The subject reads clearly as ${genderLabel}.`,
     `Scene-appropriate clothing context: ${filters.contexts.join(", ")}.`,
     `Assigned wardrobe ingredients: ${outfitSummary}.`,
-    "Keep every assigned garment type and material in the final prompt.",
+    "Name each garment briefly in the final prompt—short labels only, not long material paragraphs.",
+    "Keep every assigned garment type in the final prompt.",
     "Adjust fit, layering, or weather-appropriate styling only when needed so clothing matches the subject's gender and the environment—do not swap to unrelated outfits.",
     filters.contexts.includes("swimwear")
       ? "Swimwear is appropriate here—keep coverage and styling realistic for a swim or poolside setting."

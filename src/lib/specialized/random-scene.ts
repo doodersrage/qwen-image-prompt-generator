@@ -7,6 +7,7 @@ import {
   buildGenerateWardrobeUserDirective,
   mergeGenerateWardrobeIntoPrompt,
 } from "../generate-wardrobe";
+import { getDetailLimits } from "../detail-level";
 import { DEFAULT_GENERATION_SETTINGS } from "../generation-settings";
 import { generatePrompt } from "../prompt-generator";
 import { buildRandomSceneSeed } from "./scene-pools";
@@ -78,8 +79,14 @@ export async function generateRandomScene(
   };
 
   const postProcessPrompt = wardrobeAssignments?.length
-    ? (prompt: string) =>
-        mergeGenerateWardrobeIntoPrompt(prompt, wardrobeAssignments)
+    ? (prompt: string) => {
+        const { maxChars } = getDetailLimits(options.detail, options.model);
+        return mergeGenerateWardrobeIntoPrompt(
+          prompt,
+          wardrobeAssignments,
+          maxChars,
+        );
+      }
     : undefined;
 
   const templateFallback = async () => {
@@ -87,9 +94,15 @@ export async function generateRandomScene(
       ...wardrobeSettings,
       alwaysIncludeClothing: false,
     });
-    return wardrobeAssignments?.length
-      ? mergeGenerateWardrobeIntoPrompt(result.prompt, wardrobeAssignments)
-      : result.prompt;
+    if (!wardrobeAssignments?.length) {
+      return result.prompt;
+    }
+    const { maxChars } = getDetailLimits(options.detail, options.model);
+    return mergeGenerateWardrobeIntoPrompt(
+      result.prompt,
+      wardrobeAssignments,
+      maxChars,
+    );
   };
 
   try {

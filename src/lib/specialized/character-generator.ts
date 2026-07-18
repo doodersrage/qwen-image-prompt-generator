@@ -29,10 +29,11 @@ import {
   subjectGenderToClothingGender,
 } from "../clothing-tags";
 import {
-  mergeAssignedWardrobeIntoPrompt,
+  mergeWardrobeRespectingLimits,
   pickRandomCharacterOutfit,
   shouldPickRandomCharacterOutfit,
 } from "../clothing-catalog";
+import { getDetailLimits } from "../detail-level";
 import { buildRandomCharacterSeed } from "./scene-pools";
 import { runSpecializedPrompt } from "./runner";
 import type { CharacterOptions, ToolGenerateResult } from "./types";
@@ -144,11 +145,14 @@ ${soloRules}
 
   const postProcessPrompt = needsWardrobePostProcess
     ? (prompt: string) => {
+        const { maxChars } = getDetailLimits(detail, options.model);
         let result = prompt;
         if (randomOutfit?.summary) {
-          result = mergeAssignedWardrobeIntoPrompt(
+          result = mergeWardrobeRespectingLimits(
             result,
             randomOutfit.summary,
+            maxChars,
+            duoMode ? 2 : 1,
           );
         }
         if (hasPresets || hasPoseAnchor(presetOptions)) {
@@ -202,9 +206,12 @@ ${soloRules}
         presetOptions,
       );
       if (randomOutfit?.summary) {
-        prompt = mergeAssignedWardrobeIntoPrompt(
+        const { maxChars } = getDetailLimits(detail, options.model);
+        prompt = mergeWardrobeRespectingLimits(
           prompt,
           randomOutfit.summary,
+          maxChars,
+          duoMode ? 2 : 1,
         );
       }
       return prompt;

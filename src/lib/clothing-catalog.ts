@@ -1,4 +1,5 @@
 import { ALL_CLOTHING_CATALOG_ENTRIES } from "./clothing-catalog-batches";
+import { trimPromptToMaxChars } from "./qwen-clarity";
 import {
   clothingAllowedInScene,
   clothingMatchesGender,
@@ -555,82 +556,150 @@ export function pickRandomCharacterOutfit(
     filters.contexts.includes("intimate") && randomInt(100) < 35;
 
   const { wardrobe, bottom } = pickWardrobeLayers(workingFilters);
-  const hosiery =
-    sceneAllowsHosiery(filters.contexts) && randomInt(100) < 44
-      ? pickFromCategory("hosiery", workingFilters)
-      : null;
-  const dressyAccessory =
-    sceneAllowsFormalwear(filters.contexts) && randomInt(100) < 36
-      ? pickFromCategory("dressy-accessory", workingFilters)
-      : null;
-  const socks =
-    randomInt(100) < 48 ? pickFromCategory("socks", workingFilters) : null;
-  const headwear =
-    randomInt(100) < 28 ? pickFromCategory("headwear", workingFilters) : null;
   const footwear = useIntimateFootwear
     ? null
     : pickFromCategory("footwear", workingFilters);
-  const accessory =
-    dressyAccessory ??
-    headwear ??
-    (randomInt(100) < 55
-      ? pickFromCategory("accessory", workingFilters)
-      : null);
 
-  if (wardrobe) used.add(wardrobe.id);
-  if (bottom) used.add(bottom.id);
-  if (hosiery) used.add(hosiery.id);
-  if (socks) used.add(socks.id);
-  if (footwear) used.add(footwear.id);
-  if (accessory) used.add(accessory.id);
+  let accent: EnrichedClothingEntry | null = null;
+  if (sceneAllowsFormalwear(filters.contexts) && randomInt(100) < 36) {
+    accent = pickFromCategory("dressy-accessory", workingFilters);
+  }
+  if (!accent && sceneAllowsHosiery(filters.contexts) && randomInt(100) < 30) {
+    accent = pickFromCategory("hosiery", workingFilters);
+  }
+  if (!accent && randomInt(100) < 22) {
+    accent = pickFromCategory("headwear", workingFilters);
+  }
+  if (!accent && randomInt(100) < 32) {
+    accent = pickFromCategory("accessory", workingFilters);
+  }
 
-  const parts = [
-    wardrobe?.script,
-    bottom?.script,
-    hosiery?.script,
-    socks?.script,
-    footwear?.script,
-    accessory?.script,
-  ].filter(Boolean);
+  const layers = [wardrobe, bottom, footwear, accent].filter(
+    (entry): entry is EnrichedClothingEntry => Boolean(entry),
+  );
+
+  for (const entry of layers) {
+    used.add(entry.id);
+  }
+
+  const labels = layers.map((entry) => entry.label);
 
   return {
     wardrobeId: wardrobe?.id ?? null,
     footwearId: footwear?.id ?? null,
-    accessoriesId: accessory?.id ?? null,
+    accessoriesId: accent?.id ?? null,
     wardrobe: wardrobe?.script ?? null,
     footwear: footwear?.script ?? null,
-    accessories: accessory?.script ?? null,
-    summary: parts.join(", "),
+    accessories: accent?.script ?? null,
+    summary: labels.join(", "),
     filters,
   };
+}
+
+export function wardrobeBudgetForPrompt(maxChars: number, peopleCount = 1): number {
+  const share = peopleCount > 1 ? 0.34 : 0.28;
+  const budget = Math.floor(maxChars * share);
+  return Math.max(48, Math.min(peopleCount > 1 ? 120 : 160, budget));
+}
+
+export function trimWardrobeSummaryToMaxChars(
+  summary: string,
+  maxChars: number,
+): string {
+  const items = summary
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (items.length === 0) {
+    return summary.trim();
+  }
+
+  const kept: string[] = [];
+  for (const item of items) {
+    const candidate = kept.length === 0 ? item : `${kept.join(", ")}, ${item}`;
+    if (candidate.length > maxChars) {
+      break;
+    }
+    kept.push(item);
+  }
+
+  if (kept.length === 0) {
+    return items[0]!.length <= maxChars
+      ? items[0]!
+      : items[0]!.slice(0, maxChars).trim();
+  }
+
+  return kept.join(", ");
 }
 
 export function mergeAssignedWardrobeIntoPrompt(
   prompt: string,
   wardrobeSummary: string,
+  options?: { maxWardrobeChars?: number; maxTotalChars?: number },
 ): string {
   const trimmed = prompt.trim();
-  const summary = wardrobeSummary.trim();
+  let summary = wardrobeSummary.trim();
   if (!summary) {
     return trimmed;
+  }
+
+  if (options?.maxWardrobeChars) {
+    summary = trimWardrobeSummaryToMaxChars(summary, options.maxWardrobeChars);
   }
 
   const normPrompt = trimmed.toLowerCase();
   const chunks = summary
     .split(",")
     .map((part) => part.trim())
-    .filter((part) => part.length >= 10);
+    .filter((part) => part.length >= 8);
 
   const alreadyPresent = chunks.some((chunk) =>
-    normPrompt.includes(chunk.toLowerCase().slice(0, Math.min(28, chunk.length))),
+    normPrompt.includes(chunk.toLowerCase().slice(0, Math.min(24, chunk.length))),
   );
 
   if (alreadyPresent) {
-    return trimmed;
+    return options?.maxTotalChars
+      ? trimPromptToMaxChars(trimmed, options.maxTotalChars)
+      : trimmed;
   }
 
   const clause = summary.endsWith(".") ? `wearing ${summary}` : `wearing ${summary}.`;
-  return trimmed ? `${clause} ${trimmed}` : clause;
+  let merged = trimmed ? `${clause} ${trimmed}` : clause;
+
+  if (options?.maxTotalChars && merged.length > options.maxTotalChars) {
+    const promptRoom = Math.max(
+      32,
+      options.maxTotalChars - trimmed.length - "wearing . ".length,
+    );
+    summary = trimWardrobeSummaryToMaxChars(
+      wardrobeSummary.trim(),
+      Math.min(options.maxWardrobeChars ?? promptRoom, promptRoom),
+    );
+    const retryClause = summary.endsWith(".")
+      ? `wearing ${summary}`
+      : `wearing ${summary}.`;
+    merged = trimmed ? `${retryClause} ${trimmed}` : retryClause;
+  }
+
+  if (options?.maxTotalChars && merged.length > options.maxTotalChars) {
+    merged = trimPromptToMaxChars(merged, options.maxTotalChars);
+  }
+
+  return merged;
+}
+
+export function mergeWardrobeRespectingLimits(
+  prompt: string,
+  wardrobeSummary: string,
+  maxChars: number,
+  peopleCount = 1,
+): string {
+  const wardrobeBudget = wardrobeBudgetForPrompt(maxChars, peopleCount);
+  return mergeAssignedWardrobeIntoPrompt(prompt, wardrobeSummary, {
+    maxWardrobeChars: wardrobeBudget,
+    maxTotalChars: maxChars,
+  });
 }
 
 export function shouldPickRandomCharacterOutfit(input: {

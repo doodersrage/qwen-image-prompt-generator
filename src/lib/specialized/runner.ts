@@ -12,7 +12,7 @@ import {
 } from "../llm-client";
 import { isThinkingOnlyArtifact, stripPromptArtifacts } from "../prompt-cleanup";
 import { ensureSinglePersonPrompt } from "../single-person";
-import { sanitizeQwenPrompt, formatPromptForModel } from "../qwen-clarity";
+import { sanitizeQwenPrompt, formatPromptForModel, trimPromptToMaxChars } from "../qwen-clarity";
 import type { DetailLevel } from "../detail-level";
 import type { ToolGenerateResult, ToolLimits } from "./types";
 
@@ -139,6 +139,11 @@ function finalizeSpecializedPrompt(
 
   if (postProcessPrompt) {
     prompt = postProcessPrompt(prompt);
+  }
+
+  const { maxChars } = getDetailLimits(detail, model);
+  if (prompt.length > maxChars) {
+    prompt = trimPromptToMaxChars(prompt, maxChars);
   }
 
   if (soloSubject) {
