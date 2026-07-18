@@ -241,3 +241,65 @@ export function buildRandomCharacterSeed(
 
   return parts.join(", ");
 }
+
+const SEED_TOPIC_ANGLES = [
+  "reinterpreted as cozy slice-of-life",
+  "as high-fantasy myth",
+  "in a retro sci-fi future",
+  "during a stormy night",
+  "as minimalist studio concept art",
+  "with surreal dream logic",
+  "as gritty documentary realism",
+  "in golden-hour warmth",
+];
+
+export function buildRandomTopicPhrase(seed?: string): string {
+  const location = pick(LOCATIONS);
+  const subject = pick(SUBJECTS);
+  const mood = pick(MOODS);
+  const lighting = pick(LIGHTING);
+
+  if (seed?.trim()) {
+    const theme = seed.trim();
+    return pick([
+      `${theme} — ${location}`,
+      `${theme}, ${mood}`,
+      `${theme} under ${lighting}`,
+      `${subject} in a ${theme} setting`,
+      `${theme} ${pick(SEED_TOPIC_ANGLES)}`,
+      `${theme} meets ${pick(BACKDROP_TYPES)} at ${location}`,
+    ]);
+  }
+
+  return pick([
+    `${subject} in ${location}`,
+    `${location}, ${mood}`,
+    `${pick(BACKDROP_TYPES)}: ${location}, ${lighting}`,
+    `${subject}, ${pick(WEATHER)}, ${mood}`,
+    `${location} — ${subject}, ${lighting}`,
+  ]);
+}
+
+export function buildTemplateTopicList(options: {
+  seedTopic?: string;
+  count: number;
+}): string[] {
+  const seen = new Set<string>();
+  const topics: string[] = [];
+  let attempts = 0;
+
+  while (topics.length < options.count && attempts < options.count * 10) {
+    attempts += 1;
+    const phrase = buildRandomTopicPhrase(options.seedTopic);
+    const key = phrase.toLowerCase();
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    topics.push(phrase);
+  }
+
+  return topics;
+}

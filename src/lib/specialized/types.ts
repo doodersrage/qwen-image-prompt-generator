@@ -49,3 +49,16 @@ export type ImagePromptOptions = SharedGenerationOptions & {
   focus?: ImagePromptFocus;
   extraHints?: string;
 };
+
+export type TopicOptions = {
+  seedTopic?: string;
+  count?: number;
+  variety?: number;
+};
+
+export type TopicGenerateResult = {
+  topics: string[];
+  provider: "llm" | "template";
+  seedTopic: string | null;
+  count: number;
+};

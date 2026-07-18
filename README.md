@@ -171,6 +171,7 @@ curl -sS "http://localhost:47832/api/models?id=sdxl" | jq .
 | `/api/models` | GET | List models (`?category=`, `?id=`) |
 | `/api/generate` | POST | Keywords → model-ready prompt |
 | `/api/format` | POST | Existing draft → model-ready prompt |
+| `/api/topics` | POST | Seed theme (optional) → list of topic ideas |
 | `/api/random-scene` | POST | Random cohesive scene prompt |
 | `/api/character` | POST | Detailed single-person prompt |
 | `/api/background` | POST | People-free environment prompt |

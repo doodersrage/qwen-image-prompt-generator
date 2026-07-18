@@ -44,6 +44,12 @@ export type ImagePromptToolCache = {
   extraHints?: string;
 };
 
+export type TopicToolCache = {
+  seedTopic?: string;
+  count?: number;
+  variety?: number;
+};
+
 export type ToolSettingsCache = {
   generate?: GenerateToolCache;
   format?: FormatToolCache;
@@ -51,6 +57,7 @@ export type ToolSettingsCache = {
   background?: BackgroundToolCache;
   character?: CharacterToolCache;
   imagePrompt?: ImagePromptToolCache;
+  topics?: TopicToolCache;
 };
 
 export type SettingsCache = {
@@ -96,6 +103,12 @@ export const DEFAULT_BACKGROUND_TOOL_CACHE: BackgroundToolCache = {
 export const DEFAULT_IMAGE_PROMPT_TOOL_CACHE: ImagePromptToolCache = {
   focus: "full",
   extraHints: "",
+};
+
+export const DEFAULT_TOPIC_TOOL_CACHE: TopicToolCache = {
+  seedTopic: "",
+  count: 10,
+  variety: 50,
 };
 
 function isDetailLevel(value: unknown): value is DetailLevel {

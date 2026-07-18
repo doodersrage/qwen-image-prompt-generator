@@ -215,6 +215,53 @@ export function buildApiCatalog(baseUrl: string) {
         },
       },
       {
+        id: "topics",
+        name: "Topics",
+        description:
+          "Generate a list of image prompt topic ideas from an optional seed theme.",
+        method: "POST",
+        path: "/api/topics",
+        request: {
+          seedTopic: {
+            type: "string",
+            required: false,
+            maxLength: 500,
+            description:
+              "Optional theme to riff on. Omit for open-ended variety.",
+          },
+          count: {
+            type: "number",
+            required: false,
+            default: 10,
+            minimum: 3,
+            maximum: 24,
+            description: "Number of topics to return.",
+          },
+          variety: {
+            type: "number",
+            required: false,
+            default: 50,
+            minimum: 0,
+            maximum: 100,
+            description: "How unexpected the topic combinations should be.",
+          },
+        },
+        response: {
+          topics: "string[]",
+          provider: '"llm" | "template"',
+          seedTopic: "string | null",
+          count: "number",
+        },
+        example: {
+          request: {
+            seedTopic: "solarpunk",
+            count: 8,
+            variety: 60,
+          },
+          curl: `curl -sS -X POST ${baseUrl}/api/topics -H "Content-Type: application/json" -d '{"seedTopic":"solarpunk","count":8,"variety":60}'`,
+        },
+      },
+      {
         id: "models",
         name: "Models",
         description: "List supported ComfyUI image model targets and size limits.",

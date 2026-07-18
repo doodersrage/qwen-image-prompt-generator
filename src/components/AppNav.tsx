@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const links = [
   { href: "/", label: "Generate", description: "Keywords → prompt" },
   { href: "/format", label: "Format", description: "Draft → model-ready" },
+  { href: "/topics", label: "Topics", description: "Idea list" },
   { href: "/random-scene", label: "Random", description: "Surprise me" },
   { href: "/character", label: "Character", description: "Single person" },
   { href: "/background", label: "Background", description: "No people" },
