@@ -1,20 +1,6 @@
-import fs from "node:fs";
-
-const scene = fs.readFileSync("src/lib/specialized/scene-pools.ts", "utf8");
-const extra = fs.readFileSync("src/lib/location-catalog-extra.ts", "utf8");
-const norm = (s) => s.toLowerCase().replace(/\s+/g, " ").trim();
-
-const existing = new Set();
-const baseBlock = scene.match(/const LOCATIONS = \[([\s\S]*?)\];/)?.[1] ?? "";
-for (const match of baseBlock.matchAll(/^\s*"([^"]+)"/gm)) {
-  existing.add(norm(match[1]));
-}
-for (const match of extra.matchAll(/^\s*"([^"]+)"/gm)) {
-  existing.add(norm(match[1]));
-}
-
-const adjectives = [
-  "abandoned","ancient","arched","ash-covered","autumn","azure","balconied","bamboo-shaded","basalt","beached",
+/** Word pools for scripts/generate-locations.mjs */
+export const adjectives = [
+"abandoned","ancient","arched","ash-covered","autumn","azure","balconied","bamboo-shaded","basalt","beached",
   "bioluminescent","black-stone","bleached","blue-hour","breezy","broken","bronze-age","candlelit","canopied",
   "carved","cedar-scented","chalk-white","cliffside","cloud-wrapped","cobbled","copper-roofed","coral-fringed",
   "crumbling","crystal-clear","curved","cypress-lined","dawn-lit","deserted","dew-covered","dimly lit",
@@ -33,8 +19,8 @@ const adjectives = [
   "yellow-stone",
 ];
 
-const places = [
-  "abbey crypt","airfield hangar","alley archway","amphitheater tier","apothecary cellar","aquarium tunnel",
+export const places = [
+"abbey crypt","airfield hangar","alley archway","amphitheater tier","apothecary cellar","aquarium tunnel",
   "arcade corridor","archipelago cove","archive vault","art gallery annex","assembly hall","atrium garden",
   "auction house floor","aviary dome","backlot street","bakery courtyard","ballroom balcony","bamboo grove clearing",
   "banquet hall","barn loft","basement boiler room","bazaar lane","beach cave","bell tower stair","bench overlook",
@@ -101,8 +87,8 @@ const places = [
   "yurt camp circle","zen garden raked gravel","zoo habitat moat edge","zipline launch deck",
 ];
 
-const regions = [
-  "in the Scottish Highlands","on the Amalfi Coast","in rural Vermont","along the Mekong Delta","in coastal Maine",
+export const regions = [
+"in the Scottish Highlands","on the Amalfi Coast","in rural Vermont","along the Mekong Delta","in coastal Maine",
   "on the Aegean islands","in the Pyrenees foothills","along the Great Lakes","in the Scottish Outer Hebrides",
   "on the Oregon coast","in the Black Forest","along the Danube bend","in the Welsh Valleys","on the Algarve cliffs",
   "in the Slovenian Alps","along the Rhone valley","in the Peloponnese","on the Cornish coast","in the Dordogne",
@@ -190,61 +176,11 @@ const regions = [
   "in the Emilia mist dry canal waterfall ford","along the North Sea gas platform lane","in the Lombardy mist dry lake waterfall ford",
 ];
 
-const atmospheres = [
-  "at dawn","at dusk","at midnight","at noon","at twilight","after rain","before a storm","during a downpour",
+export const atmospheres = [
+"at dawn","at dusk","at midnight","at noon","at twilight","after rain","before a storm","during a downpour",
   "in autumn color","in cherry blossom season","in dense fog","in golden hour light","in heat haze","in heavy snow",
   "in late spring","in monsoon mist","in morning mist","in polar twilight","in river fog","in sea spray",
   "in summer haze","in winter frost","under aurora","under bruised storm clouds","under clear stars","under full moon",
   "under low cloud","under rolling thunderheads","with drifting pollen","with falling ash","with firefly dusk",
   "with heat shimmer","with hoarfrost stillness","with lightning on the horizon","with mirage shimmer","with wildfire smoke",
 ];
-
-const newLocs = [];
-let seed = 42;
-const rand = () => {
-  seed = (seed * 1664525 + 1013904223) >>> 0;
-  return seed / 0x100000000;
-};
-const pick = (arr) => arr[Math.floor(rand() * arr.length)];
-
-function tryAdd(loc) {
-  const k = norm(loc);
-  if (existing.has(k)) return false;
-  existing.add(k);
-  newLocs.push(loc);
-  return true;
-}
-
-for (const pattern of [1, 2, 3]) {
-  for (let i = 0; i < 20000 && existing.size < 2000; i++) {
-    let loc;
-    if (pattern === 1) {
-      loc = `${pick(adjectives)} ${pick(places)} ${pick(atmospheres)}`;
-    } else if (pattern === 2) {
-      const place = pick(places);
-      loc = `${place.charAt(0).toUpperCase()}${place.slice(1)} ${pick(regions)} ${pick(atmospheres)}`;
-    } else {
-      loc = `${pick(adjectives)} ${pick(places)} ${pick(regions)}`;
-    }
-    tryAdd(loc);
-  }
-}
-
-let n = 1;
-while (existing.size < 2000 && n < 100000) {
-  tryAdd(
-    `${pick(adjectives)} ${pick(places)} ${pick(regions)}, scene ${n}, ${pick(atmospheres)}`,
-  );
-  n++;
-}
-
-const lines = [
-  "/** Additional handcrafted scene locations (batch 2). */",
-  "export const EXTRA_SCENE_LOCATIONS_2 = [",
-  ...newLocs.map((loc) => `  ${JSON.stringify(loc)},`),
-  "] as const;",
-  "",
-];
-
-fs.writeFileSync("src/lib/location-catalog-extra-2.ts", lines.join("\n"));
-console.log(`Generated ${newLocs.length} new locations; merged total ${existing.size}`);

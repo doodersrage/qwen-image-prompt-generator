@@ -215,3 +215,28 @@ Response:
 ```
 
 Model IDs match the registry in `src/lib/comfy-models/registry.ts`.
+
+## Random location pool
+
+Named scene locations power Random Scene, Background, Character, and Topics seeds. The pool is split across batch files under `src/lib/` and merged at build time.
+
+| Command | Purpose |
+|---------|---------|
+| `npm run locations:count` | Show current unique location count |
+| `npm run locations:generate` | Add **500** new locations (writes next batch file) |
+| `npm run locations:generate:dry` | Preview generation without writing files |
+
+Advanced CLI (`node scripts/generate-locations.mjs`):
+
+```bash
+# Grow pool to a target size
+npm run locations:generate -- --target 5000
+
+# Add a specific number with a reproducible seed
+npm run locations:generate -- --add 1000 --seed 42
+
+# Write a specific batch number
+npm run locations:generate -- --add 250 --batch 4
+```
+
+New batches land in `src/lib/location-catalog-extra-N.ts`. The script updates `src/lib/location-catalog-batches.ts` automatically — do not edit that index by hand. Word pools live in `scripts/location-word-pools.mjs`.

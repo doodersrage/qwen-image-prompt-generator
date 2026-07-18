@@ -2,8 +2,7 @@ import {
   composeActionLocation,
   composeSceneLocation,
 } from "./location-composer";
-import { EXTRA_SCENE_LOCATIONS } from "../location-catalog-extra";
-import { EXTRA_SCENE_LOCATIONS_2 } from "../location-catalog-extra-2";
+import { ALL_EXTRA_SCENE_LOCATIONS } from "../location-catalog-batches";
 import { parseSettingHint } from "../hint-location";
 
 const LOCATIONS = [
@@ -414,11 +413,7 @@ const ALL_LOCATIONS: string[] = (() => {
   const seen = new Set<string>();
   const merged: string[] = [];
 
-  for (const location of [
-    ...LOCATIONS,
-    ...EXTRA_SCENE_LOCATIONS,
-    ...EXTRA_SCENE_LOCATIONS_2,
-  ]) {
+  for (const location of [...LOCATIONS, ...ALL_EXTRA_SCENE_LOCATIONS]) {
     const key = normalizeLocationKey(location);
     if (seen.has(key)) {
       continue;

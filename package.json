@@ -6,7 +6,10 @@
     "dev": "next dev -p 47832",
     "build": "next build",
     "start": "next start -p 47832",
-    "lint": "eslint"
+    "lint": "eslint",
+    "locations:count": "node scripts/generate-locations.mjs --count",
+    "locations:generate": "node scripts/generate-locations.mjs --add 500",
+    "locations:generate:dry": "node scripts/generate-locations.mjs --add 500 --dry-run"
   },
   "dependencies": {
     "next": "16.2.10",
