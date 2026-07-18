@@ -43,6 +43,7 @@ export async function generateCharacterPrompt(
 - Describe EXACTLY ONE person—never a couple, group, crowd, or background extras with faces.
 - ${PORTRAIT_FRAMING[portraitStyle]}${actionBlock}
 - Include concrete visual identity: age read, ethnicity, face shape, hair, eyes, skin details, clothing materials, accessories, pose, expression, and one environmental context beat.
+- When an environment seed is provided, place the character in that specific setting with visible location detail—not a generic studio or blank room unless the seed says so.
 - Be highly specific and renderable—avoid generic phrases like "beautiful woman" without detail.
 - No second person, no silhouettes, no reflections with another face, no bystanders, no staff, no audience.
 - When a MANDATORY CHARACTER block is present, follow it exactly for sex/gender, age, and hair. Never override it with a random identity seed.
