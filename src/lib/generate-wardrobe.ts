@@ -4,12 +4,12 @@ import {
   type ClothingPickFilters,
 } from "./clothing-tags";
 import {
-  hintsMentionClothing,
   mergeWardrobeAssignmentsIntoPrompt,
   mergeWardrobeRespectingLimits,
   pickRandomCharacterOutfit,
   type RandomCharacterOutfit,
 } from "./clothing-catalog";
+import { hintsMentionClothing } from "./clothing-tags";
 import {
   isMultiPersonInput,
   parsePeopleConstraint,

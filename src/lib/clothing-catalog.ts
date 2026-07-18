@@ -6,6 +6,7 @@ import {
   clothingMatchesGender,
   clothingMatchesGenderForPick,
   entryHasRestrictedContext,
+  hintsMentionClothing,
   inferClothingContexts,
   inferClothingGender,
   normalizeClothingContextTags,
@@ -460,14 +461,18 @@ function pickWardrobeLayers(
   wardrobe: EnrichedClothingEntry | null;
   bottom: EnrichedClothingEntry | null;
 } {
-  if (filters.contexts.includes("swimwear") && randomInt(100) < 58) {
+  if (filters.lockPrimaryGarment) {
+    return { wardrobe: null, bottom: null };
+  }
+
+  if (filters.contexts.includes("swimwear")) {
     const swimwear = pickFromCategory("swimwear", filters);
     if (swimwear) {
       return { wardrobe: swimwear, bottom: null };
     }
   }
 
-  if (filters.contexts.includes("intimate") && randomInt(100) < 45) {
+  if (filters.contexts.includes("intimate")) {
     const intimate = pickFromCategory("intimate", filters);
     if (intimate) {
       return { wardrobe: intimate, bottom: null };
@@ -555,6 +560,19 @@ export type RandomCharacterOutfit = {
 export function pickRandomCharacterOutfit(
   filters: ClothingPickFilters = { gender: "any", contexts: ["casual"] },
 ): RandomCharacterOutfit {
+  if (filters.skipWardrobeRolls) {
+    return {
+      wardrobeId: null,
+      footwearId: null,
+      accessoriesId: null,
+      wardrobe: null,
+      footwear: null,
+      accessories: null,
+      summary: "",
+      filters,
+    };
+  }
+
   const used = new Set(filters.excludeIds ?? []);
   const workingFilters: ClothingPickFilters = {
     ...filters,
@@ -909,12 +927,7 @@ export function shouldPickRandomCharacterOutfit(input: {
   return !hintsMentionClothing(input.hints);
 }
 
-const CLOTHING_HINT =
-  /\b(?:wearing|dressed|outfit|wardrobe|shirt|blouse|tee|t-shirt|top|jacket|coat|hoodie|sweater|dress|skirt|pants|jeans|shorts|boots|sneakers|shoes|heels|sandals|suit|uniform|apron|overalls|vest|blazer|cardigan|leggings|romper|jumpsuit|kimono|robe|armor|gown|tuxedo|scrubs|bikini|swimsuit|swim trunks|lingerie|chemise|negligee|stockings|pantyhose|tights|fascinator|opera gloves|twinset|skirt suit)\b/i;
-
-export function hintsMentionClothing(hints?: string): boolean {
-  return CLOTHING_HINT.test(hints?.trim() ?? "");
-}
+export { hintsMentionClothing } from "./clothing-tags";
 
 export function hasWardrobeCatalogSelection(options: {
   wardrobe?: string;
