@@ -1,3 +1,11 @@
+import type { PromptProfileId } from "./comfy-models/types";
+import {
+  joinTags,
+  profileUsesTagFormat,
+  SOLO_SUBJECT_TAG_BEATS,
+  splitTags,
+} from "./prompt-shape";
+
 const MULTI_PERSON_SENTENCE =
   /\b(?:two|three|four|five|both|another|other|second|third|several|multiple|many)\s+(?:people|persons|person|men|women|man|woman|boys|girls|figures|characters|individuals|bystanders|onlookers|patrons|customers|workers|students|friends|strangers|models|dancers|soldiers|couples)\b/i;
 
@@ -63,7 +71,46 @@ function extractSingleSubjectFromSplitFrame(sentence: string): string | null {
   return collapsed.length >= 20 ? collapsed : null;
 }
 
-export function ensureSinglePersonPrompt(prompt: string): string {
+function tagMentionsExtraPeople(tag: string): boolean {
+  return (
+    MULTI_PERSON_SENTENCE.test(tag) ||
+    MULTI_PERSON_PHRASES.test(tag) ||
+    LEFT_RIGHT_PEOPLE.test(tag) ||
+    WITH_ANOTHER_PERSON.test(tag) ||
+    /\b(?:couple|pair|duo|twins|crowd|group|bystanders?|onlookers?|audience)\b/i.test(
+      tag,
+    )
+  );
+}
+
+function ensureSinglePersonTags(prompt: string): string {
+  let tags = splitTags(prompt).filter((tag) => !tagMentionsExtraPeople(tag));
+
+  if (tags.length === 0) {
+    tags = splitTags(prompt).slice(0, 3);
+  }
+
+  const hasSoloTag = tags.some((tag) =>
+    /\b(?:solo|single subject|one person|empty background|no crowd)\b/i.test(
+      tag,
+    ),
+  );
+
+  if (!hasSoloTag) {
+    tags.push(...SOLO_SUBJECT_TAG_BEATS.slice(0, 2));
+  }
+
+  return joinTags(tags);
+}
+
+export function ensureSinglePersonPrompt(
+  prompt: string,
+  profile?: PromptProfileId,
+): string {
+  if (profile && profileUsesTagFormat(profile)) {
+    return ensureSinglePersonTags(prompt);
+  }
+
   const sentences = prompt
     .replace(/\s+/g, " ")
     .split(/(?<=[.!?])\s+/)

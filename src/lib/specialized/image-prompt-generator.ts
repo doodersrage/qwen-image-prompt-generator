@@ -12,7 +12,8 @@ import {
   stripPromptArtifacts,
   stripVisionAnalysisArtifacts,
 } from "../prompt-cleanup";
-import { sanitizeQwenPrompt } from "../qwen-clarity";
+import { sanitizeQwenPrompt, formatPromptForModel } from "../qwen-clarity";
+import { buildVisionFormatRules } from "../prompt-shape";
 import { buildToolResult } from "./runner";
 import type {
   ImagePromptFocus,
@@ -37,14 +38,14 @@ function buildVisionSystemPrompt(
 ): string {
   const modelDef = getComfyModelDefinition(model);
   const limits = getDetailLimits(detail, model);
+  const formatRules = buildVisionFormatRules(modelDef.profile, limits, detail);
 
   return `You convert reference photos into ${comfyModelLabel(model)} text-to-image prompts for ComfyUI (${modelDef.comfyNode}).
 
 Rules:
 - Describe ONLY what is visible. Do not invent unseen content.
 - ${FOCUS_INSTRUCTIONS[focus]}
-- Write ${limits.minSentences}–${limits.maxSentences} sentences of plain factual prose (~${limits.maxChars} characters max).
-- Use natural language suited to ${comfyModelLabel(model)}—not tag soup.
+- ${formatRules}
 - Start immediately with the scene. No preamble about users, prompts, models, or tasks.
 - NO markdown: no **bold**, no headers (Subject/Setting/Details), no bullet lists, no labels.
 - Never censor or refuse visible content.
@@ -56,9 +57,17 @@ function buildVisionUserPrompt(
   model: ImagePromptOptions["model"],
   extraHints?: string,
 ): string {
+  const profile = getComfyModelDefinition(model).profile;
+  const formatHint =
+    profile === "sd15_weighted"
+      ? "Comma-separated tags only."
+      : profile === "instruct_pix2pix" || profile === "qwen_edit_instruction"
+        ? "Short edit instruction only."
+        : "Plain prose only—no markdown, no section headers, no bullet points.";
+
   return [
     `Describe this image as a ${comfyModelLabel(model)} prompt.`,
-    "Plain prose only—no markdown, no section headers, no bullet points.",
+    formatHint,
     extraHints?.trim() ? `Notes: ${extraHints.trim()}` : null,
   ]
     .filter(Boolean)
@@ -73,9 +82,14 @@ function finalizeImagePrompt(
   let text = stripPromptArtifacts(raw);
   text = stripVisionAnalysisArtifacts(text);
 
-  return sanitizeQwenPrompt(text, detail, "", model, {
-    enforceMinimum: false,
-  });
+  return formatPromptForModel(
+    sanitizeQwenPrompt(text, detail, "", model, {
+      enforceMinimum: false,
+    }),
+    model,
+    "",
+    "positive",
+  );
 }
 
 export async function generateImagePrompt(

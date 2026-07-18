@@ -9,10 +9,12 @@ import {
   formatPromptForModel,
   fluxIgnoresNegative,
   getComfyModelDefinition,
-  isEditInstructionProfile,
   normalizeQwenModel,
   type ComfyImageModel,
 } from "./comfy-models";
+import {
+  enforcePromptShapeForProfile,
+} from "./prompt-shape";
 
 export type FormatMode = "positive" | "negative";
 
@@ -63,140 +65,17 @@ export function normalizeFormatSettings(
   };
 }
 
-function capitalize(s: string): string {
-  if (!s) return s;
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
 function cleanDraft(raw: string): string {
   return stripPromptArtifacts(raw);
-}
-
-function isSceneDescription(text: string): boolean {
-  return /[.!?]\s/.test(text) && splitSentences(text).length >= 2;
-}
-
-function splitSentences(text: string): string[] {
-  return text
-    .replace(/\s+/g, " ")
-    .split(/(?<=[.!?])\s+/)
-    .map((sentence) => sentence.trim())
-    .filter(Boolean);
-}
-
-function looksLikeTagSoup(text: string): boolean {
-  if (/[.!?]\s/.test(text) && text.split(/[.!?]/).filter(Boolean).length >= 2) {
-    return false;
-  }
-
-  const parts = text.split(/[,;|]+/).map((part) => part.trim()).filter(Boolean);
-  if (parts.length < 3) {
-    return false;
-  }
-
-  const avgPartLen =
-    parts.reduce((sum, part) => sum + part.length, 0) / parts.length;
-  return avgPartLen < 35;
-}
-
-function tagSoupToProse(text: string): string {
-  const parts = text.split(/[,;|]+/).map((part) => part.trim()).filter(Boolean);
-  if (parts.length === 0) {
-    return text;
-  }
-
-  const [primary, ...supporting] = parts;
-  const lead = capitalize(primary!);
-
-  if (supporting.length === 0) {
-    return `${lead} under clear directional light in a unified scene.`;
-  }
-
-  if (supporting.length === 1) {
-    return `${lead}, with ${supporting[0]!.toLowerCase()}, under clear directional light.`;
-  }
-
-  return `${lead}, featuring ${supporting.slice(0, -1).join(", ").toLowerCase()}, and ${supporting.at(-1)!.toLowerCase()}, in one cohesive scene with readable lighting.`;
 }
 
 function applyModelStructure(
   text: string,
   settings: FormatSettings,
+  input: string,
 ): string {
   const profile = getComfyModelDefinition(settings.model).profile;
-
-  if (settings.mode === "negative") {
-    if (fluxIgnoresNegative(profile)) {
-      const stripped = text
-        .replace(/\b(do not|don't|avoid|no|never)\b/gi, "")
-        .replace(/\s+/g, " ")
-        .trim();
-      return `Stable composition with unchanged identity and proportions. ${capitalize(stripped)}.`;
-    }
-    return text;
-  }
-
-  if (profile === "qwen_edit_instruction") {
-    const hasEditPattern =
-      /\b(keep|preserve|replace|change|figure\s*[12])\b/i.test(text);
-
-    if (hasEditPattern || /^replace the scene with/i.test(text)) {
-      return text;
-    }
-
-    if (looksLikeTagSoup(text)) {
-      const prose = tagSoupToProse(text);
-      return `Replace the scene with ${prose.charAt(0).toLowerCase() + prose.slice(1)}`;
-    }
-
-    if (isSceneDescription(text)) {
-      return `Replace the scene with ${text.charAt(0).toLowerCase() + text.slice(1)}`;
-    }
-
-    if (!/^replace\b/i.test(text) && !/^keep\b/i.test(text)) {
-      return `Replace the scene with ${text.charAt(0).toLowerCase() + text.slice(1)}`;
-    }
-  }
-
-  if (profile === "instruct_pix2pix") {
-    if (/^(make|turn|change|add|remove|transform)\b/i.test(text)) {
-      return text;
-    }
-    if (looksLikeTagSoup(text)) {
-      const prose = tagSoupToProse(text);
-      return `Transform the image to show ${prose.charAt(0).toLowerCase() + prose.slice(1)}`;
-    }
-    if (!/^transform the image\b/i.test(text)) {
-      return `Transform the image to show ${text.charAt(0).toLowerCase() + text.slice(1)}`;
-    }
-  }
-
-  if (profile === "omnigen_instruction" && !/\b(keep|replace|change|figure\s*[12])\b/i.test(text)) {
-    if (looksLikeTagSoup(text)) {
-      const prose = tagSoupToProse(text);
-      return `Generate an image showing ${prose.charAt(0).toLowerCase() + prose.slice(1)}`;
-    }
-    return text;
-  }
-
-  if (profile === "sd15_weighted" && looksLikeTagSoup(text)) {
-    return text;
-  }
-
-  if (
-    (profile === "flux_klein" ||
-      profile === "flux_prose" ||
-      profile === "flux_schnell") &&
-    looksLikeTagSoup(text)
-  ) {
-    return tagSoupToProse(text);
-  }
-
-  if (isEditInstructionProfile(profile) && looksLikeTagSoup(text)) {
-    return tagSoupToProse(text);
-  }
-
-  return text;
+  return enforcePromptShapeForProfile(text, profile, settings.mode, input);
 }
 
 function finalizeFormattedPrompt(
@@ -204,7 +83,7 @@ function finalizeFormattedPrompt(
   input: string,
   settings: FormatSettings,
 ): string {
-  const cleaned = applyModelStructure(cleanDraft(raw), settings);
+  const cleaned = applyModelStructure(cleanDraft(raw), settings, input);
   const sanitized = sanitizeQwenPrompt(
     cleaned,
     settings.detail,
@@ -267,13 +146,7 @@ ${input}
 }
 
 function formatWithRules(input: string, settings: FormatSettings): string {
-  let draft = cleanDraft(input);
-
-  if (looksLikeTagSoup(draft)) {
-    draft = tagSoupToProse(draft);
-  }
-
-  return finalizeFormattedPrompt(draft, input, settings);
+  return finalizeFormattedPrompt(cleanDraft(input), input, settings);
 }
 
 function buildFormatResult(

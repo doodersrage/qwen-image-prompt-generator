@@ -12,7 +12,7 @@ import {
 } from "../llm-client";
 import { isThinkingOnlyArtifact, stripPromptArtifacts } from "../prompt-cleanup";
 import { ensureSinglePersonPrompt } from "../single-person";
-import { sanitizeQwenPrompt } from "../qwen-clarity";
+import { sanitizeQwenPrompt, formatPromptForModel } from "../qwen-clarity";
 import type { DetailLevel } from "../detail-level";
 import type { ToolGenerateResult, ToolLimits } from "./types";
 
@@ -129,10 +129,13 @@ function finalizeSpecializedPrompt(
   });
 
   if (soloSubject) {
-    prompt = ensureSinglePersonPrompt(prompt);
+    prompt = ensureSinglePersonPrompt(
+      prompt,
+      getComfyModelDefinition(model).profile,
+    );
   }
 
-  return prompt;
+  return formatPromptForModel(prompt, model, input, "positive");
 }
 
 export function richDetailLimits(model: ComfyImageModel): ToolLimits {

@@ -6,6 +6,7 @@ import {
   fluxIgnoresNegative,
   getProfileFewShots,
 } from "./prompt-profiles";
+import { enforcePromptShapeForProfile } from "../prompt-shape";
 import {
   COMFY_IMAGE_MODELS,
   COMFY_MODEL_IDS,
@@ -108,11 +109,6 @@ export function getModelFewShots(
   return getProfileFewShots(getComfyModelDefinition(model), detail, fallback);
 }
 
-function impliesMultiImageReferences(input: string): boolean {
-  return /\b(figure\s*[12]|picture\s*[12]|image\s*[12]|photo\s*[12])\b/i.test(
-    input,
-  );
-}
 
 export function formatPromptForModel(
   prompt: string,
@@ -121,19 +117,12 @@ export function formatPromptForModel(
   mode: "positive" | "negative",
 ): string {
   const def = getComfyModelDefinition(model);
-  if (
-    mode === "negative" ||
-    def.profile !== "qwen_edit_instruction" ||
-    !impliesMultiImageReferences(input.trim())
-  ) {
-    return prompt;
-  }
-
-  if (/\bFigure\s*[12]\b/i.test(prompt)) {
-    return prompt;
-  }
-
-  return prompt;
+  return enforcePromptShapeForProfile(
+    prompt,
+    def.profile,
+    mode,
+    input.trim(),
+  );
 }
 
 export function modelUsesFluxNegativeRewrite(model: ComfyImageModel): boolean {

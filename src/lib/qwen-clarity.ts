@@ -5,16 +5,25 @@ import {
   stripMetaInstructions,
   stripPromptArtifacts,
 } from "./prompt-cleanup";
-import { SOLO_SUBJECT_EXPANSION_BEATS } from "./single-person";
 import {
   buildModelClarityAddendum,
   buildModelUserDirective,
   DEFAULT_QWEN_MODEL,
-  expansionBeatsForProfile,
-  getComfyModelDefinition,
   shouldEnforceMinPadding,
   type ComfyImageModel,
 } from "./comfy-models";
+import {
+  expandTagsToMinChars,
+  expansionBeatsForSanitize,
+  profileSkipsProsePadding,
+  profileUsesTagFormat,
+  resolveProfile,
+  splitSentences,
+  splitTags,
+  trimSentencesByPriority,
+  trimSentencesForDistinctPeople,
+  trimTagsToMaxChars,
+} from "./prompt-shape";
 
 export type { DetailLevel };
 export {
@@ -103,28 +112,28 @@ export function compactVariationHint(
   return `Optional flavor only: ${hints.slice(0, detail === "rich" ? 2 : 1).join(", ")}.`;
 }
 
-function splitSentences(text: string): string[] {
-  return text
-    .replace(/\s+/g, " ")
-    .split(/(?<=[.!?])\s+/)
-    .map((sentence) => sentence.trim())
-    .filter(Boolean);
-}
-
 function expandPromptToMinChars(
   text: string,
   detail: DetailLevel,
   model: ComfyImageModel,
   soloSubject = false,
 ): string {
+  const profile = resolveProfile(model);
   const { minChars, maxChars, maxSentences } = getDetailLimits(detail, model);
+
+  if (profileUsesTagFormat(profile)) {
+    return expandTagsToMinChars(text, detail, model, soloSubject);
+  }
+
+  if (profileSkipsProsePadding(profile)) {
+    return text.length > maxChars ? text.slice(0, maxChars).trim() : text;
+  }
+
   if (!minChars || text.length >= minChars) {
     return text;
   }
 
-  const beats = soloSubject
-    ? SOLO_SUBJECT_EXPANSION_BEATS
-    : expansionBeatsForProfile(getComfyModelDefinition(model).profile);
+  const beats = expansionBeatsForSanitize(profile, soloSubject);
   let expanded = text;
   let beatIndex = 0;
 
@@ -167,6 +176,16 @@ function padPromptToMinimum(
   input: string,
   soloSubject = false,
 ): string {
+  const profile = resolveProfile(model);
+
+  if (profileUsesTagFormat(profile)) {
+    return expandTagsToMinChars(text, detail, model, soloSubject);
+  }
+
+  if (profileSkipsProsePadding(profile)) {
+    return expandPromptToMinChars(text, detail, model, soloSubject);
+  }
+
   const { minSentences } = getDetailLimits(detail, model);
   const sentences = splitSentences(text);
 
@@ -185,11 +204,9 @@ function padPromptToMinimum(
     );
   }
 
-  if (shouldEnforceMinPadding(getComfyModelDefinition(model).profile, detail)) {
+  if (shouldEnforceMinPadding(profile, detail)) {
+    const beats = expansionBeatsForSanitize(profile, soloSubject);
     while (sentences.length + pads.length < minSentences) {
-      const beats = soloSubject
-        ? SOLO_SUBJECT_EXPANSION_BEATS
-        : expansionBeatsForProfile(getComfyModelDefinition(model).profile);
       const index = pads.length % beats.length;
       pads.push(beats[index]!);
     }
@@ -199,52 +216,46 @@ function padPromptToMinimum(
   return expandPromptToMinChars(combined, detail, model, soloSubject);
 }
 
-function trimSentencesForDistinctPeople(
-  sentences: string[],
-  maxSentences: number,
-): string[] {
-  if (sentences.length <= maxSentences) {
-    return sentences;
+function trimTextToMaxChars(text: string, maxChars: number): string {
+  if (text.length <= maxChars) {
+    return text;
   }
 
-  const leftIdx = sentences.findIndex((sentence) =>
-    /\bon the left\b/i.test(sentence),
+  const trimmed = text.slice(0, maxChars);
+  const lastBreak = Math.max(
+    trimmed.lastIndexOf(". "),
+    trimmed.lastIndexOf("! "),
+    trimmed.lastIndexOf("? "),
+    trimmed.lastIndexOf(", "),
   );
-  const rightIdx = sentences.findIndex((sentence) =>
-    /\bon the right\b/i.test(sentence),
-  );
 
-  if (leftIdx >= 0 && rightIdx >= 0) {
-    const priority =
-      leftIdx === rightIdx
-        ? [leftIdx]
-        : [leftIdx, rightIdx].sort((a, b) => a - b);
+  return lastBreak > maxChars * 0.45
+    ? trimmed.slice(0, lastBreak + 1)
+    : `${trimmed.trimEnd()}…`;
+}
 
-    if (maxSentences >= 3 && !priority.includes(0)) {
-      priority.unshift(0);
-    }
+function sanitizeTagPrompt(
+  text: string,
+  detail: DetailLevel,
+  model: ComfyImageModel,
+  input: string,
+  enforceMinimum: boolean,
+  soloSubject: boolean,
+): string {
+  const { maxChars } = getDetailLimits(detail, model);
+  let tags = splitTags(text);
 
-    const keepSet = new Set(priority);
-    const result = [...priority];
-
-    for (
-      let index = 0;
-      index < sentences.length && result.length < maxSentences;
-      index += 1
-    ) {
-      if (!keepSet.has(index)) {
-        result.push(index);
-        keepSet.add(index);
-      }
-    }
-
-    return result
-      .sort((a, b) => a - b)
-      .slice(0, maxSentences)
-      .map((index) => sentences[index]!);
+  if (tags.length === 0 && text.trim()) {
+    tags = [text.trim()];
   }
 
-  return sentences.slice(0, maxSentences);
+  let result = trimTagsToMaxChars(tags, maxChars);
+
+  if (enforceMinimum) {
+    result = padPromptToMinimum(result, detail, model, input, soloSubject);
+  }
+
+  return trimTagsToMaxChars(splitTags(result), maxChars);
 }
 
 export type SanitizeOptions = {
@@ -260,6 +271,7 @@ export function sanitizeQwenPrompt(
   model: ComfyImageModel = DEFAULT_QWEN_MODEL,
   options: SanitizeOptions = {},
 ): string {
+  const profile = resolveProfile(model);
   const { maxSentences, maxChars } = getDetailLimits(detail, model);
   const enforceMinimum = options.enforceMinimum !== false;
   const distinctPeople = options.distinctPeople === true;
@@ -272,12 +284,23 @@ export function sanitizeQwenPrompt(
   let text = stripPromptArtifacts(raw);
   text = stripMetaInstructions(text);
 
+  if (profileUsesTagFormat(profile)) {
+    return sanitizeTagPrompt(
+      text,
+      detail,
+      model,
+      input,
+      enforceMinimum,
+      soloSubject,
+    );
+  }
+
   let sentences = splitSentences(text);
 
   if (sentences.length > effectiveMaxSentences) {
     sentences = distinctPeople
       ? trimSentencesForDistinctPeople(sentences, effectiveMaxSentences)
-      : sentences.slice(0, effectiveMaxSentences);
+      : trimSentencesByPriority(sentences, effectiveMaxSentences);
   }
 
   text = sentences.join(" ");
@@ -287,26 +310,15 @@ export function sanitizeQwenPrompt(
     sentences = splitSentences(text);
     if (sentences.length > effectiveMaxSentences) {
       text = distinctPeople
-        ? trimSentencesForDistinctPeople(sentences, effectiveMaxSentences).join(" ")
-        : sentences.slice(0, effectiveMaxSentences).join(" ");
+        ? trimSentencesForDistinctPeople(sentences, effectiveMaxSentences).join(
+            " ",
+          )
+        : trimSentencesByPriority(sentences, effectiveMaxSentences).join(" ");
       text = expandPromptToMinChars(text, detail, model, soloSubject);
     }
   } else if (enforceMinimum) {
     text = expandPromptToMinChars(text, detail, model, soloSubject);
   }
 
-  if (text.length > maxChars) {
-    const trimmed = text.slice(0, maxChars);
-    const lastBreak = Math.max(
-      trimmed.lastIndexOf(". "),
-      trimmed.lastIndexOf("! "),
-      trimmed.lastIndexOf("? "),
-    );
-    text =
-      lastBreak > maxChars * 0.45
-        ? trimmed.slice(0, lastBreak + 1)
-        : `${trimmed.trimEnd()}…`;
-  }
-
-  return text.trim();
+  return trimTextToMaxChars(text.trim(), maxChars);
 }
