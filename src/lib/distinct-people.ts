@@ -174,6 +174,34 @@ export function isMultiPersonInput(input: string): boolean {
   );
 }
 
+const EXPLICIT_WOMAN_SUBJECT =
+  /\b(?:portrait\s+of|headshot\s+of|bust\s+of\s+)?(?:a|the|one)\s+(?:young|old|elderly|middle-aged|teen(?:age)?\s+)?(?:woman|girl|lady|female)\b/i;
+const EXPLICIT_MAN_SUBJECT =
+  /\b(?:portrait\s+of|headshot\s+of|bust\s+of\s+)?(?:a|the|one)\s+(?:young|old|elderly|middle-aged|teen(?:age)?\s+)?(?:man|boy|guy|male|gentleman)\b/i;
+
+/** Infer a single subject's gender from prompt/seed wording when count rules do not apply. */
+export function inferSubjectGenderFromHints(text: string): SubjectGender | undefined {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const constraint = parsePeopleConstraint(trimmed);
+  if (constraint.gender === "women" || constraint.gender === "men") {
+    return constraint.gender;
+  }
+
+  if (EXPLICIT_WOMAN_SUBJECT.test(trimmed)) {
+    return "women";
+  }
+
+  if (EXPLICIT_MAN_SUBJECT.test(trimmed)) {
+    return "men";
+  }
+
+  return undefined;
+}
+
 export function hasDistinctPeopleStructure(text: string): boolean {
   const lower = text.toLowerCase();
 

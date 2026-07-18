@@ -4,6 +4,7 @@ import { splitSentences } from "./prompt-shape";
 import {
   clothingAllowedInScene,
   clothingMatchesGender,
+  clothingMatchesGenderForPick,
   entryHasRestrictedContext,
   inferClothingContexts,
   inferClothingGender,
@@ -372,7 +373,14 @@ function filterPoolByGender(
   pool: readonly EnrichedClothingEntry[],
   gender: ClothingPickFilters["gender"],
 ): EnrichedClothingEntry[] {
-  const strict = pool.filter((entry) => clothingMatchesGender(entry.gender, gender));
+  const strict = pool.filter((entry) =>
+    clothingMatchesGenderForPick(
+      entry.gender,
+      entry.contexts,
+      entry.category,
+      gender,
+    ),
+  );
   if (strict.length > 0) {
     return strict;
   }

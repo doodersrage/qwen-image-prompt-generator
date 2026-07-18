@@ -1,4 +1,5 @@
 import type { SubjectGender } from "./variation-seed";
+import { inferSubjectGenderFromHints } from "./distinct-people";
 
 export type ClothingScenePresetHints = {
   atmosphere?: string;
@@ -96,7 +97,7 @@ const CONTEXT_RULES: Array<{ tag: ClothingContextTag; pattern: RegExp }> = [
   { tag: "work", pattern: /\b(?:coveralls|overalls|workbench|apron|hi-vis|safety vest|tool belt|mechanic|chef|barista|warehouse|scrubs|lab coat|barber|butcher|forge|paint-stained|work boots|steel-toe|utilitarian|chore coat|boiler suit)\b/i },
   { tag: "uniform", pattern: /\b(?:uniform|kit|gi|dobok|judogi|karate|scrubs|police|military|firefighter|turnout|pilot|flight attendant|nurse|paramedic|chef whites|server room|bellhop|postal|mail carrier|referee|umpire)\b/i },
   { tag: "costume", pattern: /\b(?:wizard|knight|armor|circus|magician|monk robes|nun habit|cosplay|vampire|steampunk|elven|dwarven|halloween|renaissance faire|mermaid|superhero|ballerina tutu)\b/i },
-  { tag: "beach", pattern: /\b(?:board shorts|flip-flops|sarong|snorkel|bikini|swim trunks|rash guard|beach|coastal|linen camp shirt|espadrilles|sun hat|cover-up|kaftan cover-up|poolside)\b/i },
+  { tag: "beach", pattern: /\b(?:board shorts|flip-flops|sarong|snorkel|bikini|swim trunks|rash guard|beach|shoreline|seaside|poolside|kaftan cover-up)\b/i },
   { tag: "swimwear", pattern: /\b(?:bikini|one-piece swimsuit|tankini|swim trunks|swim briefs|rash guard|cut-out swimsuit|bandeau bikini|high-waist bikini|sport swimsuit|swim set|monokini|swim top|swim bottom|competitive swim)\b/i },
   { tag: "intimate", pattern: /\b(?:lingerie|bra\b|bralette|panties|briefs|boxer briefs|chemise|negligee|teddy|bodysuit lingerie|garter belt|bustier|corset lingerie|tap pants|silk robe set|lace set|satin slip set|lounge lingerie|drawers and vest|sleep set|stay-up stockings|garter stockings)\b/i },
   { tag: "hosiery", pattern: /\b(?:stockings|pantyhose|tights|fishnet|sheer hose|nylon hose|thigh-high stockings|stay-up stockings|back-seam stockings|seamed pantyhose|garter stockings|opaque tights|lace-top stockings)\b/i },
@@ -112,7 +113,7 @@ const SCENE_CONTEXT_RULES: Array<{ tag: ClothingContextTag; pattern: RegExp }> =
   { tag: "cold", pattern: /\b(?:snow|frost|winter|arctic|glacier|blizzard|ice|polar|alpine|hoarfrost|siberian|tundra|iceland|antarctica|cold|freezing|subzero|mountain lodge|ski slope|frozen)\b/i },
   { tag: "warm", pattern: /\b(?:desert|heat haze|humid|summer|tropical|palm|sahara|savanna|oasis|jungle|rainforest|noon sun|midsummer|arid|dry heat)\b/i },
   { tag: "wet", pattern: /\b(?:rain|monsoon|drizzle|downpour|puddle|storm|wet pavement|after a recent rain|spray|misty rain|showers)\b/i },
-  { tag: "beach", pattern: /\b(?:beach|shore|coastal|sand|surf|lagoon|tropical reef|seaside|boardwalk pier|overwater|island|coral|harbor quay|dhow|tidal)\b/i },
+  { tag: "beach", pattern: /\b(?:beach|seaside|shoreline|oceanfront|boardwalk|tidal pool|sandy beach|rocky shore|surf break|beach club|poolside|black sand beach|tropical reef|overwater|harbor quay|snorkel(?:ing)?|lagoon)\b/i },
   { tag: "swimwear", pattern: /\b(?:pool|swimming|swim\b|aquatic|hot tub|jacuzzi|yacht deck|lakeside|water park|infinity pool|rooftop pool|spa pool|snorkeling|surfing|tropical resort|beach club pool)\b/i },
   { tag: "intimate", pattern: /\b(?:bedroom|boudoir|master suite|hotel room|hotel suite|ensuite|dressing room|vanity mirror|silk sheets|canopy bed|candlelit|bathtub|soaking tub|spa suite|private suite|morning light through curtains|getting ready|lingerie shoot|penthouse bed)\b/i },
   { tag: "outdoor", pattern: /\b(?:forest|mountain|trail|meadow|field|garden|canyon|lake|river|farm|barn|countryside|hiking|pine|valley|cliff|rooftop garden|park|orchard|vineyard|steppe|prairie|wetland|marsh|glade|fjord)\b/i },
@@ -266,7 +267,12 @@ export function inferSceneClothingContexts(input: {
     }
   }
 
-  if (tags.has("beach") || /\b(?:pool|swim|jacuzzi|hot tub)\b/i.test(corpus)) {
+  if (
+    tags.has("swimwear") ||
+    /\b(?:pool|swimming|swimwear|jacuzzi|hot tub|poolside|infinity pool|rooftop pool|beach club pool)\b/i.test(
+      corpus,
+    )
+  ) {
     tags.add("swimwear");
   }
 
@@ -291,8 +297,14 @@ export function buildClothingPickFilters(input: {
   presetOptions?: ClothingScenePresetHints;
   excludeIds?: readonly string[];
 }): ClothingPickFilters {
+  const hintCorpus = [input.hints, input.environmentSeed].filter(Boolean).join(" ");
+  const resolvedGender =
+    input.gender === "women" || input.gender === "men"
+      ? input.gender
+      : inferSubjectGenderFromHints(hintCorpus) ?? input.gender;
+
   return {
-    gender: subjectGenderToClothingGender(input.gender),
+    gender: subjectGenderToClothingGender(resolvedGender),
     contexts: inferSceneClothingContexts({
       sceneLocation: input.sceneLocation,
       environmentSeed: input.environmentSeed,
@@ -316,6 +328,37 @@ export function clothingMatchesGender(
   }
 
   return entryGender === filterGender;
+}
+
+const GENDERED_PICK_CATEGORIES = new Set<string>([
+  "swimwear",
+  "intimate",
+  "hosiery",
+  "formalwear",
+  "sleepwear",
+  "underwear",
+]);
+
+/** Random picks with unknown subject gender skip gendered restricted garments. */
+export function clothingMatchesGenderForPick(
+  entryGender: ClothingGenderTag,
+  entryContexts: readonly ClothingContextTag[],
+  entryCategory: string | undefined,
+  filterGender: "women" | "men" | "any",
+): boolean {
+  if (filterGender !== "any") {
+    return clothingMatchesGender(entryGender, filterGender);
+  }
+
+  const restricted =
+    entryHasRestrictedContext(entryContexts) ||
+    (entryCategory ? GENDERED_PICK_CATEGORIES.has(entryCategory) : false);
+
+  if (restricted && entryGender !== "neutral") {
+    return false;
+  }
+
+  return true;
 }
 
 export function entryHasRestrictedContext(
