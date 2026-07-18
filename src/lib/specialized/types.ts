@@ -38,6 +38,7 @@ export type CharacterOptions = SharedGenerationOptions & {
   variationStrength?: number;
   presetOptions?: CharacterPresetOptions;
   recentLocations?: string[];
+  recentClothing?: string[];
 };
 
 import type { BackgroundPresetOptions } from "../background-options";

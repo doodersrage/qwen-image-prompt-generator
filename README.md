@@ -240,3 +240,20 @@ npm run locations:generate -- --add 250 --batch 4
 ```
 
 New batches land in `src/lib/location-catalog-extra-N.ts`. The script updates `src/lib/location-catalog-batches.ts` automatically — do not edit that index by hand. Word pools live in `scripts/location-word-pools.mjs`.
+
+## Clothing library
+
+The character tool includes a **2,000+ entry clothing catalog** (outfits, tops, bottoms, outerwear, footwear, accessories) used for wardrobe presets and random outfit rolls.
+
+| Command | Purpose |
+|---------|---------|
+| `npm run clothing:count` | Show catalog size by category |
+| `npm run clothing:generate` | Add **500** new clothing entries |
+| `npm run clothing:generate:dry` | Preview without writing files |
+
+```bash
+npm run clothing:generate -- --target 5000
+npm run clothing:generate -- --add 1000 --seed 42
+```
+
+In the Character tool, open **Wardrobe & props** presets to pick library items (grouped dropdowns). Custom text fields override library picks. When no wardrobe preset or clothing hints are set, a random outfit from the library is woven into the generation seed. Word pools: `scripts/clothing-word-pools.mjs`.

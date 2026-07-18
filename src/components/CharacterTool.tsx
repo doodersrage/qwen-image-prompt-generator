@@ -6,6 +6,7 @@ import PromptResultPanel from "@/components/PromptResultPanel";
 import SharedToolControls from "@/components/SharedToolControls";
 import { useCachedSettings } from "@/hooks/useCachedSettings";
 import { useRecentLocations } from "@/hooks/useRecentLocations";
+import { useRecentClothing } from "@/hooks/useRecentClothing";
 import { readSceneLocationFromMetadata } from "@/lib/recent-locations";
 import { getComfyModelDefinition } from "@/lib/comfy-models";
 import { presetOptionsFromCache } from "@/lib/character-options";
@@ -18,7 +19,8 @@ const labelClassName = "text-sm font-medium text-zinc-200";
 export default function CharacterTool() {
   const { mounted, shared, toolSettings, updateShared, updateToolSettings } =
     useCachedSettings("character", DEFAULT_CHARACTER_TOOL_CACHE);
-  const { getRecent, record } = useRecentLocations();
+  const { getRecent, record: recordLocation } = useRecentLocations();
+  const { getRecent: getRecentClothing, record: recordClothing } = useRecentClothing();
   const [output, setOutput] = useState("");
   const [provider, setProvider] = useState<ToolGenerateResult["provider"] | null>(
     null,
@@ -49,6 +51,7 @@ export default function CharacterTool() {
           variationStrength: toolSettings.variationStrength,
           presetOptions: presetOptionsFromCache(toolSettings),
           recentLocations: getRecent(),
+          recentClothing: getRecentClothing(),
         }),
       });
 
@@ -60,7 +63,22 @@ export default function CharacterTool() {
         throw new Error(data.error ?? "Generation failed.");
       }
 
-      record(readSceneLocationFromMetadata(data.metadata));
+      recordLocation(readSceneLocationFromMetadata(data.metadata));
+      const randomOutfit = data.metadata?.randomOutfit as
+        | {
+            wardrobeId?: string | null;
+            footwearId?: string | null;
+            accessoriesId?: string | null;
+          }
+        | undefined;
+      recordClothing([
+        randomOutfit?.wardrobeId,
+        randomOutfit?.footwearId,
+        randomOutfit?.accessoriesId,
+        presetOptionsFromCache(toolSettings).wardrobeCatalog,
+        presetOptionsFromCache(toolSettings).footwearCatalog,
+        presetOptionsFromCache(toolSettings).accessoriesCatalog,
+      ]);
 
       setOutput(data.prompt);
       setProvider(data.provider);
@@ -73,7 +91,7 @@ export default function CharacterTool() {
     } finally {
       setLoading(false);
     }
-  }, [shared, toolSettings, getRecent, record]);
+  }, [shared, toolSettings, getRecent, recordLocation, getRecentClothing, recordClothing]);
 
   const copyOutput = useCallback(async () => {
     if (!output) return;

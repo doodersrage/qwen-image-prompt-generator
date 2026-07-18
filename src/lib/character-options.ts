@@ -1,3 +1,11 @@
+import type { ClothingCatalogFieldKey } from "./clothing-catalog";
+import {
+  CLOTHING_CATALOG_FIELD_KEYS,
+  getClothingCatalogFieldCategories,
+  getClothingScript,
+  normalizeClothingCatalogId,
+} from "./clothing-catalog";
+
 export type CharacterHeadcount = "" | "solo" | "duo";
 
 export type CharacterShotFraming =
@@ -197,6 +205,9 @@ export type CharacterPresetOptions = {
   poseAction?: CharacterPoseAction;
   poseTarget?: string;
   duoDynamic?: CharacterDuoDynamic;
+  wardrobeCatalog?: string;
+  footwearCatalog?: string;
+  accessoriesCatalog?: string;
   wardrobe?: string;
   footwear?: string;
   accessories?: string;
@@ -223,6 +234,8 @@ export type CharacterTextPresetKey =
   | "accessories"
   | "prop";
 
+export type CharacterClothingCatalogPresetKey = ClothingCatalogFieldKey;
+
 type SelectOption<T extends string> = {
   value: T;
   label: string;
@@ -241,6 +254,11 @@ export type CharacterPresetUiField =
       label: string;
       placeholder?: string;
       requires?: "poseAction";
+    }
+  | {
+      kind: "clothing-catalog";
+      key: CharacterClothingCatalogPresetKey;
+      label: string;
     };
 
 export type CharacterPresetUiSection = {
@@ -1106,24 +1124,40 @@ export const CHARACTER_PRESET_UI_SECTIONS: CharacterPresetUiSection[] = [
   {
     id: "wardrobe",
     title: "Wardrobe & props",
-    description: "Free text—texture language is appended automatically.",
+    description:
+      "Pick from the clothing library or type custom details—texture language is appended for custom text.",
     fields: [
+      {
+        kind: "clothing-catalog",
+        key: "wardrobeCatalog",
+        label: "Wardrobe library",
+      },
       {
         kind: "text",
         key: "wardrobe",
-        label: "Wardrobe",
+        label: "Custom wardrobe (overrides library)",
         placeholder: "dark blue pullover hoodie",
+      },
+      {
+        kind: "clothing-catalog",
+        key: "footwearCatalog",
+        label: "Footwear library",
       },
       {
         kind: "text",
         key: "footwear",
-        label: "Footwear",
+        label: "Custom footwear (overrides library)",
         placeholder: "scuffed white leather sneakers",
+      },
+      {
+        kind: "clothing-catalog",
+        key: "accessoriesCatalog",
+        label: "Accessories library",
       },
       {
         kind: "text",
         key: "accessories",
-        label: "Accessories",
+        label: "Custom accessories (overrides library)",
         placeholder: "matte black over-ear headphones",
       },
       {
@@ -1184,6 +1218,7 @@ const VALID_OPTION_VALUES = Object.fromEntries(
 export const CHARACTER_PRESET_FIELD_KEYS: (keyof CharacterPresetOptions)[] = [
   ...PRESET_SELECT_KEYS,
   "poseTarget",
+  ...CLOTHING_CATALOG_FIELD_KEYS,
   ...PRESET_TEXT_KEYS,
 ];
 
@@ -1272,6 +1307,12 @@ export function normalizeCharacterPresetOptions(
   }
 
   normalized.poseTarget = input?.poseTarget?.trim() ?? "";
+  for (const key of CLOTHING_CATALOG_FIELD_KEYS) {
+    normalized[key] = normalizeClothingCatalogId(
+      input?.[key],
+      getClothingCatalogFieldCategories(key),
+    );
+  }
   for (const key of PRESET_TEXT_KEYS) {
     normalized[key] = input?.[key]?.trim() ?? "";
   }
@@ -1327,6 +1368,12 @@ export function countCharacterPresetSelections(
     }
   }
 
+  for (const key of CLOTHING_CATALOG_FIELD_KEYS) {
+    if (options[key]) {
+      count += 1;
+    }
+  }
+
   return count;
 }
 
@@ -1352,6 +1399,13 @@ export function countCharacterPresetSectionSelections(
       }
 
       if (options[field.key as keyof CharacterPresetOptions]) {
+        count += 1;
+      }
+      continue;
+    }
+
+    if (field.kind === "clothing-catalog") {
+      if (options[field.key]) {
         count += 1;
       }
       continue;
@@ -1453,16 +1507,31 @@ export function getCharacterPresetScriptLines(
     }
   }
 
-  if (options.wardrobe) {
+  if (options.wardrobe?.trim()) {
     lines.push(`wearing ${enrichWardrobe(options.wardrobe)},`);
+  } else {
+    const catalogWardrobe = getClothingScript(options.wardrobeCatalog);
+    if (catalogWardrobe) {
+      lines.push(`wearing ${catalogWardrobe},`);
+    }
   }
 
-  if (options.footwear) {
+  if (options.footwear?.trim()) {
     lines.push(`wearing ${enrichFootwear(options.footwear)},`);
+  } else {
+    const catalogFootwear = getClothingScript(options.footwearCatalog);
+    if (catalogFootwear) {
+      lines.push(`wearing ${catalogFootwear},`);
+    }
   }
 
-  if (options.accessories) {
+  if (options.accessories?.trim()) {
     lines.push(`wearing ${enrichAccessories(options.accessories)},`);
+  } else {
+    const catalogAccessories = getClothingScript(options.accessoriesCatalog);
+    if (catalogAccessories) {
+      lines.push(`wearing ${catalogAccessories},`);
+    }
   }
 
   if (options.prop) {

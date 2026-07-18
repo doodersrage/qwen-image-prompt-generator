@@ -9,7 +9,10 @@
     "lint": "eslint",
     "locations:count": "node scripts/generate-locations.mjs --count",
     "locations:generate": "node scripts/generate-locations.mjs --add 500",
-    "locations:generate:dry": "node scripts/generate-locations.mjs --add 500 --dry-run"
+    "locations:generate:dry": "node scripts/generate-locations.mjs --add 500 --dry-run",
+    "clothing:count": "node scripts/generate-clothing.mjs --count",
+    "clothing:generate": "node scripts/generate-clothing.mjs --add 500",
+    "clothing:generate:dry": "node scripts/generate-clothing.mjs --add 500 --dry-run"
   },
   "dependencies": {
     "next": "16.2.10",

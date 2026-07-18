@@ -23,6 +23,11 @@ import {
   buildSinglePersonSystemAddendum,
   buildSinglePersonUserDirective,
 } from "../single-person";
+import {
+  hasWardrobeCatalogSelection,
+  hintsMentionClothing,
+  pickRandomCharacterOutfit,
+} from "../clothing-catalog";
 import { buildRandomCharacterSeed } from "./scene-pools";
 import { runSpecializedPrompt } from "./runner";
 import type { CharacterOptions, ToolGenerateResult } from "./types";
@@ -56,6 +61,14 @@ export async function generateCharacterPrompt(
     portraitStyle,
     options.recentLocations,
   );
+  const randomOutfit =
+    !hasWardrobeCatalogSelection(presetOptions) &&
+    !hintsMentionClothing(options.hints)
+      ? pickRandomCharacterOutfit(options.recentClothing)
+      : null;
+  const environmentSeed = randomOutfit
+    ? `${seed}, wearing ${randomOutfit.summary}`
+    : seed;
   const identitySeed = pickCharacterIdentitySeed(parsed);
   const mandatoryBlock = buildCharacterMandatoryBlock(parsed);
   const locationBlock = buildMandatoryLocationBlock(settingHint.location);
@@ -64,7 +77,7 @@ export async function generateCharacterPrompt(
   const hasPresets = hasCharacterPresetOptions(presetOptions);
   const sanitizeContext = buildCharacterPresetSanitizeContext(
     options.hints,
-    seed,
+    environmentSeed,
     presetOptions,
   );
 
@@ -109,7 +122,7 @@ ${soloRules}
       : identitySeed
         ? `Optional identity inspiration (use only if compatible with mandatory direction): ${identitySeed}`
         : null,
-    `Environment and mood: ${seed}`,
+    `Environment and mood: ${environmentSeed}`,
     hasPoseAnchor(presetOptions)
       ? "Pose anchor preset is active—prioritize it over default portrait/action framing."
       : `Framing: ${portraitStyle}`,
@@ -143,12 +156,14 @@ ${soloRules}
         : undefined,
     temperature,
     soloSubject: !duoMode,
+    seed: environmentSeed,
     metadata: {
       portraitStyle,
       hints: parsed.raw || null,
       location: settingHint.location,
       sceneLocation,
-      seed,
+      seed: environmentSeed,
+      randomOutfit,
       identitySeed,
       parsedHints: parsed,
       presetOptions,

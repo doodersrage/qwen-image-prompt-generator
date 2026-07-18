@@ -17,6 +17,7 @@ type CharacterRequestBody = {
   variationStrength?: number;
   presetOptions?: Partial<Record<keyof CharacterPresetOptions, string>>;
   recentLocations?: string[];
+  recentClothing?: string[];
 };
 
 export async function GET() {
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
           : 50,
       presetOptions: normalizeCharacterPresetOptions(body.presetOptions),
       recentLocations: normalizeRecentLocations(body.recentLocations),
+      recentClothing: normalizeRecentLocations(body.recentClothing),
     });
 
     return apiJson(result);

@@ -2,6 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  getClothingCatalogFieldCategories,
+  getClothingSelectOptions,
+  type ClothingCatalogFieldKey,
+} from "@/lib/clothing-catalog";
+import {
   CHARACTER_POSE_TARGET_PLACEHOLDERS,
   CHARACTER_PRESET_UI_SECTIONS,
   clearCharacterPresetPatch,
@@ -21,6 +26,59 @@ const fieldClassName =
   "w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-sky-500";
 
 const labelClassName = "text-sm font-medium text-zinc-200";
+
+function ClothingCatalogSelect({
+  label,
+  value,
+  catalogKey,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  catalogKey: ClothingCatalogFieldKey;
+  onChange: (value: string) => void;
+}) {
+  const options = getClothingSelectOptions(
+    getClothingCatalogFieldCategories(catalogKey),
+  );
+  const groups = new Map<string, Array<{ value: string; label: string }>>();
+
+  for (const option of options) {
+    const group = option.group ?? "General";
+    if (!groups.has(group)) {
+      groups.set(group, []);
+    }
+    groups.get(group)!.push({ value: option.value, label: option.label });
+  }
+
+  return (
+    <label className="space-y-2">
+      <span className={labelClassName}>{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={fieldClassName}
+      >
+        {options
+          .filter((option) => !option.group)
+          .map((option) => (
+            <option key={option.value || "default"} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        {[...groups.entries()].map(([group, groupOptions]) => (
+          <optgroup key={group} label={group}>
+            {groupOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+    </label>
+  );
+}
 
 function CharacterSelect({
   label,
@@ -72,6 +130,17 @@ function PresetField({
         label={field.label}
         value={(settings[field.key] as string | undefined) ?? ""}
         options={getSelectOptionsForPresetKey(field.key)}
+        onChange={(value) => onChange({ [field.key]: value })}
+      />
+    );
+  }
+
+  if (field.kind === "clothing-catalog") {
+    return (
+      <ClothingCatalogSelect
+        label={field.label}
+        catalogKey={field.key}
+        value={(settings[field.key] as string | undefined) ?? ""}
         onChange={(value) => onChange({ [field.key]: value })}
       />
     );
@@ -206,8 +275,8 @@ export default function CharacterPresetControls({
           <div className="space-y-1">
             <p className={labelClassName}>Character presets (optional)</p>
             <p className="text-xs leading-relaxed text-zinc-500">
-              40+ camera, lighting, body, pose, and wardrobe options—collapsed
-              by default. Each selection maps to prompt script language.
+              40+ camera, lighting, body, pose, wardrobe library, and prop
+              options—collapsed by default. Each selection maps to prompt script language.
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2 pt-0.5">
