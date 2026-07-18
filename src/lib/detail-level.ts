@@ -1,8 +1,8 @@
 import {
   DEFAULT_QWEN_MODEL,
   getPromptLimits,
-  type QwenImageModel,
-} from "./qwen-model";
+  type ComfyImageModel,
+} from "./comfy-models";
 
 export type DetailLevel = "concise" | "balanced" | "rich";
 
@@ -30,7 +30,7 @@ export function normalizeDetailLevel(value?: string | null): DetailLevel {
 
 export function getDetailLimits(
   detail: DetailLevel,
-  model: QwenImageModel = DEFAULT_QWEN_MODEL,
+  model: ComfyImageModel = DEFAULT_QWEN_MODEL,
 ): DetailLimits {
   return {
     ...getPromptLimits(detail, model),
@@ -127,4 +127,4 @@ export const QWEN_FEW_SHOT_BY_DETAIL: Record<DetailLevel, FewShotExample[]> = {
   ],
 };
 
-export type { QwenImageModel };
+export type { ComfyImageModel, QwenImageModel } from "./comfy-models";

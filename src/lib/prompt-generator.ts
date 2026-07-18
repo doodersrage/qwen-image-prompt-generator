@@ -21,8 +21,10 @@ import {
 } from "./detail-level";
 import {
   buildModelSystemPrompt,
-  getQwenModelDefinition,
-} from "./qwen-model";
+  fluxIgnoresNegative,
+  getComfyModelDefinition,
+  type PromptProfileId,
+} from "./comfy-models";
 import {
   buildDistinctPeopleSystemAddendum,
   buildGroupedPeopleSystemAddendum,
@@ -307,6 +309,7 @@ function paintSceneFromKeywords(
   input: string,
   settings: GenerationSettings = DEFAULT_GENERATION_SETTINGS,
 ): string {
+  const profile = getComfyModelDefinition(settings.model).profile;
   const keywords = parseKeywords(input);
   const primary = keywords[0] ?? input.trim();
   const supporting = keywords.slice(0, settings.detail === "rich" ? 3 : 2);
@@ -319,51 +322,82 @@ function paintSceneFromKeywords(
       ? topic
       : topic.charAt(0).toLowerCase() + topic.slice(1);
 
-  if (settings.model === "qwen-image-edit-2511") {
-    if (settings.detail === "concise") {
+  return paintSceneForProfile(normalized, settings.detail, profile);
+}
+
+function paintSceneForProfile(
+  normalized: string,
+  detail: GenerationSettings["detail"],
+  profile: PromptProfileId,
+): string {
+  if (profile === "qwen_edit_instruction") {
+    if (detail === "concise") {
       return `Replace the scene with ${normalized} under clear directional light.`;
     }
-    if (settings.detail === "rich") {
+    if (detail === "rich") {
       return `Replace the scene with ${capitalize(normalized)} under clear directional light, surfaces showing tangible texture. The main subject anchors the frame while atmosphere builds from foreground to background. One distant environmental beat completes the unified composition.`;
     }
     return `Replace the scene with ${capitalize(normalized)} under clear directional light, with visible texture. The main subject anchors the frame while one background detail adds depth.`;
   }
 
-  if (settings.model === "qwen-image-2512") {
-    if (settings.detail === "concise") {
+  if (profile === "instruct_pix2pix") {
+    if (detail === "concise") {
+      return `Transform the image to show ${normalized}.`;
+    }
+    return `Transform the image to show ${capitalize(normalized)} with clear lighting and cohesive detail throughout the frame.`;
+  }
+
+  if (profile === "qwen_t2i_factual") {
+    if (detail === "concise") {
       return `${capitalize(normalized)} under clear light with readable color and spatial depth. The main subject holds the frame in one cohesive moment.`;
     }
-    if (settings.detail === "rich") {
+    if (detail === "rich") {
       return `${capitalize(normalized)} anchors the midground with clear shape, texture, and color under soft directional light. Foreground and background elements sit in readable spatial layers—near surfaces show material detail while distant forms fade with atmospheric depth. Warm key light from camera-left mixes with cooler ambient fill, keeping subjects and any visible text sharp and legible.`;
     }
     return `${capitalize(normalized)} under clear directional light, with visible texture and cohesive color. The main subject sits in the midground while the background adds spatial depth in the same moment.`;
   }
 
-  if (settings.model === "flux-2-klein") {
-    if (settings.detail === "concise") {
+  if (profile === "flux_klein" || profile === "flux_prose") {
+    if (detail === "concise") {
       return `${capitalize(normalized)} holds the frame under clear directional light. The subject reads sharply in the foreground with a simple background.`;
     }
-    if (settings.detail === "rich") {
+    if (detail === "rich") {
       return `${capitalize(normalized)} anchors the foreground, posture and materials rendered with tactile detail—worn surfaces, visible texture, and weight in the light. The setting unfolds in layered depth from near detail through midground forms to a hazy background, warm key light from camera-left mixing with cool ambient fill. Lighting follows a photographic logic: soft key, gentle fill, subtle rim separation on the subject. Materials read distinctly throughout—matte versus glossy, fine grain, natural imperfections. Shot at eye level with moderate depth of field, the main subject tack sharp while the environment recedes into atmospheric perspective.`;
     }
     return `${capitalize(normalized)} anchors the frame in the foreground with clear material detail. The setting builds behind in layered depth under soft directional light with warm key and cool fill. Moderate depth of field, eye-level composition.`;
   }
 
-  if (settings.model === "qwen-image-2.0") {
-    if (settings.detail === "concise") {
+  if (profile === "flux_schnell") {
+    if (detail === "concise") {
+      return `${capitalize(normalized)} under clear light with a readable subject and simple background.`;
+    }
+    return `${capitalize(normalized)} in a cohesive scene with directional light, material detail, and a clear foreground subject.`;
+  }
+
+  if (profile === "sd15_weighted") {
+    const tags = normalized
+      .split(/,\s*/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .slice(0, detail === "rich" ? 8 : detail === "balanced" ? 6 : 4);
+    return tags.join(", ");
+  }
+
+  if (profile === "qwen_t2i_rich") {
+    if (detail === "concise") {
       return `${capitalize(normalized)} under clear directional light. The main subject holds the frame in one cohesive moment.`;
     }
-    if (settings.detail === "rich") {
+    if (detail === "rich") {
       return `${capitalize(normalized)} anchors the foreground with posture, clothing, and surface texture reading clearly in the light. The setting builds through midground detail into a soft atmospheric background, wet or worn materials catching specular highlights beside matte surfaces. Warm key light from camera-left mixes with cooler ambient fill across the frame, color temperature shifting from golden highlights to blue-gray shadows. Fine environmental beats—distant glow, weathered architecture, or natural depth—settle into the background while the air holds tangible atmosphere. The composition holds at eye level with moderate depth of field, the subject sharp while the scene recedes into unified perspective.`;
     }
     return `${capitalize(normalized)} under clear directional light, with visible texture and a cohesive palette. The main subject anchors the frame while one background detail adds depth to the same moment.`;
   }
 
-  if (settings.detail === "concise") {
+  if (detail === "concise") {
     return `${capitalize(normalized)} under clear directional light. The main subject holds the frame in one cohesive moment.`;
   }
 
-  if (settings.detail === "rich") {
+  if (detail === "rich") {
     return `${capitalize(normalized)} under clear directional light, surfaces showing tangible texture and material weight. The main subject anchors the frame in a single frozen moment, posture and clothing reading clearly in the light. Atmosphere builds depth from foreground to background while supporting details settle naturally into the midground. One distant environmental beat completes the same unified scene.`;
   }
 
@@ -381,14 +415,21 @@ export function generateWithTemplate(
   }
 
   if (mode === "negative") {
-    if (settings.model === "flux-2-klein") {
+    const profile = getComfyModelDefinition(settings.model).profile;
+    if (fluxIgnoresNegative(profile)) {
       return `Stable composition with unchanged facial features, pose, and proportions. Clean unmarked surfaces. ${trimmed}.`;
     }
-    if (settings.model === "qwen-image-2512" || settings.model === "qwen-image-2.0") {
+    if (profile === "qwen_t2i_factual" || profile === "qwen_t2i_rich") {
       return `Avoid changing facial features, pose, proportions, and composition unless requested. ${trimmed}.`;
     }
-    if (settings.model === "qwen-image-edit-2511") {
+    if (profile === "qwen_edit_instruction") {
       return `Do not change pose, face, or lighting unless specified. Only edit what is requested. Avoid: ${trimmed}.`;
+    }
+    if (profile === "instruct_pix2pix") {
+      return `Keep the rest of the image unchanged. ${trimmed}.`;
+    }
+    if (profile === "sd15_weighted") {
+      return `blurry, low quality, watermark, deformed, bad anatomy, extra limbs, ${trimmed}`;
     }
     return `Do not alter unrelated elements. Keep facial features, pose, proportions, and background composition unchanged unless explicitly requested. Avoid changing: ${trimmed}.`;
   }
@@ -472,7 +513,7 @@ function buildGenerateResult(
   settings: GenerationSettings,
 ): GenerateResult {
   const limits = getDetailLimits(settings.detail, settings.model);
-  const modelDef = getQwenModelDefinition(settings.model);
+  const modelDef = getComfyModelDefinition(settings.model);
 
   return {
     prompt,

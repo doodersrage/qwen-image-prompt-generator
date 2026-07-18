@@ -1,0 +1,55 @@
+import type { DetailLevel, FewShotExample } from "../detail-level";
+
+export type ComfyModelCategory =
+  | "stable-diffusion"
+  | "sdxl"
+  | "sd3"
+  | "flux"
+  | "qwen"
+  | "hunyuan"
+  | "other-dit"
+  | "instruct-edit";
+
+export type PromptProfileId =
+  | "sd15_weighted"
+  | "sdxl_nlp"
+  | "sd3_nlp"
+  | "flux_prose"
+  | "flux_klein"
+  | "flux_schnell"
+  | "qwen_edit"
+  | "qwen_edit_instruction"
+  | "qwen_t2i_factual"
+  | "qwen_t2i_rich"
+  | "hunyuan_nlp"
+  | "pixart_nlp"
+  | "lumina_nlp"
+  | "cascade_nlp"
+  | "instruct_pix2pix"
+  | "omnigen_instruction"
+  | "generic_nlp";
+
+export type PromptLimits = {
+  minSentences: number;
+  maxSentences: number;
+  minChars?: number;
+  maxChars: number;
+  maxTokens: number;
+};
+
+export type ComfyImageModelDefinition = {
+  id: string;
+  label: string;
+  category: ComfyModelCategory;
+  comfyNode: string;
+  description: string;
+  profile: PromptProfileId;
+  referenceTokenLimit: number;
+  limitsByDetail: Record<DetailLevel, PromptLimits>;
+  /** ComfyUI supported_models.py class name, when applicable */
+  comfyClass?: string;
+};
+
+export type ComfyImageModel = string;
+
+export type { DetailLevel, FewShotExample };

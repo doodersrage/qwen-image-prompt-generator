@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import ModelSelector from "@/components/ModelSelector";
 import { DEFAULT_GENERATION_SETTINGS } from "@/lib/generation-settings";
 import type { DetailLevel } from "@/lib/detail-level";
 import { getDetailLimits } from "@/lib/detail-level";
 import {
-  QWEN_MODELS,
-  type QwenImageModel,
-} from "@/lib/qwen-model";
+  getComfyModelDefinition,
+  type ComfyImageModel,
+} from "@/lib/comfy-models";
 import { variationStrengthLabel } from "@/lib/variation-settings";
 
 type PromptMode = "positive" | "negative";
@@ -16,7 +17,7 @@ type GenerateResponse = {
   prompt: string;
   mode: PromptMode;
   provider: "llm" | "template";
-  model: QwenImageModel;
+  model: ComfyImageModel;
   comfyNode: string;
   limits: {
     minChars?: number;
@@ -54,7 +55,7 @@ export default function PromptGenerator() {
   const [detail, setDetail] = useState<DetailLevel>(
     DEFAULT_GENERATION_SETTINGS.detail,
   );
-  const [qwenModel, setQwenModel] = useState<QwenImageModel>(
+  const [qwenModel, setQwenModel] = useState<ComfyImageModel>(
     DEFAULT_GENERATION_SETTINGS.model,
   );
   const [resultMeta, setResultMeta] = useState<Pick<
@@ -63,7 +64,7 @@ export default function PromptGenerator() {
   > | null>(null);
 
   const selectedModel = useMemo(
-    () => QWEN_MODELS.find((entry) => entry.id === qwenModel) ?? QWEN_MODELS[0]!,
+    () => getComfyModelDefinition(qwenModel),
     [qwenModel],
   );
 
@@ -149,11 +150,11 @@ export default function PromptGenerator() {
           ComfyUI · {selectedModel.comfyNode}
         </div>
         <h1 className="text-3xl font-semibold tracking-tight text-zinc-50 sm:text-4xl">
-          Qwen Image Prompt Generator
+          ComfyUI Image Prompt Generator
         </h1>
         <p className="max-w-2xl text-base leading-relaxed text-zinc-400">
           Enter a topic or keywords. The generator formats natural-language
-          prompts for your chosen Qwen model—
+          prompts for your chosen ComfyUI image model—
           <code className="rounded bg-zinc-800 px-1.5 py-0.5 text-sm text-violet-300">
             {selectedModel.comfyNode}
           </code>
@@ -170,36 +171,7 @@ export default function PromptGenerator() {
               you choose.
             </p>
           </div>
-          <div className="flex flex-col gap-2">
-            {QWEN_MODELS.map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                onClick={() => setQwenModel(entry.id)}
-                className={`rounded-xl border px-4 py-3 text-left transition ${
-                  qwenModel === entry.id
-                    ? "border-violet-500 bg-violet-500/10"
-                    : "border-zinc-700 hover:border-zinc-500"
-                }`}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span
-                    className={`text-sm font-medium ${
-                      qwenModel === entry.id ? "text-violet-200" : "text-zinc-200"
-                    }`}
-                  >
-                    {entry.label}
-                  </span>
-                  <span className="font-mono text-[11px] text-zinc-500">
-                    {entry.comfyNode}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs leading-relaxed text-zinc-500">
-                  {entry.description}
-                </p>
-              </button>
-            ))}
-          </div>
+          <ModelSelector value={qwenModel} onChange={setQwenModel} />
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -488,8 +460,8 @@ export default function PromptGenerator() {
           <li>
             Pick your{" "}
             <strong className="font-medium text-zinc-400">target model</strong>
-            —Edit, Edit-2511, Image-2512, Image-2.0, or FLUX.2 Klein—each uses different prompt style and
-            size limits.
+            —SD1.5, SDXL, SD3, Flux, Qwen Image, Hunyuan, PixArt, and more—each
+            uses a prompt style tuned for that architecture.
           </li>
           <li>
             <strong className="font-medium text-zinc-400">Edit-2511</strong>{" "}

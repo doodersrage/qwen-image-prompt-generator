@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Qwen Image Prompt Generator",
+  title: "ComfyUI Image Prompt Tools",
   description:
-    "Format prompts for Qwen-Image-Edit, Edit-2511, Image-2512, Image-2.0, and FLUX.2 Klein in ComfyUI.",
+    "Generate and format prompts for SD, SDXL, SD3, Flux, Qwen Image, Hunyuan, and other ComfyUI image models.",
 };
 
 export default function RootLayout({

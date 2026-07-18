@@ -6,15 +6,17 @@ import {
   buildModelClarityAddendum,
   buildModelSystemPrompt,
   formatPromptForModel,
-  getQwenModelDefinition,
+  fluxIgnoresNegative,
+  getComfyModelDefinition,
+  isEditInstructionProfile,
   normalizeQwenModel,
-  type QwenImageModel,
-} from "./qwen-model";
+  type ComfyImageModel,
+} from "./comfy-models";
 
 export type FormatMode = "positive" | "negative";
 
 export type FormatSettings = {
-  model: QwenImageModel;
+  model: ComfyImageModel;
   detail: DetailLevel;
   mode: FormatMode;
   smartFormat: boolean;
@@ -23,7 +25,7 @@ export type FormatSettings = {
 export type FormatResult = {
   prompt: string;
   mode: FormatMode;
-  model: QwenImageModel;
+  model: ComfyImageModel;
   comfyNode: string;
   provider: "llm" | "rules";
   limits: {
@@ -45,7 +47,7 @@ const DEFAULT_FORMAT_SETTINGS: FormatSettings = {
 
 export function normalizeFormatSettings(
   value?: Partial<Omit<FormatSettings, "model" | "detail">> & {
-    model?: string | QwenImageModel;
+    model?: string | ComfyImageModel;
     detail?: string | DetailLevel;
   } | null,
 ): FormatSettings {
@@ -120,8 +122,10 @@ function applyModelStructure(
   text: string,
   settings: FormatSettings,
 ): string {
+  const profile = getComfyModelDefinition(settings.model).profile;
+
   if (settings.mode === "negative") {
-    if (settings.model === "flux-2-klein") {
+    if (fluxIgnoresNegative(profile)) {
       const stripped = text
         .replace(/\b(do not|don't|avoid|no|never)\b/gi, "")
         .replace(/\s+/g, " ")
@@ -131,7 +135,7 @@ function applyModelStructure(
     return text;
   }
 
-  if (settings.model === "qwen-image-edit-2511") {
+  if (profile === "qwen_edit_instruction") {
     const hasEditPattern =
       /\b(keep|preserve|replace|change|figure\s*[12])\b/i.test(text);
 
@@ -153,7 +157,41 @@ function applyModelStructure(
     }
   }
 
-  if (settings.model === "flux-2-klein" && looksLikeTagSoup(text)) {
+  if (profile === "instruct_pix2pix") {
+    if (/^(make|turn|change|add|remove|transform)\b/i.test(text)) {
+      return text;
+    }
+    if (looksLikeTagSoup(text)) {
+      const prose = tagSoupToProse(text);
+      return `Transform the image to show ${prose.charAt(0).toLowerCase() + prose.slice(1)}`;
+    }
+    if (!/^transform the image\b/i.test(text)) {
+      return `Transform the image to show ${text.charAt(0).toLowerCase() + text.slice(1)}`;
+    }
+  }
+
+  if (profile === "omnigen_instruction" && !/\b(keep|replace|change|figure\s*[12])\b/i.test(text)) {
+    if (looksLikeTagSoup(text)) {
+      const prose = tagSoupToProse(text);
+      return `Generate an image showing ${prose.charAt(0).toLowerCase() + prose.slice(1)}`;
+    }
+    return text;
+  }
+
+  if (profile === "sd15_weighted" && looksLikeTagSoup(text)) {
+    return text;
+  }
+
+  if (
+    (profile === "flux_klein" ||
+      profile === "flux_prose" ||
+      profile === "flux_schnell") &&
+    looksLikeTagSoup(text)
+  ) {
+    return tagSoupToProse(text);
+  }
+
+  if (isEditInstructionProfile(profile) && looksLikeTagSoup(text)) {
     return tagSoupToProse(text);
   }
 
@@ -196,10 +234,10 @@ async function formatWithLlm(
   settings: FormatSettings,
 ): Promise<string> {
   const { baseUrl, apiKey, model } = getLlmConfig();
-  const modelDef = getQwenModelDefinition(settings.model);
+  const modelDef = getComfyModelDefinition(settings.model);
 
   const fluxNegativeNote =
-    settings.mode === "negative" && settings.model === "flux-2-klein"
+    settings.mode === "negative" && fluxIgnoresNegative(modelDef.profile)
       ? "FLUX ignores negatives—phrase positively what must stay unchanged."
       : "";
 
@@ -280,7 +318,7 @@ function buildFormatResult(
   provider: FormatResult["provider"],
 ): FormatResult {
   const limits = getDetailLimits(settings.detail, settings.model);
-  const modelDef = getQwenModelDefinition(settings.model);
+  const modelDef = getComfyModelDefinition(settings.model);
 
   return {
     prompt,

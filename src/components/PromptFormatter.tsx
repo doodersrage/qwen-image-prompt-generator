@@ -1,20 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import ModelSelector from "@/components/ModelSelector";
 import type { DetailLevel } from "@/lib/detail-level";
 import { getDetailLimits } from "@/lib/detail-level";
 import { DEFAULT_GENERATION_SETTINGS } from "@/lib/generation-settings";
 import {
-  QWEN_MODELS,
-  type QwenImageModel,
-} from "@/lib/qwen-model";
+  getComfyModelDefinition,
+  type ComfyImageModel,
+} from "@/lib/comfy-models";
 
 type FormatMode = "positive" | "negative";
 
 type FormatResponse = {
   prompt: string;
   mode: FormatMode;
-  model: QwenImageModel;
+  model: ComfyImageModel;
   comfyNode: string;
   provider: "llm" | "rules";
   limits: {
@@ -37,7 +38,7 @@ export default function PromptFormatter() {
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<FormatMode>("positive");
   const [detail, setDetail] = useState<DetailLevel>("balanced");
-  const [targetModel, setTargetModel] = useState<QwenImageModel>(
+  const [targetModel, setTargetModel] = useState<ComfyImageModel>(
     DEFAULT_GENERATION_SETTINGS.model,
   );
   const [smartFormat, setSmartFormat] = useState(true);
@@ -53,8 +54,7 @@ export default function PromptFormatter() {
   const [mounted, setMounted] = useState(false);
 
   const selectedModel = useMemo(
-    () =>
-      QWEN_MODELS.find((entry) => entry.id === targetModel) ?? QWEN_MODELS[0]!,
+    () => getComfyModelDefinition(targetModel),
     [targetModel],
   );
 
@@ -154,38 +154,7 @@ export default function PromptFormatter() {
       <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-xl shadow-black/20 backdrop-blur">
         <div className="space-y-3">
           <p className="text-sm font-medium text-zinc-200">Target model</p>
-          <div className="flex flex-col gap-2">
-            {QWEN_MODELS.map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                onClick={() => setTargetModel(entry.id)}
-                className={`rounded-xl border px-4 py-3 text-left transition ${
-                  targetModel === entry.id
-                    ? "border-emerald-500 bg-emerald-500/10"
-                    : "border-zinc-700 hover:border-zinc-500"
-                }`}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span
-                    className={`text-sm font-medium ${
-                      targetModel === entry.id
-                        ? "text-emerald-200"
-                        : "text-zinc-200"
-                    }`}
-                  >
-                    {entry.label}
-                  </span>
-                  <span className="font-mono text-[11px] text-zinc-500">
-                    {entry.comfyNode}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs leading-relaxed text-zinc-500">
-                  {entry.description}
-                </p>
-              </button>
-            ))}
-          </div>
+          <ModelSelector value={targetModel} onChange={setTargetModel} />
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800 pt-4">

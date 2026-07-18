@@ -5,12 +5,15 @@ import {
   stripMetaInstructions,
   stripPromptArtifacts,
 } from "./prompt-cleanup";
-import type { QwenImageModel } from "./qwen-model";
 import {
   buildModelClarityAddendum,
   buildModelUserDirective,
   DEFAULT_QWEN_MODEL,
-} from "./qwen-model";
+  expansionBeatsForProfile,
+  getComfyModelDefinition,
+  shouldEnforceMinPadding,
+  type ComfyImageModel,
+} from "./comfy-models";
 
 export type { DetailLevel };
 export {
@@ -24,29 +27,31 @@ export {
   GROUPED_COUPLE_FEW_SHOT_BY_DETAIL,
   QWEN_FEW_SHOT_BY_DETAIL,
   type FewShotExample,
-  type QwenImageModel,
 } from "./detail-level";
 export {
+  COMFY_IMAGE_MODELS,
   DEFAULT_QWEN_MODEL,
   formatPromptForModel,
+  getComfyModelDefinition,
   getModelFewShots,
   getPromptLimits,
   getQwenModelDefinition,
   normalizeQwenModel,
   QWEN_MODELS,
   qwenModelLabel,
-} from "./qwen-model";
+} from "./comfy-models";
+export type { ComfyImageModel, QwenImageModel } from "./comfy-models";
 
 export function buildClaritySystemAddendum(
   detail: DetailLevel,
-  model: QwenImageModel = DEFAULT_QWEN_MODEL,
+  model: ComfyImageModel = DEFAULT_QWEN_MODEL,
 ): string {
   return buildModelClarityAddendum(detail, model);
 }
 
 export function buildDetailUserDirective(
   detail: DetailLevel,
-  model: QwenImageModel = DEFAULT_QWEN_MODEL,
+  model: ComfyImageModel = DEFAULT_QWEN_MODEL,
 ): string {
   return buildModelUserDirective(detail, model);
 }
@@ -96,40 +101,17 @@ function splitSentences(text: string): string[] {
     .filter(Boolean);
 }
 
-const RICH_EXPANSION_BEATS = [
-  "Fine surface textures read clearly in the directional light—matte stone, worn fabric, brushed metal, or damp pavement catching subtle specular highlights.",
-  "The lighting mixes a warm key from camera-left with cooler ambient fill, color temperature shifting from golden highlights to blue-gray shadows across the scene.",
-  "In the midground, supporting elements settle into layered depth while background forms fade through atmospheric haze that keeps the frame unified.",
-  "Material weight grounds the image: glossy wet surfaces beside matte aged wood, fine grain in metal, and soft organic texture in fabric or foliage.",
-  "The composition holds at a natural eye level with moderate depth of field—the main subject sharp while the environment recedes into soft perspective.",
-  "Small environmental details in the distance—distant glow, fading architecture, or weather-worn surfaces—complete the same continuous moment.",
-];
-
-const RICH_EXPANSION_BEATS_2512 = [
-  "Foreground and background elements read in clear spatial layers under the same light.",
-  "Surface color and texture stay consistent across the frame with readable depth.",
-  "The main subject remains centered in the midground with supporting details placed left and right.",
-  "Lighting stays even enough to preserve shape, material, and any visible text in the scene.",
-];
-
-function expansionBeatsForModel(model: QwenImageModel): string[] {
-  if (model === "qwen-image-2512") {
-    return RICH_EXPANSION_BEATS_2512;
-  }
-  return RICH_EXPANSION_BEATS;
-}
-
 function expandPromptToMinChars(
   text: string,
   detail: DetailLevel,
-  model: QwenImageModel,
+  model: ComfyImageModel,
 ): string {
   const { minChars, maxChars, maxSentences } = getDetailLimits(detail, model);
   if (!minChars || text.length >= minChars) {
     return text;
   }
 
-  const beats = expansionBeatsForModel(model);
+  const beats = expansionBeatsForProfile(getComfyModelDefinition(model).profile);
   let expanded = text;
   let beatIndex = 0;
 
@@ -168,7 +150,7 @@ function expandPromptToMinChars(
 function padPromptToMinimum(
   text: string,
   detail: DetailLevel,
-  model: QwenImageModel,
+  model: ComfyImageModel,
   input: string,
 ): string {
   const { minSentences } = getDetailLimits(detail, model);
@@ -187,9 +169,9 @@ function padPromptToMinimum(
     );
   }
 
-  if (detail === "rich" || model === "qwen-image-2512" || model === "qwen-image-2.0" || model === "flux-2-klein") {
+  if (shouldEnforceMinPadding(getComfyModelDefinition(model).profile, detail)) {
     while (sentences.length + pads.length < minSentences) {
-      const beats = expansionBeatsForModel(model);
+      const beats = expansionBeatsForProfile(getComfyModelDefinition(model).profile);
       const index = pads.length % beats.length;
       pads.push(beats[index]!);
     }
@@ -207,7 +189,7 @@ export function sanitizeQwenPrompt(
   raw: string,
   detail: DetailLevel = "balanced",
   input = "",
-  model: QwenImageModel = DEFAULT_QWEN_MODEL,
+  model: ComfyImageModel = DEFAULT_QWEN_MODEL,
   options: SanitizeOptions = {},
 ): string {
   const { maxSentences, maxChars } = getDetailLimits(detail, model);

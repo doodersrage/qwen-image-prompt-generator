@@ -1,16 +1,25 @@
-# Qwen Image Prompt Generator
+# ComfyUI Image Prompt Tools
 
-A Next.js app that turns topics or keywords into model-specific prompts for ComfyUI image workflows.
+A Next.js app that turns topics or keywords into model-specific prompts for ComfyUI image workflows, and reformats existing drafts for any supported architecture.
 
 ## Supported models
 
-| Model | ComfyUI node | Prompt style |
-|-------|--------------|--------------|
-| **Qwen-Image-Edit** | `TextEncodeQwenImageEdit` | Short unified scene prose for single-image edits |
-| **Qwen-Image-Edit-2511** | `TextEncodeQwenImageEditPlus` | Explicit keep/change instructions; Figure 1 / Figure 2 for multi-image |
-| **Qwen-Image-2512** | `CLIPTextEncode` | Factual T2I prose—color, shape, texture, spatial layout; strong text rendering |
-| **Qwen-Image-2.0** | `CLIP Text Encode (Qwen)` | Unified T2I + edit; Rich targets ~1100–1400 characters |
-| **FLUX.2 Klein** | `CLIP Text Encode (Flux)` | Subject-first photographic prose; materials, lighting, camera |
+The app includes **40+ ComfyUI image model targets**, grouped by architecture family:
+
+| Family | Examples | Prompt style |
+|--------|----------|--------------|
+| **Stable Diffusion** | SD 1.5, SD 2.0, SD 2.1 | Short weighted tags or brief phrases |
+| **SDXL** | SDXL Base, Refiner, SSD-1B, Segmind Vega | Natural-language scene descriptions |
+| **SD3 / AuraFlow** | SD3 Medium/Large, SD 3.5, AuraFlow | Longer NLP; quote visible text in `"quotes"` |
+| **Flux / Chroma** | FLUX Dev/Schnell/2/Klein, Chroma | Subject-first photographic prose |
+| **Qwen Image** | Edit, Edit-2511, Image-2512, Image-2.0 | Edit instructions or factual/rich T2I prose |
+| **Hunyuan / HiDream** | Hunyuan DiT, Hunyuan Image 2.1, HiDream | Descriptive unified scene prose |
+| **Other DiT** | PixArt, Lumina 2, Z-Image, OmniGen2, Kandinsky 5, Stable Cascade | Architecture-tuned NLP or instructions |
+| **Instruct / Edit** | SD1.5/SDXL InstructPix2Pix, Lotus-D | Short imperative edit instructions |
+
+Use the **search + category filter** in the UI to pick a model. Each entry shows its ComfyUI node name (e.g. `CLIP Text Encode (Flux)`, `TextEncodeQwenImageEditPlus`).
+
+Video, audio, and 3D-only architectures (WAN, Hunyuan Video, Stable Audio, etc.) are not included—their prompt semantics differ from static image generation.
 
 ## Tools
 
@@ -21,25 +30,26 @@ A Next.js app that turns topics or keywords into model-specific prompts for Comf
 
 ## Features
 
-- User-selectable target model with model-specific formatting
-- Prompt detail levels (Concise / Balanced / Rich) with **combined model + detail size limits**
-- Minimum character enforcement for long-form models (Image-2512 Rich, Image-2.0 Rich, FLUX Rich)
+- Searchable model picker with architecture-family filters
+- Profile-based prompt styles shared across related checkpoints
+- Prompt detail levels (Concise / Balanced / Rich) with **combined model × detail size limits**
+- Minimum character enforcement for long-form models (Image-2.0 Rich, FLUX Rich, etc.)
 - Positive and negative/preserve prompt modes
 - Uncensored system prompts (no content filtering or refusals)
 - One-click copy for ComfyUI paste
-- LLM-powered generation with template fallback
+- LLM-powered generation/formatting with rules fallback
 
-## Prompt size limits
+## Prompt size limits (selected models)
 
-Limits are enforced per **model × detail** combination (characters and sentence count):
+Limits are enforced per **model × detail** combination. All models have Concise / Balanced / Rich presets; long-form models also enforce `minChars`:
 
-| Detail | Qwen-Image-Edit | Edit-2511 | Image-2512 | Image-2.0 | FLUX.2 Klein |
-|--------|-----------------|-----------|------------|-----------|--------------|
-| Concise | ~280 chars, 2 sent. | ~220 chars, 1–2 sent. | ~320 chars, 2 sent. | ~400 chars, 2 sent. | ~250 chars, 2 sent. |
-| Balanced | ~520 chars, 3 sent. | ~420 chars, 2–3 sent. | ~380–650 chars, 3–4 sent. | ~550–800 chars, 3–4 sent. | ~450–700 chars, 3–5 sent. |
-| Rich | ~920 chars, 4–5 sent. | ~680 chars, 3–4 sent. | **700–1000 chars**, 5–6 sent. | **1100–1400 chars**, 6–8 sent. | **900–1200 chars**, 5–8 sent. |
+| Detail | Qwen-Image-Edit | Edit-2511 | Image-2512 | Image-2.0 | FLUX.2 Klein | SDXL | SD1.5 |
+|--------|-----------------|-----------|------------|-----------|--------------|------|-------|
+| Concise | ~280 chars | ~220 chars | ~320 chars | ~400 chars | ~250 chars | ~280 chars | ~220 chars |
+| Balanced | ~520 chars | ~420 chars | ~380–650 chars | ~550–800 chars | ~450–700 chars | ~520 chars | ~380 chars |
+| Rich | ~920 chars | ~680 chars | **700–1000 chars** | **1100–1400 chars** | **900–1200 chars** | ~780 chars | ~520 chars |
 
-Rich detail on Image-2.0 and FLUX.2 Klein enforces a **minimum character count** via LLM instructions, long few-shot examples, and post-processing expansion.
+Other families use limits tuned to their encoder (see `src/lib/comfy-models/limits.ts`).
 
 ## Quick start
 
@@ -77,7 +87,7 @@ LLM_MODEL=dolphin-llama3
 
 ## Prompt format examples
 
-**Qwen-Image-Edit (Balanced):**
+**SDXL (Balanced):**
 
 > A narrow cyberpunk alley at midnight, rain-slick asphalt mirroring magenta and cyan neon signs. Steam curls from sidewalk grates between cracked pavement. A sleek black cat crouches on a rusted fire escape, amber eyes catching a stray beam of light.
 
@@ -89,9 +99,40 @@ LLM_MODEL=dolphin-llama3
 
 > A sleek black cat crouches on a rusted fire escape… [subject first, named materials, photographic lighting, camera/composition detail]
 
-Use **Negative / Preserve** mode for protective conditioning. **Note:** FLUX.2 Klein ignores negative prompts—the generator outputs positive preservation phrasing instead.
+**SD1.5 (Concise):**
 
-## Format API
+> neon alley, rain, black cat, cyberpunk, night, wet pavement
+
+Use **Negative / Preserve** mode for protective conditioning. **Note:** FLUX models ignore negative prompts—the generator outputs positive preservation phrasing instead.
+
+## HTTP API
+
+All endpoints return **JSON** (`Content-Type: application/json`) and support **CORS** (`Access-Control-Allow-Origin: *`) for use from scripts, ComfyUI custom nodes, or other apps.
+
+### Discovery
+
+```bash
+# API catalog: tools, request/response shapes, curl examples
+curl -sS http://localhost:3000/api | jq .
+
+# Supported models (47 targets) with limits per detail level
+curl -sS http://localhost:3000/api/models | jq .
+
+# Filter by family or fetch one model
+curl -sS "http://localhost:3000/api/models?category=flux" | jq .
+curl -sS "http://localhost:3000/api/models?id=sdxl" | jq .
+```
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api` | GET | API catalog and schema documentation |
+| `/api/models` | GET | List models (`?category=`, `?id=`) |
+| `/api/generate` | POST | Keywords → model-ready prompt |
+| `/api/format` | POST | Existing draft → model-ready prompt |
+
+Errors use a consistent shape: `{ "error": "message" }` with an appropriate HTTP status (400, 404, 405, 500).
+
+### Format API
 
 ```bash
 curl -X POST http://localhost:3000/api/format \
@@ -106,7 +147,7 @@ Set `"smartFormat": false` for instant rules-only cleanup (no LLM).
 ```bash
 curl -X POST http://localhost:3000/api/generate \
   -H "Content-Type: application/json" \
-  -d '{"input":"neon alley, rain, black cat","mode":"positive","model":"qwen-image-2.0","detail":"rich"}'
+  -d '{"input":"neon alley, rain, black cat","mode":"positive","model":"sdxl","detail":"balanced"}'
 ```
 
 Response:
@@ -116,13 +157,14 @@ Response:
   "prompt": "...",
   "mode": "positive",
   "provider": "llm",
-  "model": "qwen-image-2.0",
-  "comfyNode": "CLIP Text Encode (Qwen)",
+  "model": "sdxl",
+  "comfyNode": "CLIP Text Encode (Prompt)",
   "limits": {
-    "minChars": 1100,
-    "maxChars": 1400,
-    "maxSentences": 8,
-    "maxTokens": 1024
+    "maxChars": 520,
+    "maxSentences": 3,
+    "maxTokens": 380
   }
 }
 ```
+
+Model IDs match the registry in `src/lib/comfy-models/registry.ts`.

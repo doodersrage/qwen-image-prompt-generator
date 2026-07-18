@@ -3,6 +3,11 @@ import {
   type PromptMode,
 } from "@/lib/prompt-generator";
 import { normalizeGenerationSettings } from "@/lib/generation-settings";
+import {
+  apiError,
+  apiJson,
+  apiMethodNotAllowed,
+} from "@/lib/api/response";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -19,6 +24,10 @@ type GenerateRequestBody = {
   model?: string;
 };
 
+export async function GET() {
+  return apiMethodNotAllowed(["POST"], "/api/generate");
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as GenerateRequestBody;
@@ -32,26 +41,31 @@ export async function POST(request: Request) {
     });
 
     if (!input) {
-      return NextResponse.json(
-        { error: "Input is required." },
-        { status: 400 },
-      );
+      return apiError("Input is required.", 400);
     }
 
     if (input.length > 4000) {
-      return NextResponse.json(
-        { error: "Input must be 4000 characters or fewer." },
-        { status: 400 },
-      );
+      return apiError("Input must be 4000 characters or fewer.", 400);
     }
 
     const result = await generatePrompt(input, mode, settings);
 
-    return NextResponse.json(result);
+    return apiJson(result);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to generate prompt.";
 
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiError(message, 500);
   }
+}
+
+export function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
+  });
 }
