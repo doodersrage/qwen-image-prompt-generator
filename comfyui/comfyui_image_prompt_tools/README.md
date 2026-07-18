@@ -10,27 +10,22 @@ Custom ComfyUI nodes that call the qwen-image-prompt HTTP API and return prompt 
 
 ## Install
 
-**Recommended** — symlink the whole `comfyui/` folder:
+**Install into the ComfyUI you actually run.** If you have multiple copies (e.g. `~/comfy/ComfyUI` and `/opt/comfyui`), only the running one loads custom nodes.
+
+Recommended:
 
 ```bash
-/path/to/qwen-image-prompt/comfyui/install.sh /path/to/ComfyUI
+/path/to/qwen-image-prompt/comfyui/install.sh /opt/comfyui
 ```
 
 Or manually:
 
 ```bash
 ln -sfn /path/to/qwen-image-prompt/comfyui \
-  /path/to/ComfyUI/custom_nodes/qwen-image-prompt-tools
+  /opt/comfyui/custom_nodes/qwen-image-prompt-tools
 ```
 
-**Also works** — symlink only the inner package:
-
-```bash
-ln -sfn /path/to/qwen-image-prompt/comfyui/comfyui_image_prompt_tools \
-  /path/to/ComfyUI/custom_nodes/comfyui_image_prompt_tools
-```
-
-Restart ComfyUI completely after installing.
+Restart ComfyUI completely after installing (a browser reload is not enough).
 
 ## Verify
 
@@ -44,13 +39,22 @@ You should see `OK: loaded 6 node(s)`.
 
 ## Nodes not showing?
 
-1. **Restart ComfyUI** — custom nodes load only at startup.
-2. **Check the terminal** — import errors appear as `Failed to load ComfyUI custom nodes` with a traceback.
-3. **Confirm the path** — the folder must be a direct child of `ComfyUI/custom_nodes/` and contain an `__init__.py`.
-   - Wrong: copying the repo root or only the `comfyui/` folder without `__init__.py` (fixed in current repo).
-   - Wrong: nesting under `custom_nodes/foo/bar/` with no `__init__.py` in `foo`.
+1. **Wrong ComfyUI folder** — Most common issue. Check which server is running:
+   ```bash
+   pgrep -af 'main.py' | rg -i comfy
+   ```
+   Install into that path's `custom_nodes/` (on this machine, often `/opt/comfyui`, not `~/comfy/ComfyUI`).
+
+2. **Restart ComfyUI** — custom nodes load only at startup. Reloading the browser tab is not enough.
+
+3. **Check the terminal/log** — import errors appear as `IMPORT FAILED` or `Cannot import ... qwen-image-prompt-tools`.
+
 4. **Search in the UI** — double-click the canvas and search `Prompt Tools` (category: **prompt tools**).
-5. **Desktop ComfyUI** — custom nodes live under your ComfyUI install, e.g. `~/Documents/ComfyUI/custom_nodes/`, not inside this repo.
+
+5. **Verify import**:
+   ```bash
+   /opt/comfyui/venv/bin/python /path/to/qwen-image-prompt/comfyui/verify_install.py
+   ```
 
 ## Configuration
 
