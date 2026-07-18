@@ -11,7 +11,8 @@ import {
   QWEN_FEW_SHOT_BY_DETAIL,
   sanitizeQwenPrompt,
 } from "./qwen-clarity";
-import { stripPromptArtifacts } from "./prompt-cleanup";
+import { stripPromptArtifacts, isThinkingOnlyArtifact } from "./prompt-cleanup";
+import { chatCompletion } from "./llm-client";
 import {
   DISTINCT_PEOPLE_FEW_SHOT_BY_DETAIL,
   DISTINCT_PEOPLE_FEW_SHOT_INPUT,
@@ -192,16 +193,6 @@ function getLlmSeed(): number {
   return array[0]! % 2_147_483_647;
 }
 
-function getLlmConfig() {
-  const baseUrl =
-    process.env.LLM_API_BASE_URL?.replace(/\/$/, "") ??
-    "http://localhost:11434/v1";
-  const apiKey = process.env.LLM_API_KEY ?? "";
-  const model = process.env.LLM_MODEL ?? "dolphin-llama3";
-
-  return { baseUrl, apiKey, model };
-}
-
 function finalizePrompt(
   raw: string,
   input: string,
@@ -230,8 +221,6 @@ export async function generateWithLlm(
   mode: PromptMode,
   settings: GenerationSettings = DEFAULT_GENERATION_SETTINGS,
 ): Promise<string> {
-  const { baseUrl, apiKey, model } = getLlmConfig();
-  const { variation } = settings;
   let systemPrompt = buildModelSystemPrompt(settings.model, mode);
 
   if (mode === "positive") {
@@ -246,60 +235,39 @@ export async function generateWithLlm(
     }
   }
 
+  systemPrompt = `${systemPrompt}\n\nOutput ONLY the raw prompt text. No numbered analysis, thinking steps, labels, markdown, or explanations.`;
+
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },
     ...buildFewShotMessages(mode, settings, input),
     { role: "user", content: buildUserMessage(input, mode, settings) },
   ];
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-
-  if (apiKey) {
-    headers.Authorization = `Bearer ${apiKey}`;
-  }
-
-  const requestBody: Record<string, unknown> = {
-    model,
-    messages,
-    temperature: getLlmTemperature(settings.variation),
-    max_tokens: getDetailLimits(settings.detail, settings.model).maxTokens,
-    stream: false,
+  const extraBody: Record<string, unknown> = {
     ...getLlmSamplingParams(settings.variation),
   };
 
   if (settings.variation.enabled) {
-    requestBody.seed = getLlmSeed();
+    extraBody.seed = getLlmSeed();
   }
 
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(requestBody),
+  const content = await chatCompletion({
+    messages,
+    maxTokens: getDetailLimits(settings.detail, settings.model).maxTokens,
+    temperature: getLlmTemperature(settings.variation),
+    extraBody,
   });
-
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(
-      `LLM request failed (${response.status}): ${detail.slice(0, 300)}`,
-    );
-  }
-
-  const data = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-
-  const content = data.choices?.[0]?.message?.content?.trim();
-  if (!content) {
-    throw new Error("LLM returned an empty response.");
-  }
 
   return finalizePrompt(content, input.trim(), mode, settings);
 }
 
 function sanitizePrompt(raw: string): string {
-  return stripPromptArtifacts(raw);
+  const cleaned = stripPromptArtifacts(raw);
+  if (!cleaned.trim() || isThinkingOnlyArtifact(cleaned)) {
+    throw new Error("LLM returned reasoning text instead of a prompt.");
+  }
+
+  return cleaned;
 }
 
 function capitalize(s: string): string {

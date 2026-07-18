@@ -96,7 +96,146 @@ export function stripPromptArtifacts(raw: string): string {
     .replace(/\s+/g, " ")
     .trim();
 
+  text = stripThinkingArtifacts(text);
+
   return text;
+}
+
+function looksLikePromptProse(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length < 40) {
+    return false;
+  }
+
+  if (/^(?:a\s+)?thinking process:/i.test(trimmed)) {
+    return false;
+  }
+
+  if (/^\d+\.\s*\*\*/.test(trimmed)) {
+    return false;
+  }
+
+  if (
+    /\b(?:Analyze User Input|Character direction|Style seed|Scene seed|Need to merge|matching .* rules)\b/i.test(
+      trimmed,
+    )
+  ) {
+    return false;
+  }
+
+  if (/^\*\*[^*]+\*\*:?\s*[-*•]/.test(trimmed)) {
+    return false;
+  }
+
+  return true;
+}
+
+function stripLeadingNumberedAnalysisSteps(text: string): string {
+  let cleaned = text.trim();
+  const stepPattern = /^\d+\.\s*\*\*[^*]+\*\*:?\s*/;
+
+  while (stepPattern.test(cleaned)) {
+    const nextStep = cleaned.search(/\n\s*\d+\.\s*\*\*/);
+    if (nextStep > 0) {
+      cleaned = cleaned.slice(nextStep).trim();
+      continue;
+    }
+
+    if (
+      /\b(?:Analyze User Input|Character direction|Style seed|Scene seed|Need to merge|matching .* rules)\b/i.test(
+        cleaned,
+      )
+    ) {
+      return "";
+    }
+
+    break;
+  }
+
+  return cleaned.trim();
+}
+
+function extractPromptProseAfterAnalysis(text: string): string {
+  const parts = text.split(/(?<=[.!?])\s+/);
+  for (let index = 0; index < parts.length; index += 1) {
+    const candidate = parts.slice(index).join(" ").trim();
+    if (looksLikePromptProse(candidate)) {
+      return candidate;
+    }
+  }
+
+  return "";
+}
+
+export function stripThinkingArtifacts(text: string): string {
+  let cleaned = text.trim();
+  if (!cleaned) {
+    return cleaned;
+  }
+
+  cleaned = cleaned.replace(/^[\s\S]*?<\/think>\s*/i, "").trim();
+
+  const finalMarkers = [
+    /\*\*(?:Final(?:\s+Prompt)?|Output|Draft(?:\s+Prompt)?|Scene(?:\s+Description)?|Prompt)(?::\*\*|\*\*:?)\s*/gi,
+    /(?:^|\n)(?:Final prompt|Output prompt|Scene description):\s*/gi,
+  ];
+
+  for (const marker of finalMarkers) {
+    const matches = [...cleaned.matchAll(marker)];
+    if (matches.length > 0) {
+      const last = matches[matches.length - 1];
+      const rest = cleaned.slice(last.index! + last[0].length).trim();
+      if (rest.length >= 30) {
+        cleaned = rest;
+        break;
+      }
+    }
+  }
+
+  if (
+    /^(?:a\s+)?thinking process:/i.test(cleaned) ||
+    /^\d+\.\s*\*\*(?:Analyze|Plan|Merge|Draft)/i.test(cleaned)
+  ) {
+    const prose = extractPromptProseAfterAnalysis(cleaned);
+    cleaned = prose || "";
+  }
+
+  cleaned = cleaned.replace(/^(?:a\s+)?thinking process:\s*/i, "");
+  cleaned = stripLeadingNumberedAnalysisSteps(cleaned);
+  cleaned = cleaned.replace(
+    /^[-*•]\s*(?:Character direction|Style seed|Scene seed|Framing):[^.!?]*[.!?]?\s*/gi,
+    "",
+  );
+
+  return cleaned.replace(/\s+/g, " ").trim();
+}
+
+export function isThinkingOnlyArtifact(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return true;
+  }
+
+  if (/^(?:a\s+)?thinking process:/i.test(trimmed)) {
+    return true;
+  }
+
+  if (/^\d+\.\s*\*\*(?:Analyze|Plan|Merge|Draft)/i.test(trimmed)) {
+    return true;
+  }
+
+  if (/\*\*Analyze User Input:\*\*/i.test(trimmed)) {
+    return true;
+  }
+
+  if (
+    /\b(?:Character direction|Style seed|Scene seed):\s*"/i.test(trimmed) &&
+    !looksLikePromptProse(trimmed)
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 const EXPANSION_PADDING_FRAGMENTS = [

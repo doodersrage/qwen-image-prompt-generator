@@ -1,7 +1,8 @@
 import type { DetailLevel } from "./detail-level";
 import { getDetailLimits, normalizeDetailLevel } from "./detail-level";
 import { sanitizeQwenPrompt } from "./qwen-clarity";
-import { stripPromptArtifacts } from "./prompt-cleanup";
+import { chatCompletion } from "./llm-client";
+import { isThinkingOnlyArtifact, stripPromptArtifacts } from "./prompt-cleanup";
 import {
   buildModelClarityAddendum,
   buildModelSystemPrompt,
@@ -219,21 +220,10 @@ function finalizeFormattedPrompt(
   );
 }
 
-function getLlmConfig() {
-  const baseUrl =
-    process.env.LLM_API_BASE_URL?.replace(/\/$/, "") ??
-    "http://localhost:11434/v1";
-  const apiKey = process.env.LLM_API_KEY ?? "";
-  const model = process.env.LLM_MODEL ?? "dolphin-llama3";
-
-  return { baseUrl, apiKey, model };
-}
-
 async function formatWithLlm(
   input: string,
   settings: FormatSettings,
 ): Promise<string> {
-  const { baseUrl, apiKey, model } = getLlmConfig();
   const modelDef = getComfyModelDefinition(settings.model);
 
   const fluxNegativeNote =
@@ -250,7 +240,7 @@ You are adapting an EXISTING prompt draft for ${modelDef.label} (${modelDef.comf
 - ${fluxNegativeNote}
 ${buildModelClarityAddendum(settings.detail, settings.model)}
 
-Output ONLY the formatted prompt text. No quotes around the whole prompt, labels, or explanations.`;
+Output ONLY the formatted prompt text. No quotes around the whole prompt, labels, numbered analysis, thinking steps, or explanations.`;
 
   const userMessage = `Adapt this draft for ${modelDef.label}. Preserve all subjects and details. Output only the rewritten prompt.
 
@@ -258,47 +248,22 @@ Output ONLY the formatted prompt text. No quotes around the whole prompt, labels
 ${input}
 ---`;
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-
-  if (apiKey) {
-    headers.Authorization = `Bearer ${apiKey}`;
-  }
-
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userMessage },
-      ],
-      temperature: 0.4,
-      max_tokens: getDetailLimits(settings.detail, settings.model).maxTokens,
-      stream: false,
-      top_p: 0.9,
-    }),
+  const content = await chatCompletion({
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userMessage },
+    ],
+    temperature: 0.4,
+    maxTokens: getDetailLimits(settings.detail, settings.model).maxTokens,
+    extraBody: { top_p: 0.9 },
   });
 
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(
-      `LLM request failed (${response.status}): ${detail.slice(0, 300)}`,
-    );
+  const cleaned = stripPromptArtifacts(content);
+  if (!cleaned.trim() || isThinkingOnlyArtifact(cleaned)) {
+    throw new Error("LLM returned reasoning text instead of a prompt.");
   }
 
-  const data = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-
-  const content = data.choices?.[0]?.message?.content?.trim();
-  if (!content) {
-    throw new Error("LLM returned an empty response.");
-  }
-
-  return stripPromptArtifacts(content);
+  return cleaned;
 }
 
 function formatWithRules(input: string, settings: FormatSettings): string {

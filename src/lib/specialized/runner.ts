@@ -10,7 +10,7 @@ import {
   chatCompletion,
   isLlmEnabled,
 } from "../llm-client";
-import { stripPromptArtifacts } from "../prompt-cleanup";
+import { isThinkingOnlyArtifact, stripPromptArtifacts } from "../prompt-cleanup";
 import { sanitizeQwenPrompt } from "../qwen-clarity";
 import type { DetailLevel } from "../detail-level";
 import type { ToolGenerateResult, ToolLimits } from "./types";
@@ -60,7 +60,7 @@ ${options.toolInstructions}
 
 ${buildModelClarityAddendum(options.detail, options.model)}
 
-Output ONLY the raw prompt text. No quotes around the whole prompt, labels, markdown, or explanations.`;
+Output ONLY the raw prompt text. No quotes around the whole prompt, labels, markdown, numbered analysis, thinking steps, or explanations.`;
 
   if (isLlmEnabled()) {
     try {
@@ -115,6 +115,10 @@ function finalizeSpecializedPrompt(
   input: string,
 ): string {
   const cleaned = stripPromptArtifacts(raw);
+  if (!cleaned.trim() || isThinkingOnlyArtifact(cleaned)) {
+    throw new Error("LLM returned reasoning text instead of a prompt.");
+  }
+
   return sanitizeQwenPrompt(cleaned, detail, input, model);
 }
 

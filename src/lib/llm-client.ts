@@ -133,15 +133,96 @@ function extractAssistantText(message?: {
     }
   }
 
-  if (typeof message.reasoning === "string" && message.reasoning.trim()) {
-    return message.reasoning.trim();
-  }
-
-  if (typeof message.thinking === "string" && message.thinking.trim()) {
-    return message.thinking.trim();
-  }
-
   return "";
+}
+
+function chatMessageToOllamaContent(content: string | ChatContentPart[]): string {
+  if (typeof content === "string") {
+    return content;
+  }
+
+  return content
+    .filter((part): part is { type: "text"; text: string } => part.type === "text")
+    .map((part) => part.text)
+    .join("\n");
+}
+
+function mapExtraBodyToOllamaOptions(
+  extraBody?: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!extraBody) {
+    return {};
+  }
+
+  const options: Record<string, unknown> = {};
+
+  if (typeof extraBody.top_p === "number") {
+    options.top_p = extraBody.top_p;
+  }
+  if (typeof extraBody.seed === "number") {
+    options.seed = extraBody.seed;
+  }
+  if (typeof extraBody.frequency_penalty === "number") {
+    options.frequency_penalty = extraBody.frequency_penalty;
+  }
+  if (typeof extraBody.presence_penalty === "number") {
+    options.presence_penalty = extraBody.presence_penalty;
+  }
+
+  return options;
+}
+
+async function ollamaNativeChatCompletion(options: {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  messages: ChatMessage[];
+  maxTokens: number;
+  temperature?: number;
+  extraBody?: Record<string, unknown>;
+}): Promise<string> {
+  const response = await fetch(`${ollamaNativeBaseUrl(options.baseUrl)}/api/chat`, {
+    method: "POST",
+    headers: buildAuthHeaders(options.apiKey),
+    body: JSON.stringify({
+      model: options.model,
+      messages: options.messages.map((message) => ({
+        role: message.role,
+        content: chatMessageToOllamaContent(message.content),
+      })),
+      stream: false,
+      think: false,
+      options: {
+        temperature: getLlmTemperature(options.temperature),
+        num_predict: options.maxTokens,
+        ...mapExtraBodyToOllamaOptions(options.extraBody),
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(
+      `Ollama chat request failed (${response.status}): ${detail.slice(0, 300)}`,
+    );
+  }
+
+  const data = (await response.json()) as {
+    message?: {
+      content?: string;
+      thinking?: string;
+      reasoning?: string;
+    };
+  };
+
+  const text = extractAssistantText(data.message);
+  if (!text) {
+    throw new Error(
+      "LLM returned an empty response. If using a thinking model, ensure Ollama supports think:false or returns content.",
+    );
+  }
+
+  return text;
 }
 
 function buildAuthHeaders(apiKey: string): Record<string, string> {
@@ -221,18 +302,39 @@ export async function chatCompletion(options: {
 }): Promise<string> {
   const { baseUrl, apiKey, model } = getLlmConfig();
   const headers = buildAuthHeaders(apiKey);
+  const resolvedModel = options.model ?? model;
+  const extraBody = { think: false, ...options.extraBody };
+
+  if (isOllamaBaseUrl(baseUrl)) {
+    try {
+      return await ollamaNativeChatCompletion({
+        baseUrl,
+        apiKey,
+        model: resolvedModel,
+        messages: options.messages,
+        maxTokens: options.maxTokens,
+        temperature: options.temperature,
+        extraBody,
+      });
+    } catch (nativeError) {
+      console.warn(
+        "[llm-client] Ollama native chat failed, trying OpenAI-compatible endpoint:",
+        nativeError instanceof Error ? nativeError.message : nativeError,
+      );
+    }
+  }
 
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers,
     body: JSON.stringify({
-      model: options.model ?? model,
+      model: resolvedModel,
       messages: options.messages,
       temperature: getLlmTemperature(options.temperature),
       max_tokens: options.maxTokens,
       stream: false,
       top_p: 0.9,
-      ...options.extraBody,
+      ...extraBody,
     }),
   });
 
