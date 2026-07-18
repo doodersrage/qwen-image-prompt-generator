@@ -5,6 +5,7 @@ import {
   stripMetaInstructions,
   stripPromptArtifacts,
 } from "./prompt-cleanup";
+import { compactPromptForProfile } from "./prompt-compact";
 import {
   buildModelClarityAddendum,
   buildModelUserDirective,
@@ -12,6 +13,7 @@ import {
   shouldEnforceMinPadding,
   type ComfyImageModel,
 } from "./comfy-models";
+import type { PromptProfileId } from "./comfy-models/types";
 import {
   expandTagsToMinChars,
   expansionBeatsForSanitize,
@@ -35,6 +37,11 @@ export {
   stripMetaInstructions,
   stripPromptArtifacts,
 } from "./prompt-cleanup";
+export {
+  compactPromptForProfile,
+  compactPromptProse,
+  compactPromptTags,
+} from "./prompt-compact";
 export {
   detailLevelLabel,
   DISTINCT_PEOPLE_FEW_SHOT_BY_DETAIL,
@@ -116,6 +123,25 @@ export function compactVariationHint(
   return `Optional flavor only: ${hints.slice(0, detail === "rich" ? 2 : 1).join(", ")}.`;
 }
 
+const NEAR_MAX_CHAR_RATIO = 0.88;
+const NEAR_MIN_CHAR_RATIO = 0.94;
+
+function hasRoomForMinPadding(
+  text: string,
+  minChars: number | undefined,
+  maxChars: number,
+): boolean {
+  if (text.length >= Math.floor(maxChars * NEAR_MAX_CHAR_RATIO)) {
+    return false;
+  }
+
+  if (minChars && text.length >= Math.floor(minChars * NEAR_MIN_CHAR_RATIO)) {
+    return false;
+  }
+
+  return true;
+}
+
 function expandPromptToMinChars(
   text: string,
   detail: DetailLevel,
@@ -134,7 +160,14 @@ function expandPromptToMinChars(
   }
 
   if (!minChars || text.length >= minChars) {
-    return text;
+    if (text.length > maxChars) {
+      return trimProseClauseToMaxChars(text, maxChars);
+    }
+    return text.trim();
+  }
+
+  if (!hasRoomForMinPadding(text, minChars, maxChars)) {
+    return text.length > maxChars ? trimProseClauseToMaxChars(text, maxChars) : text.trim();
   }
 
   const beats = expansionBeatsForSanitize(profile, soloSubject);
@@ -180,8 +213,12 @@ function padPromptToMinimum(
     return expandPromptToMinChars(text, detail, model, soloSubject);
   }
 
-  const { minSentences } = getDetailLimits(detail, model);
+  const { minSentences, minChars, maxChars } = getDetailLimits(detail, model);
   const sentences = splitSentences(text);
+
+  if (!hasRoomForMinPadding(text, minChars, maxChars)) {
+    return text.length > maxChars ? trimProseClauseToMaxChars(text, maxChars) : text.trim();
+  }
 
   if (sentences.length >= minSentences) {
     return expandPromptToMinChars(text, detail, model, soloSubject);
@@ -232,6 +269,18 @@ export function trimPromptToMaxChars(text: string, maxChars: number): string {
   return trimTextToMaxChars(text.trim(), maxChars);
 }
 
+function finalizeSanitizedPrompt(
+  text: string,
+  profile: PromptProfileId,
+  maxChars: number,
+): string {
+  let result = compactPromptForProfile(text, profile);
+  if (result.length > maxChars) {
+    result = trimTextToMaxChars(result, maxChars);
+  }
+  return result;
+}
+
 function sanitizeTagPrompt(
   text: string,
   detail: DetailLevel,
@@ -253,7 +302,11 @@ function sanitizeTagPrompt(
     result = padPromptToMinimum(result, detail, model, input, soloSubject);
   }
 
-  return trimTagsToMaxChars(splitTags(result), maxChars);
+  return finalizeSanitizedPrompt(
+    trimTagsToMaxChars(splitTags(result), maxChars),
+    resolveProfile(model),
+    maxChars,
+  );
 }
 
 export type SanitizeOptions = {
@@ -322,8 +375,12 @@ export function sanitizeQwenPrompt(
     splitSentences(text.trim()),
   );
   if (distinctPeople && input.trim() && finalSentences.length > 0) {
-    return trimDistinctPeopleProseToMaxChars(finalSentences, maxChars);
+    return finalizeSanitizedPrompt(
+      trimDistinctPeopleProseToMaxChars(finalSentences, maxChars),
+      profile,
+      maxChars,
+    );
   }
 
-  return trimTextToMaxChars(text.trim(), maxChars);
+  return finalizeSanitizedPrompt(trimTextToMaxChars(text.trim(), maxChars), profile, maxChars);
 }

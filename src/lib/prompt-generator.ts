@@ -10,6 +10,8 @@ import {
   getModelFewShots,
   QWEN_FEW_SHOT_BY_DETAIL,
   sanitizeQwenPrompt,
+  compactPromptForProfile,
+  trimPromptToMaxChars,
 } from "./qwen-clarity";
 import { stripPromptArtifacts, isThinkingOnlyArtifact } from "./prompt-cleanup";
 import { chatCompletion } from "./llm-client";
@@ -234,7 +236,13 @@ function finalizePrompt(
   }
 
   const { maxChars } = getDetailLimits(settings.detail, settings.model);
-  return mergeGenerateWardrobeIntoPrompt(formatted, wardrobeAssignments, maxChars);
+  const merged = mergeGenerateWardrobeIntoPrompt(
+    formatted,
+    wardrobeAssignments,
+    maxChars,
+  );
+  const profile = getComfyModelDefinition(settings.model).profile;
+  return trimPromptToMaxChars(compactPromptForProfile(merged, profile), maxChars);
 }
 
 export async function generateWithLlm(

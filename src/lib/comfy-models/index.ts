@@ -7,6 +7,7 @@ import {
   getProfileFewShots,
 } from "./prompt-profiles";
 import { enforcePromptShapeForProfile } from "../prompt-shape";
+import { compactPromptForProfile } from "../prompt-compact";
 import {
   COMFY_IMAGE_MODELS,
   COMFY_MODEL_IDS,
@@ -117,12 +118,16 @@ export function formatPromptForModel(
   mode: "positive" | "negative",
 ): string {
   const def = getComfyModelDefinition(model);
-  return enforcePromptShapeForProfile(
+  let shaped = enforcePromptShapeForProfile(
     prompt,
     def.profile,
     mode,
     input.trim(),
   );
+  if (mode === "positive") {
+    shaped = compactPromptForProfile(shaped, def.profile);
+  }
+  return shaped;
 }
 
 export function modelUsesFluxNegativeRewrite(model: ComfyImageModel): boolean {
