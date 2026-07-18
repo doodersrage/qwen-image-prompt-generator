@@ -1,15 +1,25 @@
 import {
-  QWEN_FEW_SHOT_EXAMPLES,
   QWEN_NEGATIVE_SYSTEM_PROMPT,
   QWEN_POSITIVE_SYSTEM_PROMPT,
 } from "./qwen-system-prompt";
 import {
-  buildTemplateVariation,
-  buildVariationSeed,
-  buildVariationSystemAddendum,
   getSamplingBoost,
   pickFewShotExamples,
 } from "./variation-seed";
+import {
+  buildClaritySystemAddendum,
+  buildDetailUserDirective,
+  compactVariationHint,
+  QWEN_FEW_SHOT_BY_DETAIL,
+  sanitizeQwenPrompt,
+} from "./qwen-clarity";
+import {
+  DISTINCT_PEOPLE_FEW_SHOT_BY_DETAIL,
+  DISTINCT_PEOPLE_FEW_SHOT_INPUT,
+  getDetailLimits,
+  GROUPED_COUPLE_FEW_SHOT_BY_DETAIL,
+  GROUPED_COUPLE_FEW_SHOT_INPUT,
+} from "./detail-level";
 import {
   buildDistinctPeopleSystemAddendum,
   buildGroupedPeopleSystemAddendum,
@@ -27,7 +37,8 @@ import {
 } from "./variation-settings";
 
 export type PromptMode = "positive" | "negative";
-export type { GenerationSettings, VariationSettings };
+export type { GenerationSettings, VariationSettings } from "./generation-settings";
+export type { DetailLevel } from "./detail-level";
 
 export type GenerateResult = {
   prompt: string;
@@ -39,9 +50,6 @@ type ChatMessage = {
   role: "system" | "user" | "assistant";
   content: string;
 };
-
-const DISTINCT_PEOPLE_FEW_SHOT_INPUT = "two women, rooftop bar, city lights";
-const GROUPED_COUPLE_FEW_SHOT_INPUT = "tropical beach sunset, couple walking";
 
 function isMultiPersonInput(input: string): boolean {
   return (
@@ -58,31 +66,20 @@ function buildFewShotMessages(
     return [];
   }
 
-  let examples = QWEN_FEW_SHOT_EXAMPLES;
   const multiPerson = isMultiPersonInput(input);
-
-  if (settings.distinctPeople) {
-    examples = examples.filter(
-      (example) => example.input !== GROUPED_COUPLE_FEW_SHOT_INPUT,
-    );
-  } else {
-    examples = examples.filter(
-      (example) => example.input !== DISTINCT_PEOPLE_FEW_SHOT_INPUT,
-    );
-  }
-
-  const pinnedInput = settings.distinctPeople
-    ? DISTINCT_PEOPLE_FEW_SHOT_INPUT
-    : GROUPED_COUPLE_FEW_SHOT_INPUT;
+  const detailExamples = QWEN_FEW_SHOT_BY_DETAIL[settings.detail];
 
   const pinnedExample = multiPerson
-    ? examples.find((example) => example.input === pinnedInput) ??
-      QWEN_FEW_SHOT_EXAMPLES.find((example) => example.input === pinnedInput)
+    ? settings.distinctPeople
+      ? DISTINCT_PEOPLE_FEW_SHOT_BY_DETAIL[settings.detail]
+      : GROUPED_COUPLE_FEW_SHOT_BY_DETAIL[settings.detail]
     : undefined;
 
-  const pool = pinnedExample
-    ? examples.filter((example) => example.input !== pinnedInput)
-    : examples;
+  const pool = detailExamples.filter(
+    (example) =>
+      example.input !== DISTINCT_PEOPLE_FEW_SHOT_INPUT &&
+      example.input !== GROUPED_COUPLE_FEW_SHOT_INPUT,
+  );
 
   const selected = pickFewShotExamples(
     pool,
@@ -112,21 +109,22 @@ function buildUserMessage(
     return trimmed;
   }
 
-  const extras: string[] = [];
+  const extras: string[] = [buildDetailUserDirective(settings.detail)];
   const peopleConstraint = parsePeopleConstraint(trimmed);
 
   if (settings.variation.enabled) {
-    extras.push(
-      `Creative variation (weave naturally, do not quote): ${buildVariationSeed(settings.variation.strength, {
+    const hint = compactVariationHint(
+      settings.variation.strength,
+      settings.detail,
+      {
         distinctPeople: settings.distinctPeople,
-        impliedPeopleCount: peopleConstraint.count,
+        peopleCount: peopleConstraint.count,
         gender: peopleConstraint.gender,
-      })}`,
+      },
     );
-  }
-
-  if (extras.length === 0) {
-    return trimmed;
+    if (hint) {
+      extras.push(hint);
+    }
   }
 
   return `${trimmed}\n\n${extras.join("\n\n")}`;
@@ -193,18 +191,15 @@ export async function generateWithLlm(
       ? QWEN_NEGATIVE_SYSTEM_PROMPT
       : QWEN_POSITIVE_SYSTEM_PROMPT;
 
-  if (mode === "positive" && isMultiPersonInput(input.trim())) {
-    if (settings.distinctPeople) {
-      systemPrompt = `${systemPrompt}\n\n${buildDistinctPeopleSystemAddendum(input.trim())}`;
-    } else {
-      systemPrompt = `${systemPrompt}\n\n${buildGroupedPeopleSystemAddendum(input.trim())}`;
-    }
-  }
+  if (mode === "positive") {
+    systemPrompt = `${systemPrompt}\n\n${buildClaritySystemAddendum(settings.detail)}`;
 
-  if (mode === "positive" && variation.enabled) {
-    const addendum = buildVariationSystemAddendum(variation.strength);
-    if (addendum) {
-      systemPrompt = `${systemPrompt}\n\n${addendum}`;
+    if (isMultiPersonInput(input.trim())) {
+      if (settings.distinctPeople) {
+        systemPrompt = `${systemPrompt}\n\n${buildDistinctPeopleSystemAddendum(input.trim())}`;
+      } else {
+        systemPrompt = `${systemPrompt}\n\n${buildGroupedPeopleSystemAddendum(input.trim())}`;
+      }
     }
   }
 
@@ -226,7 +221,7 @@ export async function generateWithLlm(
     model,
     messages,
     temperature: getLlmTemperature(settings.variation),
-    max_tokens: 1024,
+    max_tokens: getDetailLimits(settings.detail).maxTokens,
     stream: false,
     ...getLlmSamplingParams(settings.variation),
   };
@@ -257,7 +252,11 @@ export async function generateWithLlm(
     throw new Error("LLM returned an empty response.");
   }
 
-  return sanitizePrompt(content);
+  return sanitizeQwenPrompt(
+    sanitizePrompt(content),
+    settings.detail,
+    input.trim(),
+  );
 }
 
 function sanitizePrompt(raw: string): string {
@@ -286,31 +285,25 @@ function paintSceneFromKeywords(
 ): string {
   const keywords = parseKeywords(input);
   const primary = keywords[0] ?? input.trim();
-  const supporting = keywords.slice(1);
-  const peopleConstraint = parsePeopleConstraint(input);
+  const supporting = keywords.slice(0, settings.detail === "rich" ? 3 : 2);
+  const topic =
+    supporting.length > 0
+      ? `${primary}, ${supporting.join(", ")}`
+      : primary;
+  const normalized =
+    topic.toLowerCase().startsWith("a ") || topic.toLowerCase().startsWith("an ")
+      ? topic
+      : topic.charAt(0).toLowerCase() + topic.slice(1);
 
-  let scene = `The image shows ${primary.toLowerCase().startsWith("a ") || primary.toLowerCase().startsWith("an ") ? primary : primary.charAt(0).toLowerCase() + primary.slice(1)}`;
-
-  if (supporting.length > 0) {
-    scene += `, with ${supporting.join(", ")} visible throughout the composition`;
+  if (settings.detail === "concise") {
+    return `${capitalize(normalized)} under clear directional light. The main subject holds the frame in one cohesive moment.`;
   }
 
-  scene +=
-    ". Light falls with clear direction across the frame, casting defined shadows that separate foreground from background. Surfaces carry tangible texture and material detail—fabric, stone, skin, water, or metal rendered with physical weight. Colors read rich and intentional, atmosphere building depth from the nearest objects to the far distance. Every element sits in a single frozen moment, arranged so the full picture reads as one unified scene.";
-
-  if (settings.variation.enabled) {
-    const templateVariation = buildTemplateVariation(
-      settings.variation.strength,
-      settings.distinctPeople,
-      peopleConstraint.count,
-      peopleConstraint.gender,
-    );
-    if (templateVariation) {
-      scene += ` ${templateVariation}`;
-    }
+  if (settings.detail === "rich") {
+    return `${capitalize(normalized)} under clear directional light, surfaces showing tangible texture and material weight. The main subject anchors the frame in a single frozen moment, posture and clothing reading clearly in the light. Atmosphere builds depth from foreground to background while supporting details settle naturally into the midground. One distant environmental beat completes the same unified scene.`;
   }
 
-  return scene;
+  return `${capitalize(normalized)} under clear directional light, with visible texture and a cohesive palette. The main subject anchors the frame while one background detail adds depth to the same moment.`;
 }
 
 export function generateWithTemplate(
@@ -351,6 +344,7 @@ export function generateWithTemplate(
     const painted = paintSceneFromKeywords(sceneWords || trimmed, {
       variation: { enabled: false, strength: 0 },
       distinctPeople: false,
+      detail: "balanced",
     });
     return `Keep the subject's facial features, body proportions, and pose exactly unchanged. ${painted.replace(/^The image shows /, "The surrounding scene becomes ")}`;
   }
@@ -358,18 +352,22 @@ export function generateWithTemplate(
   if (!settings.distinctPeople && isMultiPersonInput(trimmed)) {
     const groupedScene = paintGroupedPeopleScene(trimmed, settings);
     if (groupedScene) {
-      return groupedScene;
+      return sanitizeQwenPrompt(groupedScene, settings.detail, trimmed);
     }
   }
 
   if (settings.distinctPeople && isMultiPersonInput(trimmed)) {
     const distinctScene = paintDistinctPeopleScene(trimmed, settings);
     if (distinctScene) {
-      return distinctScene;
+      return sanitizeQwenPrompt(distinctScene, settings.detail, trimmed);
     }
   }
 
-  return paintSceneFromKeywords(trimmed, settings);
+  return sanitizeQwenPrompt(
+    paintSceneFromKeywords(trimmed, settings),
+    settings.detail,
+    trimmed,
+  );
 }
 
 export async function generatePrompt(

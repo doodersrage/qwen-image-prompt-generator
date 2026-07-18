@@ -1,8 +1,8 @@
 import {
-  buildTemplateVariation,
   pickDistinctSubjects,
   type SubjectGender,
 } from "./variation-seed";
+import type { DetailLevel } from "./detail-level";
 import type { GenerationSettings } from "./generation-settings";
 
 export type PeopleConstraint = {
@@ -127,45 +127,28 @@ export function buildDistinctPeopleSystemAddendum(input: string): string {
   const genderRule = genderMandate(constraint.gender);
 
   if (constraint.count === 2 || /\b(couple|pair|duo)\b/i.test(input)) {
-    const gender =
-      constraint.gender === "mixed" ? "mixed" : constraint.gender;
-    const [personOne, personTwo] = pickDistinctSubjects(2, gender);
-
     return [
-      "DISTINCT INDIVIDUALS MODE (mandatory): write two separate people, not one merged couple.",
+      "Two separate people only: one short sentence each, left and right.",
       genderRule,
-      `Person A must read as: ${personOne}.`,
-      `Person B must read as: ${personTwo}—different age, ethnicity, build, hair, clothing, and expression.`,
-      "Give each person at least one dedicated sentence with their own face, body, and pose.",
-      'Use spatial anchors: "on the left", "on the right", "in the foreground", or "behind".',
-      'Do NOT write "a couple", "they", "both figures", or one shared description.',
+      "Do not merge them into one couple blob or shared description.",
     ]
       .filter(Boolean)
       .join(" ");
   }
 
   if (constraint.count !== null && constraint.count > 2) {
-    const subjects = pickDistinctSubjects(
-      Math.min(constraint.count, 4),
-      constraint.gender === "any" ? "any" : constraint.gender,
-    );
-
     return [
-      `DISTINCT INDIVIDUALS MODE (mandatory): ${constraint.count} separate people.`,
+      `${constraint.count} separate people, one short sentence each.`,
       genderRule,
-      ...subjects.map(
-        (subject, index) => `Person ${index + 1} must read as: ${subject}.`,
-      ),
-      "Give each person their own sentence—never a faceless group blob.",
+      "No faceless group blob.",
     ]
       .filter(Boolean)
       .join(" ");
   }
 
   return [
-    "DISTINCT INDIVIDUALS MODE: when multiple people appear, describe each separately.",
+    "If multiple people appear, one short sentence each.",
     genderRule,
-    "Never collapse multiple people into one vague subject or shared silhouette.",
   ]
     .filter(Boolean)
     .join(" ");
@@ -177,11 +160,9 @@ export function buildGroupedPeopleSystemAddendum(input: string): string {
   const label = groupedLabel(constraint);
 
   return [
-    "GROUPED / COUPLE MODE (mandatory): describe the pair as one unified subject in flowing prose.",
+    `${label} as one unified subject in a single sentence.`,
     genderRule,
-    `Write ${label.toLowerCase()} together as a single focal moment—not Person A/Person B and not left/right split catalog entries.`,
-    'Use natural couple phrasing such as "a couple", "two women together", or "both men" in one cohesive description.',
-    "Do NOT separate them into individually catalogued characters.",
+    "No Person A/Person B split and no left/right catalog entries.",
   ]
     .filter(Boolean)
     .join(" ");
@@ -192,6 +173,7 @@ export function paintDistinctPeopleScene(
   settings: GenerationSettings,
 ): string | null {
   const constraint = parsePeopleConstraint(input);
+  const detail: DetailLevel = settings.detail;
   const setting = extractSceneSetting(input);
   const settingPhrase =
     setting.toLowerCase().startsWith("a ") ||
@@ -203,21 +185,16 @@ export function paintDistinctPeopleScene(
     const gender =
       constraint.gender === "mixed" ? "mixed" : constraint.gender;
     const [personOne, personTwo] = pickDistinctSubjects(2, gender);
-    let scene = `${capitalize(settingPhrase)}. On the left, ${personOne}, with clear facial detail, defined clothing, and a specific posture. On the right, ${personTwo}—entirely different in age, ethnicity, build, hair, and expression—holds a separate pose and visible identity. Light falls across both figures while keeping each person visually distinct.`;
 
-    if (settings.variation.enabled) {
-      const variation = buildTemplateVariation(
-        settings.variation.strength,
-        true,
-        2,
-        constraint.gender,
-      );
-      if (variation) {
-        scene += ` ${variation}`;
-      }
+    if (detail === "concise") {
+      return `${capitalize(settingPhrase)}. On the left, ${personOne}; on the right, ${personTwo}.`;
     }
 
-    return scene;
+    if (detail === "rich") {
+      return `${capitalize(settingPhrase)}, warm light falling across the frame. On the left, ${personOne}, posture and clothing distinct in the light; on the right, ${personTwo}, clearly separate from the first. The background holds one environmental beat that ties both figures to the same moment.`;
+    }
+
+    return `${capitalize(settingPhrase)}. On the left, ${personOne}; on the right, ${personTwo}, each with distinct posture in the same light.`;
   }
 
   if (constraint.count !== null && constraint.count > 2) {
@@ -238,7 +215,7 @@ export function paintDistinctPeopleScene(
       )
       .join(". ");
 
-    return `${capitalize(settingPhrase)}. ${people}. Each person reads as a separate individual, not a merged group.`;
+    return `${capitalize(settingPhrase)}. ${people}.`;
   }
 
   return null;
@@ -253,6 +230,7 @@ export function paintGroupedPeopleScene(
     return null;
   }
 
+  const detail: DetailLevel = settings.detail;
   const setting = extractSceneSetting(input);
   const settingPhrase =
     setting.toLowerCase().startsWith("a ") ||
@@ -261,19 +239,13 @@ export function paintGroupedPeopleScene(
       : setting.charAt(0).toLowerCase() + setting.slice(1);
   const label = groupedLabel(constraint);
 
-  let scene = `${capitalize(settingPhrase)}. ${label} share the frame as one unified subject—described together in flowing prose, close to one another, their combined interaction forming a single focal moment rather than two separately catalogued individuals. Warm light wraps both figures as one scene element.`;
-
-  if (settings.variation.enabled) {
-    const variation = buildTemplateVariation(
-      settings.variation.strength,
-      false,
-      2,
-      constraint.gender,
-    );
-    if (variation) {
-      scene += ` ${variation}`;
-    }
+  if (detail === "concise") {
+    return `${capitalize(settingPhrase)}. ${label} share the frame as one unified subject.`;
   }
 
-  return scene;
+  if (detail === "rich") {
+    return `${capitalize(settingPhrase)}, warm light wrapping the pair. ${label} share the frame as one unified subject, clothes and posture reading together in the same moment. One background detail completes the scene without splitting them apart.`;
+  }
+
+  return `${capitalize(settingPhrase)}. ${label} share the frame as one unified subject in warm, simple light.`;
 }

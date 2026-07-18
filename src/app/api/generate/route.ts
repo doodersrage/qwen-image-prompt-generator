@@ -14,6 +14,7 @@ type GenerateRequestBody = {
     enabled?: boolean;
     strength?: number;
   };
+  detail?: string;
   distinctPeople?: boolean;
 };
 
@@ -25,6 +26,7 @@ export async function POST(request: Request) {
     const settings = normalizeGenerationSettings({
       variation: body.variation,
       distinctPeople: body.distinctPeople,
+      detail: body.detail,
     });
 
     if (!input) {

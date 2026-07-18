@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { DEFAULT_GENERATION_SETTINGS } from "@/lib/generation-settings";
+import type { DetailLevel } from "@/lib/detail-level";
 import { variationStrengthLabel } from "@/lib/variation-settings";
 
 type PromptMode = "positive" | "negative";
@@ -37,6 +38,9 @@ export default function PromptGenerator() {
   const [distinctPeople, setDistinctPeople] = useState(
     DEFAULT_GENERATION_SETTINGS.distinctPeople,
   );
+  const [detail, setDetail] = useState<DetailLevel>(
+    DEFAULT_GENERATION_SETTINGS.detail,
+  );
 
   useEffect(() => {
     setMounted(true);
@@ -66,6 +70,7 @@ export default function PromptGenerator() {
             strength: variationStrength,
           },
           distinctPeople: mode === "positive" && distinctPeople,
+          detail: mode === "positive" ? detail : "balanced",
         }),
       });
 
@@ -86,7 +91,7 @@ export default function PromptGenerator() {
     } finally {
       setLoading(false);
     }
-  }, [input, mode, variationEnabled, variationStrength, distinctPeople]);
+  }, [input, mode, variationEnabled, variationStrength, distinctPeople, detail]);
 
   const copyOutput = useCallback(async () => {
     if (!output) return;
@@ -226,6 +231,51 @@ export default function PromptGenerator() {
             </div>
 
             <div className="border-t border-zinc-800 pt-4">
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm font-medium text-zinc-200">
+                    Prompt detail
+                  </p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    More detail adds texture and atmosphere to the same scene.
+                    Rich can jumble if your keywords list too many unrelated
+                    ideas.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      { label: "Concise", value: "concise" },
+                      { label: "Balanced", value: "balanced" },
+                      { label: "Rich", value: "rich" },
+                    ] as const
+                  ).map((preset) => (
+                    <button
+                      key={preset.value}
+                      type="button"
+                      onClick={() => setDetail(preset.value)}
+                      className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
+                        detail === preset.value
+                          ? "border-violet-500 bg-violet-500/15 text-violet-200"
+                          : "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-zinc-500">
+                  {detail === "concise" &&
+                    "Shortest output—best when Qwen scenes look cluttered."}
+                  {detail === "balanced" &&
+                    "Default: vivid but still one unified scene (~4 sentences)."}
+                  {detail === "rich" &&
+                    "Most descriptive—deepens the same moment, not new locations."}
+                </p>
+              </div>
+            </div>
+
+            <div className="border-t border-zinc-800 pt-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-medium text-zinc-200">
@@ -349,16 +399,19 @@ export default function PromptGenerator() {
         <h3 className="mb-2 font-medium text-zinc-300">How it works</h3>
         <ul className="list-inside list-disc space-y-1 leading-relaxed">
           <li>
-            Type any topic or keywords—the output describes the scene in full
-            prose, not tag lists.
+            <strong className="font-medium text-zinc-400">Balanced</strong>{" "}
+            detail is the default—descriptive without cramming unrelated ideas
+            into one frame.
           </li>
           <li>
-            Qwen format: complete sentences with lighting, color, texture,
-            depth, and spatial detail.
+            Use <strong className="font-medium text-zinc-400">Concise</strong>{" "}
+            if Qwen output still looks jumbled; use{" "}
+            <strong className="font-medium text-zinc-400">Rich</strong> when
+            scenes feel too thin.
           </li>
           <li>
-            Separate ideas with commas for richer combinations (e.g. &quot;forest,
-            fog, shrine, candles&quot;).
+            Separate ideas with commas, but keep the output focused—Qwen renders
+            cleaner with 2–3 short sentences, not dense prose.
           </li>
           <li>
             Use <strong className="font-medium text-zinc-400">Distinct

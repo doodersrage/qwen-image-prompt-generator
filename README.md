@@ -55,9 +55,9 @@ LLM_MODEL=cognitivecomputations/dolphin-mistral-24b-venice-edition:free
 
 ## Prompt format
 
-Positive mode expands your input into descriptive prose that paints the scene—Qwen's preferred natural-language format:
+Positive mode outputs focused prose tuned for Qwen Image Edit. Default **Balanced** detail is ~4 sentences; use **Concise** if scenes jumble, **Rich** for more texture on the same scene.
 
-> A narrow cyberpunk alley at midnight, the asphalt slick with rain that mirrors magenta and cyan neon signs overhead. Steam curls from sidewalk grates between cracked pavement. In the midground, a sleek black cat crouches on a rusted fire escape, amber eyes catching a stray beam of light.
+> A narrow cyberpunk alley at midnight, rain-slick asphalt mirroring magenta and cyan neon signs. A sleek black cat crouches on a rusted fire escape, amber eyes catching a stray beam of light.
 
 Use **Negative / Preserve** mode for protective conditioning (e.g. "do not alter the subject's face").
 
