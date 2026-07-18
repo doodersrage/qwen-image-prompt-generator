@@ -1,6 +1,8 @@
 import { ALL_CLOTHING_CATALOG_ENTRIES } from "./clothing-catalog-batches";
 import {
+  clothingAllowedInScene,
   clothingMatchesGender,
+  entryHasRestrictedContext,
   inferClothingContexts,
   inferClothingGender,
   normalizeClothingContextTags,
@@ -16,7 +18,36 @@ export type ClothingCategory =
   | "bottom"
   | "outerwear"
   | "footwear"
-  | "accessory";
+  | "accessory"
+  | "swimwear"
+  | "intimate"
+  | "hosiery"
+  | "formalwear"
+  | "dressy-accessory"
+  | "sleepwear"
+  | "underwear"
+  | "socks"
+  | "headwear"
+  | "traditional";
+
+export const ALL_CLOTHING_CATEGORIES: ClothingCategory[] = [
+  "outfit",
+  "top",
+  "bottom",
+  "outerwear",
+  "footwear",
+  "accessory",
+  "swimwear",
+  "intimate",
+  "hosiery",
+  "formalwear",
+  "dressy-accessory",
+  "sleepwear",
+  "underwear",
+  "socks",
+  "headwear",
+  "traditional",
+];
 
 export type ClothingCatalogEntry = {
   id: string;
@@ -51,17 +82,154 @@ const WARDROBE_CATEGORIES: ClothingCategory[] = [
   "top",
   "bottom",
   "outerwear",
+  "swimwear",
+  "intimate",
+  "formalwear",
+  "sleepwear",
+  "underwear",
+  "traditional",
 ];
+
+function sceneAllowsFormalwear(contexts: readonly ClothingContextTag[]): boolean {
+  return contexts.includes("formal") || contexts.includes("evening");
+}
+
+function sceneAllowsHosiery(contexts: readonly ClothingContextTag[]): boolean {
+  return (
+    contexts.includes("formal") ||
+    contexts.includes("evening") ||
+    contexts.includes("intimate")
+  );
+}
+
+function mergeCategoryContexts(
+  category: ClothingCategory,
+  contexts: ClothingContextTag[],
+  text: string,
+): ClothingContextTag[] {
+  const tags = new Set(contexts);
+
+  if (category === "swimwear") {
+    tags.add("swimwear");
+    tags.add("beach");
+    tags.add("warm");
+    tags.delete("casual");
+    tags.delete("work");
+    tags.delete("cold");
+  }
+
+  if (category === "intimate") {
+    tags.add("intimate");
+    tags.delete("casual");
+    tags.delete("work");
+    tags.delete("outdoor");
+    if (
+      /\b(?:lace|satin|silk|chemise|negligee|garter|bustier|luxury|champagne|embroidered)\b/i.test(
+        text,
+      )
+    ) {
+      tags.add("evening");
+    }
+  }
+
+  if (category === "hosiery") {
+    tags.add("hosiery");
+    tags.add("formal");
+    tags.delete("casual");
+    tags.delete("work");
+    tags.delete("outdoor");
+    if (/\b(?:fishnet|garter|stay-up|sheer)\b/i.test(text)) {
+      tags.add("intimate");
+    }
+    if (/\b(?:opaque|wool|ribbed|winter)\b/i.test(text)) {
+      tags.add("cold");
+    }
+  }
+
+  if (category === "formalwear") {
+    tags.add("formalwear");
+    tags.add("formal");
+    tags.add("evening");
+    tags.delete("casual");
+    tags.delete("work");
+    tags.delete("athletic");
+  }
+
+  if (category === "dressy-accessory") {
+    tags.add("formalwear");
+    tags.add("formal");
+    tags.add("evening");
+    tags.delete("casual");
+    tags.delete("work");
+  }
+
+  if (category === "sleepwear") {
+    tags.add("sleepwear");
+    tags.add("intimate");
+    tags.delete("work");
+    tags.delete("outdoor");
+  }
+
+  if (category === "underwear") {
+    tags.add("underwear");
+    tags.add("intimate");
+    tags.delete("work");
+    tags.delete("outdoor");
+  }
+
+  if (category === "socks") {
+    if (/\b(?:dress|argyle)\b/i.test(text)) {
+      tags.add("formal");
+    }
+    if (/\b(?:athletic|compression)\b/i.test(text)) {
+      tags.add("athletic");
+    }
+    if (/\b(?:wool|merino|hiking)\b/i.test(text)) {
+      tags.add("outdoor");
+    }
+    if (/\b(?:wool|winter|thick)\b/i.test(text)) {
+      tags.add("cold");
+    }
+  }
+
+  if (category === "headwear") {
+    if (/\b(?:formal|fascinator|church|cloche|boater)\b/i.test(text)) {
+      tags.add("formal");
+      tags.add("evening");
+    }
+    if (/\b(?:sun|bucket|visor)\b/i.test(text)) {
+      tags.add("warm");
+    }
+    if (/\b(?:balaclava|knit|earmuff)\b/i.test(text)) {
+      tags.add("cold");
+    }
+  }
+
+  if (category === "traditional") {
+    tags.add("traditional");
+    tags.add("formal");
+    tags.delete("casual");
+  }
+
+  return [...tags];
+}
 
 function enrichEntry(raw: ClothingCatalogEntry): EnrichedClothingEntry {
   const text = `${raw.label} ${raw.script}`;
+  const baseContexts = raw.contexts?.length
+    ? normalizeClothingContextTags([...raw.contexts])
+    : inferClothingContexts(text);
 
   return {
     ...raw,
-    gender: raw.gender ?? inferClothingGender(text),
-    contexts: raw.contexts?.length
-      ? normalizeClothingContextTags([...raw.contexts])
-      : inferClothingContexts(text),
+    gender:
+      raw.gender ??
+      (raw.category === "hosiery" ||
+      raw.category === "formalwear" ||
+      raw.category === "dressy-accessory"
+        ? "women"
+        : inferClothingGender(text)),
+    contexts: mergeCategoryContexts(raw.category, baseContexts, text),
   };
 }
 
@@ -122,6 +290,26 @@ function categoryLabel(category: ClothingCategory): string {
       return "Footwear";
     case "accessory":
       return "Accessories";
+    case "swimwear":
+      return "Swimwear";
+    case "intimate":
+      return "Intimates & loungewear";
+    case "hosiery":
+      return "Hosiery";
+    case "formalwear":
+      return "Formal & dressy";
+    case "dressy-accessory":
+      return "Dressy accessories";
+    case "sleepwear":
+      return "Sleepwear & robes";
+    case "underwear":
+      return "Underwear & base layers";
+    case "socks":
+      return "Socks & legwear";
+    case "headwear":
+      return "Headwear";
+    case "traditional":
+      return "Traditional & cultural";
     default:
       return category;
   }
@@ -191,6 +379,21 @@ function filterPoolByGender(
   return [...pool];
 }
 
+function filterPoolByScene(
+  pool: readonly EnrichedClothingEntry[],
+  sceneContexts: readonly ClothingContextTag[],
+): EnrichedClothingEntry[] {
+  const allowed = pool.filter((entry) =>
+    clothingAllowedInScene(entry.contexts, sceneContexts),
+  );
+
+  if (allowed.length > 0) {
+    return allowed;
+  }
+
+  return pool.filter((entry) => !entryHasRestrictedContext(entry.contexts));
+}
+
 function pickScoredEntry(
   pool: readonly EnrichedClothingEntry[],
   contexts: readonly ClothingContextTag[],
@@ -200,7 +403,8 @@ function pickScoredEntry(
     return null;
   }
 
-  const scored = pool.map((entry) => ({
+  const scenePool = filterPoolByScene(pool, contexts);
+  const scored = scenePool.map((entry) => ({
     entry,
     score: scoreClothingContextMatch(entry.contexts, contexts),
   }));
@@ -219,7 +423,67 @@ function pickScoredEntry(
   }
 
   const fallback = tier.find((item) => !isExcluded(item.entry.id, exclude));
-  return fallback?.entry ?? pick(pool);
+  return fallback?.entry ?? pick(scenePool);
+}
+
+function pickWardrobeLayers(
+  filters: ClothingPickFilters,
+): {
+  wardrobe: EnrichedClothingEntry | null;
+  bottom: EnrichedClothingEntry | null;
+} {
+  if (filters.contexts.includes("swimwear") && randomInt(100) < 58) {
+    const swimwear = pickFromCategory("swimwear", filters);
+    if (swimwear) {
+      return { wardrobe: swimwear, bottom: null };
+    }
+  }
+
+  if (filters.contexts.includes("intimate") && randomInt(100) < 45) {
+    const intimate = pickFromCategory("intimate", filters);
+    if (intimate) {
+      return { wardrobe: intimate, bottom: null };
+    }
+  }
+
+  if (sceneAllowsFormalwear(filters.contexts) && randomInt(100) < 38) {
+    const formalwear = pickFromCategory("formalwear", filters);
+    if (formalwear) {
+      return { wardrobe: formalwear, bottom: null };
+    }
+  }
+
+  if (
+    (filters.contexts.includes("formal") ||
+      filters.contexts.includes("costume") ||
+      filters.contexts.includes("traditional")) &&
+    randomInt(100) < 22
+  ) {
+    const traditional = pickFromCategory("traditional", filters);
+    if (traditional) {
+      return { wardrobe: traditional, bottom: null };
+    }
+  }
+
+  if (filters.contexts.includes("intimate") && randomInt(100) < 30) {
+    const sleepwear = pickFromCategory("sleepwear", filters);
+    if (sleepwear) {
+      return { wardrobe: sleepwear, bottom: null };
+    }
+  }
+
+  const useOutfit = randomInt(100) < 42;
+  if (useOutfit) {
+    return {
+      wardrobe: pickFromCategory("outfit", filters),
+      bottom: null,
+    };
+  }
+
+  return {
+    wardrobe: pickFromCategory("top", filters),
+    bottom: pickFromCategory("bottom", filters),
+  };
 }
 
 function pickFromCategory(
@@ -269,31 +533,44 @@ export function pickRandomCharacterOutfit(
     excludeIds: [...used],
   };
 
-  const useOutfit = randomInt(100) < 42;
-  let wardrobe: EnrichedClothingEntry | null = null;
-  let bottom: EnrichedClothingEntry | null = null;
+  const useIntimateFootwear =
+    filters.contexts.includes("intimate") && randomInt(100) < 35;
 
-  if (useOutfit) {
-    wardrobe = pickFromCategory("outfit", workingFilters);
-  } else {
-    wardrobe = pickFromCategory("top", workingFilters);
-    bottom = pickFromCategory("bottom", workingFilters);
-  }
-
-  const footwear = pickFromCategory("footwear", workingFilters);
-  const accessory =
-    randomInt(100) < 55
-      ? pickFromCategory("accessory", workingFilters)
+  const { wardrobe, bottom } = pickWardrobeLayers(workingFilters);
+  const hosiery =
+    sceneAllowsHosiery(filters.contexts) && randomInt(100) < 44
+      ? pickFromCategory("hosiery", workingFilters)
       : null;
+  const dressyAccessory =
+    sceneAllowsFormalwear(filters.contexts) && randomInt(100) < 36
+      ? pickFromCategory("dressy-accessory", workingFilters)
+      : null;
+  const socks =
+    randomInt(100) < 48 ? pickFromCategory("socks", workingFilters) : null;
+  const headwear =
+    randomInt(100) < 28 ? pickFromCategory("headwear", workingFilters) : null;
+  const footwear = useIntimateFootwear
+    ? null
+    : pickFromCategory("footwear", workingFilters);
+  const accessory =
+    dressyAccessory ??
+    headwear ??
+    (randomInt(100) < 55
+      ? pickFromCategory("accessory", workingFilters)
+      : null);
 
   if (wardrobe) used.add(wardrobe.id);
   if (bottom) used.add(bottom.id);
+  if (hosiery) used.add(hosiery.id);
+  if (socks) used.add(socks.id);
   if (footwear) used.add(footwear.id);
   if (accessory) used.add(accessory.id);
 
   const parts = [
     wardrobe?.script,
     bottom?.script,
+    hosiery?.script,
+    socks?.script,
     footwear?.script,
     accessory?.script,
   ].filter(Boolean);
@@ -311,7 +588,7 @@ export function pickRandomCharacterOutfit(
 }
 
 const CLOTHING_HINT =
-  /\b(?:wearing|dressed|outfit|wardrobe|shirt|blouse|tee|t-shirt|top|jacket|coat|hoodie|sweater|dress|skirt|pants|jeans|shorts|boots|sneakers|shoes|heels|sandals|suit|uniform|apron|overalls|vest|blazer|cardigan|leggings|romper|jumpsuit|kimono|robe|armor|gown|tuxedo|scrubs)\b/i;
+  /\b(?:wearing|dressed|outfit|wardrobe|shirt|blouse|tee|t-shirt|top|jacket|coat|hoodie|sweater|dress|skirt|pants|jeans|shorts|boots|sneakers|shoes|heels|sandals|suit|uniform|apron|overalls|vest|blazer|cardigan|leggings|romper|jumpsuit|kimono|robe|armor|gown|tuxedo|scrubs|bikini|swimsuit|swim trunks|lingerie|chemise|negligee|stockings|pantyhose|tights|fascinator|opera gloves|twinset|skirt suit)\b/i;
 
 export function hintsMentionClothing(hints?: string): boolean {
   return CLOTHING_HINT.test(hints?.trim() ?? "");
@@ -352,7 +629,7 @@ export function getClothingCatalogFieldCategories(
     case "footwearCatalog":
       return ["footwear"];
     case "accessoriesCatalog":
-      return ["accessory"];
+      return ["accessory", "dressy-accessory", "hosiery", "socks", "headwear"];
     default:
       return [];
   }

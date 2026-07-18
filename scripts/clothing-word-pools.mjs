@@ -36,6 +36,11 @@ export const tops = [
   "halter top", "off-shoulder blouse", "peasant blouse", "wrap blouse", "silk camisole",
   "satin slip top", "bodysuit", "unitard top", "chef coat", "lab coat", "scrubs top",
   "surgical gown", "kimono jacket", "noragi work jacket", "safari jacket", "smoking jacket",
+  "waistcoat", "tailored vest", "down vest", "fleece vest", "fishing vest", "photographer vest",
+  "tunic", "smock", "peplum top", "tube top", "spaghetti-strap tank", "cricket sweater",
+  "baseball jersey", "basketball jersey", "leotard", "wetsuit top", "shawl-collar cardigan",
+  "capelet", "bolero", "poncho sweater", "mesh tank", "rugby polo", "cricket whites shirt",
+  "dress shirt", "mandarin collar shirt", "band collar shirt", "short-sleeve button-down",
 ];
 
 export const bottoms = [
@@ -47,6 +52,9 @@ export const bottoms = [
   "maxi skirt", "wrap skirt", "kilts", "sarong", "hakama trousers", "palazzo pants",
   "culottes", "overalls", "shortalls", "coveralls", "work coveralls", "fish-tail skirt",
   "pencil skirt", "A-line skirt", "leather pants", "vinyl pants", "hot pants",
+  "harem pants", "gaucho pants", "snow pants", "ski pants", "rain pants", "leather skirt",
+  "denim skirt", "corduroy skirt", "sweat skirt", "tennis dress skirt", "bib shorts",
+  "mountain pants", "motocross pants", "equestrian breeches", "jodhpurs", "dhoti trousers",
 ];
 
 export const outerwear = [
@@ -58,6 +66,8 @@ export const outerwear = [
   "quilted barn coat", "oilskin duster", "western duster", "kimono overcoat", "haori layer",
   "surgical scrub jacket", "chef's whites jacket", "lab safety coat", "high-vis safety vest",
   "reflective running vest", "life vest", "flotation jacket", "firefighter turnout coat",
+  "duvet coat", "cape coat", "swing coat", "military greatcoat", "watch coat", "bridge coat",
+  "reversible jacket", "3-in-1 shell jacket", "insulated bib overalls", "ski bib",
 ];
 
 export const footwear = [
@@ -71,6 +81,10 @@ export const footwear = [
   "moon boots", "roller skates", "inline skates", "climbing shoes", "cycling shoes",
   "soccer cleats", "tap shoes", "cowboy boots", "riding boots", "wellington boots",
   "crocs", "birkenstock sandals", "platform combat boots", "thigh-high boots",
+  "house slippers", "moccasins", "duck boots", "platform sneakers", "platform sandals",
+  "water shoes", "golf shoes", "bowling shoes", "character shoes", "dance heels",
+  "ugg-style boots", "hiking sandals", "boat shoes", "deck shoes", "spectator shoes",
+  "saddle shoes", "wooden clogs", "tabi boots", "geta sandals", "slippers",
 ];
 
 export const accessories = [
@@ -87,6 +101,10 @@ export const accessories = [
   "wristwatch", "pocket watch", "fitness tracker", "leather cuff bracelet", "beaded bracelet",
   "ring set", "signet ring", "brooch", "lapel pin", "flower boutonniere", "hair clip",
   "claw clip", "headband", "scrunchie", "face mask", "respirator mask", "chef hat",
+  "pocket square", "cufflinks", "tie clip", "collar bar", "shawl", "pashmina", "umbrella",
+  "parasol", "leg warmers", "arm warmers", "anklet", "body chain", "waist chain",
+  "stethoscope", "knee pads", "elbow pads", "shin guards", "hand muff", "earmuffs",
+  "cravat", "ascot", "bolo tie", "chain belt", "utility harness", "camera harness",
 ];
 
 export const outfits = [
@@ -110,6 +128,10 @@ export const outfits = [
   "waiter black tie service outfit", "hotel concierge uniform", "bellhop uniform",
   "construction hi-vis outfit", "warehouse picker vest look", "mechanic coveralls",
   "farmer chore outfit", "fisherman rain gear", "sailor deck outfit", "submariner jumper",
+  "wedding dress", "bridal gown", "bridesmaid dress", "prom dress", "quinceañera dress",
+  "graduation gown and cap", "academic regalia", "beekeeper suit", "hazmat suit",
+  "maternity dress outfit", "nursing-friendly outfit", "modest layered outfit",
+  "winter layered outfit", "rain-ready outfit", "festival rave outfit", "Renaissance faire outfit",
 ];
 
 export const details = [
@@ -126,4 +148,100 @@ export const details = [
 export const fits = [
   "relaxed-fit", "slim-fit", "oversized", "cropped", "tailored", "boxy", "tapered",
   "wide-leg", "high-waisted", "low-rise", "double-breasted", "single-breasted", "unstructured",
+];
+
+export const swimwearPieces = [
+  "triangle bikini set", "bandeau bikini set", "high-waist bikini set", "sport bikini set",
+  "cut-out one-piece swimsuit", "classic one-piece swimsuit", "racerback one-piece swimsuit",
+  "plunge one-piece swimsuit", "tankini set", "high-leg one-piece swimsuit", "monokini swimsuit",
+  "swim trunks", "classic board shorts", "long swim trunks", "swim briefs", "jammer swim shorts",
+  "rash guard top with swim trunks", "rash guard one-piece", "surf rash guard set",
+  "mesh-panel one-piece swimsuit", "striped retro one-piece swimsuit", "wrap bikini set",
+  "string bikini set", "scoop-back one-piece swimsuit", "zip-front surf swimsuit",
+  "swim crop top with high-waist bottoms", "athletic two-piece swimsuit", "pool training swimsuit",
+  "linen cover-up over swimsuit", "sheer kaftan over bikini", "sarong-wrap swim set",
+];
+
+export const intimatePieces = [
+  "lace lingerie set", "satin lingerie set", "silk chemise", "satin chemise", "sheer lace chemise",
+  "lace bralette and high-waist brief set", "balconette bra and brief set", "plunge bra and thong set",
+  "satin slip dress lingerie", "bias-cut silk slip", "lace teddy", "satin teddy", "mesh teddy",
+  "corset lingerie set", "bustier and garter set", "garter belt lingerie set", "tap pants and camisole set",
+  "silk robe over lace set", "satin robe and slip set", "luxury loungewear set", "champagne silk lingerie set",
+  "black lace bodysuit lingerie", "embroidered balconette set", "longline bra and brief set",
+  "modal boxer briefs", "cotton boxer briefs", "jersey lounge shorts", "silk lounge shorts",
+  "linen sleep shirt and shorts set", "henley sleep set", "classic white briefs", "trunk briefs",
+  "ribbed tank and boxer brief set", "open-weave robe over briefs", "monogrammed hotel robe set",
+  "cashmere lounge set", "velvet lounge set", "lace-trim camisole and shorts set",
+  "pearl-button sleep shirt set", "drawstring lounge pants and bralette set",
+];
+
+export const hosieryPieces = [
+  "sheer nylon stockings", "silk stockings", "back-seam stockings", "seamed stockings",
+  "thigh-high stockings", "stay-up stockings", "garter stockings", "lace-top stockings",
+  "sheer pantyhose", "opaque pantyhose", "control-top pantyhose", "satin-finish pantyhose",
+  "matte opaque tights", "sheer-to-waist pantyhose", "fishnet stockings", "fishnet tights",
+  "patterned fashion tights", "ribbed tights", "winter wool tights", "microfiber tights",
+  "nude sheer pantyhose", "black sheer stockings", "cuban-heel seamed stockings",
+  "garter belt and stockings set", "suspender stockings set",
+];
+
+export const formalwearPieces = [
+  "women's tailored skirt suit", "women's formal pants suit", "cashmere twinset with pearls",
+  "silk twinset", "blouse and pencil skirt suit", "cocktail suit with satin lapels",
+  "evening dress suit", "tuxedo-inspired women's suit", "wrap blouse and midi skirt set",
+  "fit-and-flare dress and matching jacket", "belted shirt-dress suit", "tweed skirt suit",
+  "formal sheath dress and bolero jacket", "dressy jumpsuit with cropped jacket",
+  "ballroom gown and matching stole", "wide-leg formal trouser suit", "satin-trim dinner suit",
+  "morning dress suit with hat", "double-breasted skirt suit", "peplum jacket and pencil skirt set",
+  "chiffon blouse and maxi skirt formal set", "lace-overlay formal dress suit",
+];
+
+export const dressyAccessories = [
+  "opera-length satin gloves", "elbow-length lace gloves", "long satin opera gloves",
+  "wrist-length formal gloves", "pearl-embellished evening clutch", "metallic minaudiere",
+  "beaded evening bag", "satin box clutch", "jeweled clasp clutch", "feather fascinator",
+  "velvet bow fascinator", "netting fascinator with veil", "silk flower fascinator",
+  "wide-brim formal hat", "silk evening wrap", "cashmere stole", "marabou feather stole",
+  "pearl opera necklace", "crystal drop earrings", "formal statement brooch",
+  "satin sash belt", "crystal tiara", "dressy headband with pearls",
+];
+
+export const sleepwearPieces = [
+  "cotton pajama set", "flannel pajama set", "silk pajama set", "striped pajama set",
+  "nightgown", "cotton nightdress", "satin nightgown", "sleep shirt", "oversized sleep tee",
+  "sleep shorts set", "onesie pajama", "footie pajamas", "lounge shorts sleep set",
+  "bathrobe", "terry cloth robe", "silk dressing gown", "kimono sleep robe", "hotel bathrobe",
+  "peignoir set", "sleep camisole set", "jersey sleep set", "modal lounge set",
+];
+
+export const underwearPieces = [
+  "cotton briefs", "boxer briefs", "trunk underwear", "classic white briefs", "A-shirt undershirt",
+  "wifebeater undershirt", "long johns top", "long johns bottom", "thermal underwear set",
+  "union suit", "sports bra", "everyday bra", "wireless bra", "hipster panties",
+  "bikini-cut panties", "high-waist briefs", "slip petticoat", "shapewear shorts",
+  "compression shorts", "undershirt and drawers set",
+];
+
+export const socksPieces = [
+  "crew socks", "ankle socks", "no-show socks", "wool hiking socks", "dress socks",
+  "athletic socks", "knee-high socks", "tube socks", "compression socks", "tabi socks",
+  "slouch socks", "leg warmers", "over-the-knee socks", "argyle dress socks", "striped socks",
+  "cotton athletic socks", "merino wool socks", "fishnet socks", "sheer ankle socks",
+];
+
+export const headwearPieces = [
+  "hijab", "headscarf", "turban", "kippah", "sun visor", "trilby hat", "cowboy hat",
+  "cloche hat", "boater hat", "deerstalker hat", "knit snood", "earmuff headband",
+  "formal fascinator", "church hat", "newsboy flat cap", "cadet cap", "bucket sun hat",
+  "rain hood", "balaclava hood", "knit hood", "surgical cap", "chef toque",
+];
+
+export const traditionalPieces = [
+  "qipao dress", "cheongsam dress", "ao dai", "abaya", "kaftan dress", "dashiki set",
+  "boubou robe", "djellaba", "kebaya and sarong set", "huipil outfit", "hanfu set",
+  "yukata set", "kimono formal set", "sari formal set", "kilt and sporran outfit",
+  "lederhosen and suspenders", "dirndl complete set", "poncho andalusian outfit",
+  "serape outfit", "shalwar kameez formal set", "deel outfit", "gomesi dress",
+  "bunad-inspired outfit", "chapan coat outfit", "greek evzone-inspired outfit",
 ];

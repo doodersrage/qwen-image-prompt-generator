@@ -248,6 +248,7 @@ The character tool includes a **2,000+ entry clothing catalog** (outfits, tops, 
 | Command | Purpose |
 |---------|---------|
 | `npm run clothing:count` | Show catalog size by category |
+| `npm run clothing:dedupe` | Remove duplicate category+label entries across batches |
 | `npm run clothing:generate` | Add **500** new clothing entries |
 | `npm run clothing:generate:dry` | Preview without writing files |
 
@@ -256,4 +257,4 @@ npm run clothing:generate -- --target 5000
 npm run clothing:generate -- --add 1000 --seed 42
 ```
 
-In the Character tool, open **Wardrobe & props** presets to pick library items (grouped dropdowns). Custom text fields override library picks. Catalog dropdowns filter by gender when hints specify woman/man. When no wardrobe preset or clothing hints are set, a random outfit is picked from the library using **gender** (from character hints) and **scene context** (location, environment seed, atmosphere/aesthetic presets). Entries carry inferred `gender` and `contexts` tags (keyword-based at load time; explicit on newly generated batches). Word pools: `scripts/clothing-word-pools.mjs`; tag rules: `src/lib/clothing-tags.ts`.
+In the Character tool, open **Wardrobe & props** presets to pick library items (grouped dropdowns covering all **16 categories**: tops, bottoms, outerwear, footwear, swimwear, intimates, hosiery, formalwear, sleepwear, underwear, socks, headwear, traditional dress, and more). Custom text fields override library picks. **Every catalog item is always selectable** in the dropdowns (gender filtering only). Random outfit rolls still respect scene context for specialized items. Word pools: `scripts/clothing-word-pools.mjs`.

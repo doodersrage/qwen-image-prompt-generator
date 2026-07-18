@@ -21,6 +21,16 @@ import {
   outerwear,
   outfits,
   tops,
+  swimwearPieces,
+  intimatePieces,
+  hosieryPieces,
+  formalwearPieces,
+  dressyAccessories,
+  sleepwearPieces,
+  underwearPieces,
+  socksPieces,
+  headwearPieces,
+  traditionalPieces,
 } from "./clothing-word-pools.mjs";
 import { tagClothingEntry } from "./clothing-tag-utils.mjs";
 
@@ -30,12 +40,22 @@ const BATCH_INDEX = path.join(LIB_DIR, "clothing-catalog-batches.ts");
 const CATALOG_GLOB = /^clothing-catalog-(\d+)\.ts$/;
 
 const CATEGORY_QUOTAS = {
-  outfit: 0.2,
-  top: 0.18,
-  bottom: 0.14,
-  outerwear: 0.12,
-  footwear: 0.18,
-  accessory: 0.18,
+  outfit: 0.12,
+  top: 0.11,
+  bottom: 0.09,
+  outerwear: 0.08,
+  footwear: 0.11,
+  accessory: 0.085,
+  swimwear: 0.04,
+  intimate: 0.04,
+  hosiery: 0.04,
+  formalwear: 0.04,
+  "dressy-accessory": 0.04,
+  sleepwear: 0.04,
+  underwear: 0.04,
+  socks: 0.04,
+  headwear: 0.04,
+  traditional: 0.04,
 };
 
 function slugify(value) {
@@ -44,6 +64,10 @@ function slugify(value) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 72);
+}
+
+function labelKey(category, label) {
+  return `${category}::${label.trim().toLowerCase().replace(/\s+/g, " ")}`;
 }
 
 function parseArgs(argv) {
@@ -135,6 +159,7 @@ function parseEntriesFromFile(filePath) {
 
 function loadExistingCatalog() {
   const byId = new Map();
+  const byLabel = new Set();
   const sources = [];
 
   for (const fileName of listCatalogFiles()) {
@@ -142,11 +167,12 @@ function loadExistingCatalog() {
     const entries = parseEntriesFromFile(filePath);
     for (const entry of entries) {
       byId.set(entry.id, entry);
+      byLabel.add(labelKey(entry.category, entry.label));
     }
     sources.push({ label: fileName, count: entries.length });
   }
 
-  return { byId, sources };
+  return { byId, byLabel, sources };
 }
 
 function nextBatchNumber(explicitBatch) {
@@ -209,6 +235,86 @@ function buildPhrase(category, pick) {
     };
   }
 
+  if (category === "swimwear") {
+    const piece = pick(swimwearPieces);
+    return {
+      label: `${color} ${material} ${piece}`,
+      script: `a ${color} ${material} ${piece}, damp fabric sheen, secure fit, and realistic swimwear construction for pool or beach use`,
+    };
+  }
+
+  if (category === "intimate") {
+    const piece = pick(intimatePieces);
+    return {
+      label: `${color} ${material} ${piece}`,
+      script: `a ${color} ${material} ${piece}, fine lingerie detailing, soft fabric drape, and believable fit for a private indoor setting`,
+    };
+  }
+
+  if (category === "hosiery") {
+    const piece = pick(hosieryPieces);
+    return {
+      label: `${color} ${material} ${piece}`,
+      script: `${color} ${material} ${piece}, rendered with believable sheer or opaque texture, fine seam detail, and natural fit on the legs`,
+    };
+  }
+
+  if (category === "formalwear") {
+    const piece = pick(formalwearPieces);
+    return {
+      label: `${fit} ${color} ${material} ${piece}`,
+      script: `a ${fit} ${color} ${material} ${piece}, refined tailoring, polished fabric drape, and elegant formal styling`,
+    };
+  }
+
+  if (category === "dressy-accessory") {
+    const piece = pick(dressyAccessories);
+    return {
+      label: `${color} ${material} ${piece}`,
+      script: `a ${color} ${material} ${piece}, rendered with formal occasion detail, fine finish, and natural placement for an evening or gala setting`,
+    };
+  }
+
+  if (category === "sleepwear") {
+    const piece = pick(sleepwearPieces);
+    return {
+      label: `${color} ${material} ${piece}`,
+      script: `a ${color} ${material} ${piece}, soft sleepwear drape, comfortable fit, and believable at-home fabric texture`,
+    };
+  }
+
+  if (category === "underwear") {
+    const piece = pick(underwearPieces);
+    return {
+      label: `${color} ${material} ${piece}`,
+      script: `a ${color} ${material} ${piece}, rendered as base-layer underwear with natural fit and realistic fabric stretch`,
+    };
+  }
+
+  if (category === "socks") {
+    const piece = pick(socksPieces);
+    return {
+      label: `${color} ${material} ${piece}`,
+      script: `${color} ${material} ${piece}, showing knit texture, natural stretch, and believable fit on the feet and calves`,
+    };
+  }
+
+  if (category === "headwear") {
+    const piece = pick(headwearPieces);
+    return {
+      label: `${color} ${material} ${piece}`,
+      script: `a ${color} ${material} ${piece}, rendered with readable shape, material weight, and natural placement on the head`,
+    };
+  }
+
+  if (category === "traditional") {
+    const piece = pick(traditionalPieces);
+    return {
+      label: `${fit} ${color} ${material} ${piece}`,
+      script: `a ${fit} ${color} ${material} ${piece}, culturally specific tailoring, authentic drape, and respectful traditional garment construction`,
+    };
+  }
+
   const accessory = pick(accessories);
   return {
     label: `${color} ${accessory}`,
@@ -216,7 +322,7 @@ function buildPhrase(category, pick) {
   };
 }
 
-function generateEntries(byId, countNeeded, seed) {
+function generateEntries(byId, byLabel, countNeeded, seed) {
   const rand = createRng(seed);
   const pick = (items) => items[Math.floor(rand() * items.length)];
   const categories = Object.keys(CATEGORY_QUOTAS);
@@ -228,6 +334,11 @@ function generateEntries(byId, countNeeded, seed) {
     attempts += 1;
     const category = categories[attempts % categories.length];
     const phrase = buildPhrase(category, pick);
+    const key = labelKey(category, phrase.label);
+    if (byLabel.has(key)) {
+      continue;
+    }
+
     const baseId = slugify(`${category}-${phrase.label}`);
     let id = baseId;
     let suffix = 1;
@@ -245,6 +356,7 @@ function generateEntries(byId, countNeeded, seed) {
     });
 
     byId.set(id, entry);
+    byLabel.add(key);
     newEntries.push(entry);
   }
 
@@ -323,7 +435,7 @@ function main() {
     return;
   }
 
-  const { byId, sources } = loadExistingCatalog();
+  const { byId, byLabel, sources } = loadExistingCatalog();
   const currentTotal = byId.size;
 
   if (args.count) {
@@ -352,7 +464,7 @@ function main() {
   }
 
   const batchNumber = nextBatchNumber(args.batch);
-  const newEntries = generateEntries(new Map(byId), addCount, args.seed);
+  const newEntries = generateEntries(new Map(byId), new Set(byLabel), addCount, args.seed);
 
   console.log(`Current catalog: ${currentTotal}`);
   console.log(`Generated: ${newEntries.length}`);

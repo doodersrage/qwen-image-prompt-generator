@@ -1,8 +1,8 @@
 const WOMEN_GARMENT =
-  /\b(?:dress|gown|skirt|heels|stiletto|tutu|cocktail dress|evening gown|a-line skirt|fish-tail skirt|maxi skirt|mini skirt|pencil skirt|wrap skirt|romper|camisole|corset top|blouse|peasant blouse|wrap blouse|halter top|slip dress|shirt dress|sweater dress|dirndl|sari|salwar kameez|hanbok|flamenco dress|ballroom dance dress|mary jane|kitten heels|block heel pumps|ballet flats|leggings|yoga pants)\b/i;
+  /\b(?:dress|gown|skirt|heels|stiletto|tutu|cocktail dress|evening gown|a-line skirt|fish-tail skirt|maxi skirt|mini skirt|pencil skirt|wrap skirt|romper|camisole|corset top|blouse|peasant blouse|wrap blouse|halter top|slip dress|shirt dress|sweater dress|dirndl|sari|salwar kameez|hanbok|flamenco dress|ballroom dance dress|mary jane|kitten heels|block heel pumps|ballet flats|leggings|yoga pants|bikini|one-piece swimsuit|tankini|chemise|negligee|lingerie|bralette|bustier|teddy|garter belt|tap pants|stockings|pantyhose|tights|fishnet|twinset|skirt suit|fascinator|opera gloves)\b/i;
 
 const MEN_GARMENT =
-  /\b(?:brogues|monk strap|oxford dress shoes|tuxedo|three-piece suit|boxer briefs|jockstrap|codpiece|necktie with suit|suspenders and tie|chore coat with work boots|cowboy boots with hat)\b/i;
+  /\b(?:brogues|monk strap|oxford dress shoes|tuxedo|three-piece suit|boxer briefs|jockstrap|codpiece|necktie with suit|suspenders and tie|chore coat with work boots|cowboy boots with hat|swim trunks|swim briefs|lounge shorts with robe)\b/i;
 
 const WOMEN_LEAN =
   /\b(?:crop top|off-shoulder|bodysuit|spaghetti strap|wrap dress|sequin gown|platform heels|thigh-high boots with skirt)\b/i;
@@ -12,8 +12,8 @@ const MEN_LEAN =
 
 const CONTEXT_RULES = [
   { tag: "athletic", pattern: /\b(?:jersey|running|jogger|yoga|gym|cycling|soccer|cleats|track pants|sweatpants|sport|ski jacket|climbing|trail runner|basketball|fencing|dance kit|triathlon|workout|compression|goalkeeper|baseball uniform|hockey|swim|snorkel|cleats|mogul|parkour)\b/i },
-  { tag: "formal", pattern: /\b(?:suit|tuxedo|gown|cocktail|blazer|oxford dress|brogues|monk strap|evening wear|wedding|pencil skirt|sport coat|tailcoat|formal wear|three-piece|evening gown|cocktail dress)\b/i },
-  { tag: "evening", pattern: /\b(?:cocktail|evening gown|sequin|silk slip|stiletto|heels|gown|tuxedo|smoking jacket|ballroom|satin slip|pearl necklace|clutch)\b/i },
+  { tag: "formal", pattern: /\b(?:suit|tuxedo|gown|cocktail|blazer|oxford dress|brogues|monk strap|evening wear|wedding|pencil skirt|sport coat|tailcoat|formal wear|three-piece|evening gown|cocktail dress|skirt suit|twinset|formalwear|opera gloves|fascinator)\b/i },
+  { tag: "evening", pattern: /\b(?:cocktail|evening gown|sequin|silk slip|stiletto|heels|gown|tuxedo|smoking jacket|ballroom|satin slip|pearl necklace|clutch|opera gloves|fascinator|minaudiere|stole|tiara)\b/i },
   { tag: "outdoor", pattern: /\b(?:hiking|trail|parka|puffer|anorak|fleece|gore-tex|windbreaker|cargo pants|work boots|mountain shell|rain slicker|field jacket|cagoule|poncho|bandana|sun hat|straw hat|backpack|climbing|camp|safari|gorpcore)\b/i },
   { tag: "cold", pattern: /\b(?:parka|puffer|wool|fleece|peacoat|duffle coat|shearling|down|beanie|scarf|mittens|balaclava|moon boots|overcoat|quilted|insulated|ear muffs|winter)\b/i },
   { tag: "warm", pattern: /\b(?:shorts|sandals|flip-flops|tank top|linen|hawaiian shirt|board shorts|muscle tank|racerback|espadrilles|sun hat|crop top|sleeveless|mesh jersey|sleeveless)\b/i },
@@ -21,10 +21,116 @@ const CONTEXT_RULES = [
   { tag: "work", pattern: /\b(?:coveralls|overalls|workbench|apron|hi-vis|safety vest|tool belt|mechanic|chef|barista|warehouse|scrubs|lab coat|barber|butcher|forge|paint-stained|work boots|steel-toe|utilitarian|chore coat|boiler suit)\b/i },
   { tag: "uniform", pattern: /\b(?:uniform|kit|gi|dobok|judogi|karate|scrubs|police|military|firefighter|turnout|pilot|flight attendant|nurse|paramedic|chef whites|server room|bellhop|postal|mail carrier|referee|umpire)\b/i },
   { tag: "costume", pattern: /\b(?:wizard|knight|armor|circus|magician|monk robes|nun habit|cosplay|vampire|steampunk|elven|dwarven|halloween|renaissance faire|mermaid|superhero|ballerina tutu)\b/i },
-  { tag: "beach", pattern: /\b(?:board shorts|flip-flops|sarong|snorkel|bikini|swim trunks|rash guard|beach|coastal|linen camp shirt|espadrilles|sun hat|cover-up)\b/i },
+  { tag: "beach", pattern: /\b(?:board shorts|flip-flops|sarong|snorkel|bikini|swim trunks|rash guard|beach|coastal|linen camp shirt|espadrilles|sun hat|cover-up|kaftan cover-up|poolside)\b/i },
+  { tag: "swimwear", pattern: /\b(?:bikini|one-piece swimsuit|tankini|swim trunks|swim briefs|rash guard|cut-out swimsuit|bandeau bikini|high-waist bikini|sport swimsuit|swim set|monokini|swim top|swim bottom|competitive swim)\b/i },
+  { tag: "intimate", pattern: /\b(?:lingerie|bra\b|bralette|panties|briefs|boxer briefs|chemise|negligee|teddy|bodysuit lingerie|garter belt|bustier|corset lingerie|tap pants|silk robe set|lace set|satin slip set|lounge lingerie|drawers and vest|sleep set|stay-up stockings|garter stockings)\b/i },
+  { tag: "hosiery", pattern: /\b(?:stockings|pantyhose|tights|fishnet|sheer hose|nylon hose|thigh-high stockings|stay-up stockings|back-seam stockings|seamed pantyhose|garter stockings|opaque tights|lace-top stockings)\b/i },
+  { tag: "formalwear", pattern: /\b(?:skirt suit|pants suit|twinset|formal suit|evening suit|tweed suit|sheath dress and jacket|formal jumpsuit|ballroom-ready|chanel-style|dress suit|formal cape|ladies' tuxedo|morning dress suit)\b/i },
+  { tag: "sleepwear", pattern: /\b(?:pajama|pyjama|nightgown|nightdress|sleep shirt|sleep set|bathrobe|dressing gown|peignoir|onesie pajama|footie pajama|lounge sleep)\b/i },
+  { tag: "underwear", pattern: /\b(?:underwear|undershirt|long johns|thermal underwear|union suit|everyday bra|sports bra|boxer briefs|hipster panties|shapewear|A-shirt|wifebeater undershirt)\b/i },
+  { tag: "traditional", pattern: /\b(?:qipao|cheongsam|ao dai|abaya|kaftan dress|dashiki|boubou|djellaba|kebaya|huipil|hanfu|yukata|dirndl|lederhosen|kilt|serape|shalwar|gomesi|bunad|chapan)\b/i },
   { tag: "urban", pattern: /\b(?:streetwear|techwear|hoodie|denim jacket|leather jacket|bomber|sneakers|crossbody|snapback|cargo pants|oversized fit|y2k|grunge|cyberpunk|neon|metro|skateboard|parkour)\b/i },
   { tag: "casual", pattern: /\b(?:tee|t-shirt|henley|jeans|chinos|hoodie|sneakers|flannel|cardigan|loafers|casual|everyday|relaxed-fit)\b/i },
 ];
+
+function mergeCategoryContexts(category, contexts, text) {
+  const tags = new Set(contexts);
+
+  if (category === "swimwear") {
+    tags.add("swimwear");
+    tags.add("beach");
+    tags.add("warm");
+    tags.delete("casual");
+    tags.delete("work");
+    tags.delete("cold");
+  }
+
+  if (category === "intimate") {
+    tags.add("intimate");
+    tags.delete("casual");
+    tags.delete("work");
+    tags.delete("outdoor");
+    if (/\b(?:lace|satin|silk|chemise|negligee|garter|bustier|luxury|champagne|embroidered)\b/i.test(text)) {
+      tags.add("evening");
+    }
+  }
+
+  if (category === "hosiery") {
+    tags.add("hosiery");
+    tags.add("formal");
+    tags.delete("casual");
+    tags.delete("work");
+    tags.delete("outdoor");
+    if (/\b(?:fishnet|garter|stay-up|sheer)\b/i.test(text)) {
+      tags.add("intimate");
+    }
+    if (/\b(?:opaque|wool|ribbed|winter)\b/i.test(text)) {
+      tags.add("cold");
+    }
+  }
+
+  if (category === "formalwear") {
+    tags.add("formalwear");
+    tags.add("formal");
+    tags.add("evening");
+    tags.delete("casual");
+    tags.delete("work");
+    tags.delete("athletic");
+  }
+
+  if (category === "dressy-accessory") {
+    tags.add("formalwear");
+    tags.add("formal");
+    tags.add("evening");
+    tags.delete("casual");
+    tags.delete("work");
+  }
+
+  if (category === "sleepwear") {
+    tags.add("sleepwear");
+    tags.add("intimate");
+    tags.delete("work");
+    tags.delete("outdoor");
+  }
+
+  if (category === "underwear") {
+    tags.add("underwear");
+    tags.add("intimate");
+    tags.delete("work");
+    tags.delete("outdoor");
+  }
+
+  if (category === "socks") {
+    if (/\b(?:dress|argyle)\b/i.test(text)) tags.add("formal");
+    if (/\b(?:athletic|compression|soccer)\b/i.test(text)) tags.add("athletic");
+    if (/\b(?:wool|merino|hiking)\b/i.test(text)) tags.add("outdoor");
+    if (/\b(?:wool|winter|thick)\b/i.test(text)) tags.add("cold");
+    if (tags.size === 1 && tags.has("casual")) {
+      /* keep casual socks */
+    }
+  }
+
+  if (category === "headwear") {
+    if (/\b(?:formal|fascinator|church|cloche|boater)\b/i.test(text)) {
+      tags.add("formal");
+      tags.add("evening");
+    }
+    if (/\b(?:sun|bucket|visor|straw)\b/i.test(text)) tags.add("warm");
+    if (/\b(?:balaclava|knit|beanie|earmuff)\b/i.test(text)) tags.add("cold");
+  }
+
+  if (category === "traditional") {
+    tags.add("traditional");
+    tags.add("formal");
+    tags.delete("casual");
+  }
+
+  if (tags.size === 0) {
+    tags.add("casual");
+  }
+
+  return [...tags];
+}
 
 export function inferClothingGender(text) {
   const value = text.toLowerCase();
@@ -41,6 +147,10 @@ export function inferClothingGender(text) {
   }
   if (/\b(?:tuxedo|cummerbund|dress shirt and tie)\b/i.test(value)) {
     menScore += 2;
+  }
+
+  if (/\b(?:women's|ladies'|twinset|skirt suit|fascinator|stockings|pantyhose)\b/i.test(value)) {
+    womenScore += 2;
   }
 
   if (womenScore >= menScore + 2) return "women";
@@ -60,6 +170,17 @@ export function inferClothingContexts(text) {
 
   if (tags.size === 0) {
     tags.add("casual");
+  } else if (
+    tags.has("swimwear") ||
+    tags.has("intimate") ||
+    tags.has("hosiery") ||
+    tags.has("formalwear") ||
+    tags.has("sleepwear") ||
+    tags.has("underwear") ||
+    tags.has("uniform") ||
+    tags.has("costume")
+  ) {
+    tags.delete("casual");
   }
 
   return [...tags];
@@ -67,11 +188,19 @@ export function inferClothingContexts(text) {
 
 export function tagClothingEntry(entry) {
   const text = `${entry.label} ${entry.script}`;
+  const inferred = entry.contexts?.length
+    ? entry.contexts
+    : inferClothingContexts(text);
+
   return {
     ...entry,
-    gender: entry.gender ?? inferClothingGender(text),
-    contexts: entry.contexts?.length
-      ? entry.contexts
-      : inferClothingContexts(text),
+    gender:
+      entry.gender ??
+      (entry.category === "hosiery" ||
+      entry.category === "formalwear" ||
+      entry.category === "dressy-accessory"
+        ? "women"
+        : inferClothingGender(text)),
+    contexts: mergeCategoryContexts(entry.category, inferred, text),
   };
 }

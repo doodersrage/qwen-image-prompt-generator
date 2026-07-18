@@ -2,6 +2,10 @@
 import { CLOTHING_CATALOG_1 } from "./clothing-catalog-1";
 import { CLOTHING_CATALOG_2 } from "./clothing-catalog-2";
 import { CLOTHING_CATALOG_3 } from "./clothing-catalog-3";
+import { CLOTHING_CATALOG_4 } from "./clothing-catalog-4";
+import { CLOTHING_CATALOG_5 } from "./clothing-catalog-5";
+import { CLOTHING_CATALOG_6 } from "./clothing-catalog-6";
+import { CLOTHING_CATALOG_7 } from "./clothing-catalog-7";
 
 type ClothingBatchEntry = {
   readonly id: string;
@@ -16,4 +20,8 @@ export const ALL_CLOTHING_CATALOG_ENTRIES: readonly ClothingBatchEntry[] = [
   ...(CLOTHING_CATALOG_1 as readonly ClothingBatchEntry[]),
   ...(CLOTHING_CATALOG_2 as readonly ClothingBatchEntry[]),
   ...(CLOTHING_CATALOG_3 as readonly ClothingBatchEntry[]),
+  ...(CLOTHING_CATALOG_4 as readonly ClothingBatchEntry[]),
+  ...(CLOTHING_CATALOG_5 as readonly ClothingBatchEntry[]),
+  ...(CLOTHING_CATALOG_6 as readonly ClothingBatchEntry[]),
+  ...(CLOTHING_CATALOG_7 as readonly ClothingBatchEntry[]),
 ];
