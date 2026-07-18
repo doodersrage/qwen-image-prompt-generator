@@ -1,15 +1,37 @@
-# Qwen Image Edit Prompt Generator
+# Qwen Image Prompt Generator
 
-A Next.js app that paints a picture in words from any topic or keywords—a Qwen-compatible scene prompt for **TextEncodeQwenImageEdit**.
+A Next.js app that turns topics or keywords into model-specific prompts for ComfyUI image workflows.
+
+## Supported models
+
+| Model | ComfyUI node | Prompt style |
+|-------|--------------|--------------|
+| **Qwen-Image-Edit** | `TextEncodeQwenImageEdit` | Short unified scene prose for single-image edits |
+| **Qwen-Image-Edit-2511** | `TextEncodeQwenImageEditPlus` | Explicit keep/change instructions; Figure 1 / Figure 2 for multi-image |
+| **Qwen-Image-2.0** | `CLIP Text Encode (Qwen)` | Long T2I scene descriptions; Rich targets 1100–1400 characters |
+| **FLUX.2 Klein** | `CLIP Text Encode (Flux)` | Subject-first photographic prose; materials, lighting, camera |
 
 ## Features
 
-- Topic or keywords → descriptive prose scene (word painting, not tag soup)
-- Qwen Image Edit natural-language format
+- User-selectable target model with model-specific formatting
+- Prompt detail levels (Concise / Balanced / Rich) with **combined model + detail size limits**
+- Minimum character enforcement for long-form models (Image-2.0 Rich, FLUX Rich)
 - Positive and negative/preserve prompt modes
 - Uncensored system prompts (no content filtering or refusals)
 - One-click copy for ComfyUI paste
 - LLM-powered generation with template fallback
+
+## Prompt size limits
+
+Limits are enforced per **model × detail** combination (characters and sentence count):
+
+| Detail | Qwen-Image-Edit | Edit-2511 | Image-2.0 | FLUX.2 Klein |
+|--------|-----------------|-----------|-----------|--------------|
+| Concise | ~280 chars, 2 sent. | ~220 chars, 1–2 sent. | ~400 chars, 2 sent. | ~250 chars, 2 sent. |
+| Balanced | ~520 chars, 3 sent. | ~420 chars, 2–3 sent. | ~550–800 chars, 3–4 sent. | ~450–700 chars, 3–5 sent. |
+| Rich | ~920 chars, 4–5 sent. | ~680 chars, 3–4 sent. | **1100–1400 chars**, 6–8 sent. | **900–1200 chars**, 5–8 sent. |
+
+Rich detail on Image-2.0 and FLUX.2 Klein enforces a **minimum character count** via LLM instructions, long few-shot examples, and post-processing expansion.
 
 ## Quick start
 
@@ -45,36 +67,44 @@ LLM_API_BASE_URL=http://localhost:11434/v1
 LLM_MODEL=dolphin-llama3
 ```
 
-### OpenRouter
+## Prompt format examples
 
-```env
-LLM_API_BASE_URL=https://openrouter.ai/api/v1
-LLM_API_KEY=your_key
-LLM_MODEL=cognitivecomputations/dolphin-mistral-24b-venice-edition:free
-```
+**Qwen-Image-Edit (Balanced):**
 
-## Prompt format
+> A narrow cyberpunk alley at midnight, rain-slick asphalt mirroring magenta and cyan neon signs. Steam curls from sidewalk grates between cracked pavement. A sleek black cat crouches on a rusted fire escape, amber eyes catching a stray beam of light.
 
-Positive mode outputs focused prose tuned for Qwen Image Edit. Default **Balanced** detail is ~4 sentences; use **Concise** if scenes jumble, **Rich** for more texture on the same scene.
+**Qwen-Image-Edit-2511 (Balanced):**
 
-> A narrow cyberpunk alley at midnight, rain-slick asphalt mirroring magenta and cyan neon signs. A sleek black cat crouches on a rusted fire escape, amber eyes catching a stray beam of light.
+> Keep the subject's facial features, pose, and proportions unchanged. Replace the background with a gothic cathedral interior, candle flames cutting through low fog above worn flagstones.
 
-Use **Negative / Preserve** mode for protective conditioning (e.g. "do not alter the subject's face").
+**FLUX.2 Klein (Rich):**
+
+> A sleek black cat crouches on a rusted fire escape… [subject first, named materials, photographic lighting, camera/composition detail]
+
+Use **Negative / Preserve** mode for protective conditioning. **Note:** FLUX.2 Klein ignores negative prompts—the generator outputs positive preservation phrasing instead.
 
 ## API
 
 ```bash
 curl -X POST http://localhost:3000/api/generate \
   -H "Content-Type: application/json" \
-  -d '{"input":"neon alley, rain, black cat","mode":"positive"}'
+  -d '{"input":"neon alley, rain, black cat","mode":"positive","model":"qwen-image-2.0","detail":"rich"}'
 ```
 
 Response:
 
 ```json
 {
-  "prompt": "A narrow cyberpunk alley at midnight, the asphalt slick with rain that mirrors magenta and cyan neon signs overhead. Steam curls from sidewalk grates between cracked pavement. In the midground, a sleek black cat crouches on a rusted fire escape, amber eyes catching a stray beam of light.",
+  "prompt": "...",
   "mode": "positive",
-  "provider": "llm"
+  "provider": "llm",
+  "model": "qwen-image-2.0",
+  "comfyNode": "CLIP Text Encode (Qwen)",
+  "limits": {
+    "minChars": 1100,
+    "maxChars": 1400,
+    "maxSentences": 8,
+    "maxTokens": 1024
+  }
 }
 ```

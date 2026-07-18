@@ -1,35 +1,24 @@
+import {
+  DEFAULT_QWEN_MODEL,
+  getPromptLimits,
+  type QwenImageModel,
+} from "./qwen-model";
+
 export type DetailLevel = "concise" | "balanced" | "rich";
 
 export type DetailLimits = {
   minSentences: number;
   maxSentences: number;
+  minChars?: number;
   maxChars: number;
   maxTokens: number;
   label: string;
 };
 
-const DETAIL_LIMITS: Record<DetailLevel, DetailLimits> = {
-  concise: {
-    minSentences: 2,
-    maxSentences: 2,
-    maxChars: 280,
-    maxTokens: 180,
-    label: "Concise",
-  },
-  balanced: {
-    minSentences: 3,
-    maxSentences: 3,
-    maxChars: 520,
-    maxTokens: 380,
-    label: "Balanced",
-  },
-  rich: {
-    minSentences: 4,
-    maxSentences: 5,
-    maxChars: 920,
-    maxTokens: 720,
-    label: "Rich",
-  },
+const DETAIL_LABELS: Record<DetailLevel, string> = {
+  concise: "Concise",
+  balanced: "Balanced",
+  rich: "Rich",
 };
 
 export function normalizeDetailLevel(value?: string | null): DetailLevel {
@@ -39,50 +28,18 @@ export function normalizeDetailLevel(value?: string | null): DetailLevel {
   return "balanced";
 }
 
-export function getDetailLimits(detail: DetailLevel): DetailLimits {
-  return DETAIL_LIMITS[detail];
+export function getDetailLimits(
+  detail: DetailLevel,
+  model: QwenImageModel = DEFAULT_QWEN_MODEL,
+): DetailLimits {
+  return {
+    ...getPromptLimits(detail, model),
+    label: DETAIL_LABELS[detail],
+  };
 }
 
 export function detailLevelLabel(detail: DetailLevel): string {
-  return DETAIL_LIMITS[detail].label;
-}
-
-export function buildClaritySystemAddendum(detail: DetailLevel): string {
-  const { minSentences, maxSentences, maxChars } = getDetailLimits(detail);
-
-  if (detail === "concise") {
-    return `DETAIL LEVEL: CONCISE (mandatory).
-- Write EXACTLY 2 short sentences (~${maxChars} characters total).
-- Sentence 1: setting + light. Sentence 2: main subject only.
-- No third sentence. No extra background paragraph, texture list, or atmosphere essay.
-- Keep the same scene unified—just minimal.`;
-  }
-
-  if (detail === "rich") {
-    return `DETAIL LEVEL: RICH (mandatory).
-- Write ${minSentences} to ${maxSentences} sentences (~650–${maxChars} characters).
-- Sentence 1: setting and lighting. Sentence 2: main subject with material/texture detail. Sentence 3: action or pose. Sentences 4–5: atmosphere and one environmental background beat in the same place.
-- Deepen the SAME scene with sensory prose—do not add unrelated locations or subjects.`;
-  }
-
-  return `DETAIL LEVEL: BALANCED (mandatory).
-- Write EXACTLY ${maxSentences} sentences (~400–${maxChars} characters).
-- Sentence 1: setting and light. Sentence 2: main subject with one concrete detail. Sentence 3: one background or atmospheric beat.
-- More descriptive than concise, but still one unified scene.`;
-}
-
-export function buildDetailUserDirective(detail: DetailLevel): string {
-  const { minSentences, maxSentences } = getDetailLimits(detail);
-
-  if (detail === "concise") {
-    return `Write EXACTLY 2 short sentences for this request. Be minimal.`;
-  }
-
-  if (detail === "rich") {
-    return `Write ${minSentences}–${maxSentences} sentences with rich texture, light, and atmosphere—all one scene.`;
-  }
-
-  return `Write EXACTLY ${maxSentences} sentences with clear setting, subject, and one background detail.`;
+  return DETAIL_LABELS[detail];
 }
 
 export type FewShotExample = {
@@ -169,3 +126,5 @@ export const QWEN_FEW_SHOT_BY_DETAIL: Record<DetailLevel, FewShotExample[]> = {
     },
   ],
 };
+
+export type { QwenImageModel };

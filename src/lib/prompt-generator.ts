@@ -1,8 +1,4 @@
 import {
-  QWEN_NEGATIVE_SYSTEM_PROMPT,
-  QWEN_POSITIVE_SYSTEM_PROMPT,
-} from "./qwen-system-prompt";
-import {
   getSamplingBoost,
   pickFewShotExamples,
 } from "./variation-seed";
@@ -10,6 +6,8 @@ import {
   buildClaritySystemAddendum,
   buildDetailUserDirective,
   compactVariationHint,
+  formatPromptForModel,
+  getModelFewShots,
   QWEN_FEW_SHOT_BY_DETAIL,
   sanitizeQwenPrompt,
 } from "./qwen-clarity";
@@ -20,6 +18,10 @@ import {
   GROUPED_COUPLE_FEW_SHOT_BY_DETAIL,
   GROUPED_COUPLE_FEW_SHOT_INPUT,
 } from "./detail-level";
+import {
+  buildModelSystemPrompt,
+  getQwenModelDefinition,
+} from "./qwen-model";
 import {
   buildDistinctPeopleSystemAddendum,
   buildGroupedPeopleSystemAddendum,
@@ -39,11 +41,20 @@ import {
 export type PromptMode = "positive" | "negative";
 export type { GenerationSettings, VariationSettings } from "./generation-settings";
 export type { DetailLevel } from "./detail-level";
+export type { QwenImageModel } from "./qwen-model";
 
 export type GenerateResult = {
   prompt: string;
   mode: PromptMode;
   provider: "llm" | "template";
+  model: GenerationSettings["model"];
+  comfyNode: string;
+  limits: {
+    minChars?: number;
+    maxChars: number;
+    maxSentences: number;
+    maxTokens: number;
+  };
 };
 
 type ChatMessage = {
@@ -67,7 +78,12 @@ function buildFewShotMessages(
   }
 
   const multiPerson = isMultiPersonInput(input);
-  const detailExamples = QWEN_FEW_SHOT_BY_DETAIL[settings.detail];
+  const baseExamples = QWEN_FEW_SHOT_BY_DETAIL[settings.detail];
+  const detailExamples = getModelFewShots(
+    settings.model,
+    settings.detail,
+    baseExamples,
+  );
 
   const pinnedExample = multiPerson
     ? settings.distinctPeople
@@ -109,7 +125,9 @@ function buildUserMessage(
     return trimmed;
   }
 
-  const extras: string[] = [buildDetailUserDirective(settings.detail)];
+  const extras: string[] = [
+    buildDetailUserDirective(settings.detail, settings.model),
+  ];
   const peopleConstraint = parsePeopleConstraint(trimmed);
 
   if (settings.variation.enabled) {
@@ -179,6 +197,22 @@ function getLlmConfig() {
   return { baseUrl, apiKey, model };
 }
 
+function finalizePrompt(
+  raw: string,
+  input: string,
+  mode: PromptMode,
+  settings: GenerationSettings,
+): string {
+  const cleaned = sanitizePrompt(raw);
+  const sanitized = sanitizeQwenPrompt(
+    cleaned,
+    settings.detail,
+    input,
+    settings.model,
+  );
+  return formatPromptForModel(sanitized, settings.model, input, mode);
+}
+
 export async function generateWithLlm(
   input: string,
   mode: PromptMode,
@@ -186,13 +220,10 @@ export async function generateWithLlm(
 ): Promise<string> {
   const { baseUrl, apiKey, model } = getLlmConfig();
   const { variation } = settings;
-  let systemPrompt =
-    mode === "negative"
-      ? QWEN_NEGATIVE_SYSTEM_PROMPT
-      : QWEN_POSITIVE_SYSTEM_PROMPT;
+  let systemPrompt = buildModelSystemPrompt(settings.model, mode);
 
   if (mode === "positive") {
-    systemPrompt = `${systemPrompt}\n\n${buildClaritySystemAddendum(settings.detail)}`;
+    systemPrompt = `${systemPrompt}\n\n${buildClaritySystemAddendum(settings.detail, settings.model)}`;
 
     if (isMultiPersonInput(input.trim())) {
       if (settings.distinctPeople) {
@@ -221,7 +252,7 @@ export async function generateWithLlm(
     model,
     messages,
     temperature: getLlmTemperature(settings.variation),
-    max_tokens: getDetailLimits(settings.detail).maxTokens,
+    max_tokens: getDetailLimits(settings.detail, settings.model).maxTokens,
     stream: false,
     ...getLlmSamplingParams(settings.variation),
   };
@@ -252,11 +283,7 @@ export async function generateWithLlm(
     throw new Error("LLM returned an empty response.");
   }
 
-  return sanitizeQwenPrompt(
-    sanitizePrompt(content),
-    settings.detail,
-    input.trim(),
-  );
+  return finalizePrompt(content, input.trim(), mode, settings);
 }
 
 function sanitizePrompt(raw: string): string {
@@ -295,6 +322,36 @@ function paintSceneFromKeywords(
       ? topic
       : topic.charAt(0).toLowerCase() + topic.slice(1);
 
+  if (settings.model === "qwen-image-edit-2511") {
+    if (settings.detail === "concise") {
+      return `Replace the scene with ${normalized} under clear directional light.`;
+    }
+    if (settings.detail === "rich") {
+      return `Replace the scene with ${capitalize(normalized)} under clear directional light, surfaces showing tangible texture. The main subject anchors the frame while atmosphere builds from foreground to background. One distant environmental beat completes the unified composition.`;
+    }
+    return `Replace the scene with ${capitalize(normalized)} under clear directional light, with visible texture. The main subject anchors the frame while one background detail adds depth.`;
+  }
+
+  if (settings.model === "flux-2-klein") {
+    if (settings.detail === "concise") {
+      return `${capitalize(normalized)} holds the frame under clear directional light. The subject reads sharply in the foreground with a simple background.`;
+    }
+    if (settings.detail === "rich") {
+      return `${capitalize(normalized)} anchors the foreground, posture and materials rendered with tactile detail—worn surfaces, visible texture, and weight in the light. The setting unfolds in layered depth from near detail through midground forms to a hazy background, warm key light from camera-left mixing with cool ambient fill. Lighting follows a photographic logic: soft key, gentle fill, subtle rim separation on the subject. Materials read distinctly throughout—matte versus glossy, fine grain, natural imperfections. Shot at eye level with moderate depth of field, the main subject tack sharp while the environment recedes into atmospheric perspective.`;
+    }
+    return `${capitalize(normalized)} anchors the frame in the foreground with clear material detail. The setting builds behind in layered depth under soft directional light with warm key and cool fill. Moderate depth of field, eye-level composition.`;
+  }
+
+  if (settings.model === "qwen-image-2.0") {
+    if (settings.detail === "concise") {
+      return `${capitalize(normalized)} under clear directional light. The main subject holds the frame in one cohesive moment.`;
+    }
+    if (settings.detail === "rich") {
+      return `${capitalize(normalized)} anchors the foreground with posture, clothing, and surface texture reading clearly in the light. The setting builds through midground detail into a soft atmospheric background, wet or worn materials catching specular highlights beside matte surfaces. Warm key light from camera-left mixes with cooler ambient fill across the frame, color temperature shifting from golden highlights to blue-gray shadows. Fine environmental beats—distant glow, weathered architecture, or natural depth—settle into the background while the air holds tangible atmosphere. The composition holds at eye level with moderate depth of field, the subject sharp while the scene recedes into unified perspective.`;
+    }
+    return `${capitalize(normalized)} under clear directional light, with visible texture and a cohesive palette. The main subject anchors the frame while one background detail adds depth to the same moment.`;
+  }
+
   if (settings.detail === "concise") {
     return `${capitalize(normalized)} under clear directional light. The main subject holds the frame in one cohesive moment.`;
   }
@@ -317,6 +374,15 @@ export function generateWithTemplate(
   }
 
   if (mode === "negative") {
+    if (settings.model === "flux-2-klein") {
+      return `Stable composition with unchanged facial features, pose, and proportions. Clean unmarked surfaces. ${trimmed}.`;
+    }
+    if (settings.model === "qwen-image-2.0") {
+      return `Avoid changing facial features, pose, proportions, and composition unless requested. ${trimmed}.`;
+    }
+    if (settings.model === "qwen-image-edit-2511") {
+      return `Do not change pose, face, or lighting unless specified. Only edit what is requested. Avoid: ${trimmed}.`;
+    }
     return `Do not alter unrelated elements. Keep facial features, pose, proportions, and background composition unchanged unless explicitly requested. Avoid changing: ${trimmed}.`;
   }
 
@@ -324,15 +390,30 @@ export function generateWithTemplate(
   const preserveRequested = shouldPreserveSubject(trimmed);
 
   if (/^(remove|delete|erase)\b/.test(lower)) {
-    return `Keep the subject's identity, pose, and proportions unchanged. ${capitalize(trimmed)}. Fill the removed area naturally so it matches the surrounding scene in light, texture, and color.`;
+    return finalizePrompt(
+      `Keep the subject's identity, pose, and proportions unchanged. ${capitalize(trimmed)}. Fill the removed area naturally so it matches the surrounding scene in light, texture, and color.`,
+      trimmed,
+      mode,
+      settings,
+    );
   }
 
   if (/^(add|insert|put)\b/.test(lower)) {
-    return `Keep the subject's identity, pose, and proportions unchanged. ${capitalize(trimmed)}. The added elements sit naturally in the frame with matching perspective, lighting, and atmosphere.`;
+    return finalizePrompt(
+      `Keep the subject's identity, pose, and proportions unchanged. ${capitalize(trimmed)}. The added elements sit naturally in the frame with matching perspective, lighting, and atmosphere.`,
+      trimmed,
+      mode,
+      settings,
+    );
   }
 
   if (/figure\s*[12]|picture\s*[12]/i.test(trimmed)) {
-    return `Keep identity, pose, and framing from Figure 1 unless specified. ${capitalize(trimmed)}.`;
+    return finalizePrompt(
+      `Keep identity, pose, and framing from Figure 1 unless specified. ${capitalize(trimmed)}.`,
+      trimmed,
+      mode,
+      settings,
+    );
   }
 
   if (preserveRequested) {
@@ -342,32 +423,63 @@ export function generateWithTemplate(
       .trim();
 
     const painted = paintSceneFromKeywords(sceneWords || trimmed, {
+      ...settings,
       variation: { enabled: false, strength: 0 },
       distinctPeople: false,
       detail: "balanced",
     });
-    return `Keep the subject's facial features, body proportions, and pose exactly unchanged. ${painted.replace(/^The image shows /, "The surrounding scene becomes ")}`;
+    return finalizePrompt(
+      `Keep the subject's facial features, body proportions, and pose exactly unchanged. ${painted.replace(/^The image shows /, "The surrounding scene becomes ")}`,
+      trimmed,
+      mode,
+      settings,
+    );
   }
 
   if (!settings.distinctPeople && isMultiPersonInput(trimmed)) {
     const groupedScene = paintGroupedPeopleScene(trimmed, settings);
     if (groupedScene) {
-      return sanitizeQwenPrompt(groupedScene, settings.detail, trimmed);
+      return finalizePrompt(groupedScene, trimmed, mode, settings);
     }
   }
 
   if (settings.distinctPeople && isMultiPersonInput(trimmed)) {
     const distinctScene = paintDistinctPeopleScene(trimmed, settings);
     if (distinctScene) {
-      return sanitizeQwenPrompt(distinctScene, settings.detail, trimmed);
+      return finalizePrompt(distinctScene, trimmed, mode, settings);
     }
   }
 
-  return sanitizeQwenPrompt(
+  return finalizePrompt(
     paintSceneFromKeywords(trimmed, settings),
-    settings.detail,
     trimmed,
+    mode,
+    settings,
   );
+}
+
+function buildGenerateResult(
+  prompt: string,
+  mode: PromptMode,
+  provider: GenerateResult["provider"],
+  settings: GenerationSettings,
+): GenerateResult {
+  const limits = getDetailLimits(settings.detail, settings.model);
+  const modelDef = getQwenModelDefinition(settings.model);
+
+  return {
+    prompt,
+    mode,
+    provider,
+    model: settings.model,
+    comfyNode: modelDef.comfyNode,
+    limits: {
+      minChars: limits.minChars,
+      maxChars: limits.maxChars,
+      maxSentences: limits.maxSentences,
+      maxTokens: limits.maxTokens,
+    },
+  };
 }
 
 export async function generatePrompt(
@@ -385,7 +497,7 @@ export async function generatePrompt(
   if (llmEnabled) {
     try {
       const prompt = await generateWithLlm(trimmed, mode, settings);
-      return { prompt, mode, provider: "llm" };
+      return buildGenerateResult(prompt, mode, "llm", settings);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown LLM error";
       const fallbackAllowed = process.env.ALLOW_TEMPLATE_FALLBACK !== "false";
@@ -398,9 +510,10 @@ export async function generatePrompt(
     }
   }
 
-  return {
-    prompt: generateWithTemplate(trimmed, mode, settings),
+  return buildGenerateResult(
+    generateWithTemplate(trimmed, mode, settings),
     mode,
-    provider: "template",
-  };
+    "template",
+    settings,
+  );
 }

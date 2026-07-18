@@ -16,6 +16,7 @@ type GenerateRequestBody = {
   };
   detail?: string;
   distinctPeople?: boolean;
+  model?: string;
 };
 
 export async function POST(request: Request) {
@@ -27,6 +28,7 @@ export async function POST(request: Request) {
       variation: body.variation,
       distinctPeople: body.distinctPeople,
       detail: body.detail,
+      model: body.model,
     });
 
     if (!input) {

@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Qwen Image Edit Prompt Generator",
+  title: "Qwen Image Prompt Generator",
   description:
-    "Paint a picture in words from any topic or keywords—Qwen-compatible scene prompts for TextEncodeQwenImageEdit.",
+    "Format prompts for Qwen-Image-Edit, Qwen-Image-Edit-2511, and Qwen-Image-2.0 in ComfyUI.",
 };
 
 export default function RootLayout({

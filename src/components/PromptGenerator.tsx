@@ -1,8 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DEFAULT_GENERATION_SETTINGS } from "@/lib/generation-settings";
 import type { DetailLevel } from "@/lib/detail-level";
+import { getDetailLimits } from "@/lib/detail-level";
+import {
+  QWEN_MODELS,
+  type QwenImageModel,
+} from "@/lib/qwen-model";
 import { variationStrengthLabel } from "@/lib/variation-settings";
 
 type PromptMode = "positive" | "negative";
@@ -11,6 +16,14 @@ type GenerateResponse = {
   prompt: string;
   mode: PromptMode;
   provider: "llm" | "template";
+  model: QwenImageModel;
+  comfyNode: string;
+  limits: {
+    minChars?: number;
+    maxChars: number;
+    maxSentences: number;
+    maxTokens: number;
+  };
 };
 
 const EXAMPLE_INPUTS = [
@@ -40,6 +53,23 @@ export default function PromptGenerator() {
   );
   const [detail, setDetail] = useState<DetailLevel>(
     DEFAULT_GENERATION_SETTINGS.detail,
+  );
+  const [qwenModel, setQwenModel] = useState<QwenImageModel>(
+    DEFAULT_GENERATION_SETTINGS.model,
+  );
+  const [resultMeta, setResultMeta] = useState<Pick<
+    GenerateResponse,
+    "model" | "comfyNode" | "limits"
+  > | null>(null);
+
+  const selectedModel = useMemo(
+    () => QWEN_MODELS.find((entry) => entry.id === qwenModel) ?? QWEN_MODELS[0]!,
+    [qwenModel],
+  );
+
+  const activeLimits = useMemo(
+    () => getDetailLimits(detail, qwenModel),
+    [detail, qwenModel],
   );
 
   useEffect(() => {
@@ -71,6 +101,7 @@ export default function PromptGenerator() {
           },
           distinctPeople: mode === "positive" && distinctPeople,
           detail: mode === "positive" ? detail : "balanced",
+          model: qwenModel,
         }),
       });
 
@@ -84,14 +115,20 @@ export default function PromptGenerator() {
 
       setOutput(data.prompt);
       setProvider(data.provider);
+      setResultMeta({
+        model: data.model,
+        comfyNode: data.comfyNode,
+        limits: data.limits,
+      });
     } catch (err) {
       setOutput("");
       setProvider(null);
+      setResultMeta(null);
       setError(err instanceof Error ? err.message : "Generation failed.");
     } finally {
       setLoading(false);
     }
-  }, [input, mode, variationEnabled, variationStrength, distinctPeople, detail]);
+  }, [input, mode, variationEnabled, variationStrength, distinctPeople, detail, qwenModel]);
 
   const copyOutput = useCallback(async () => {
     if (!output) return;
@@ -109,22 +146,62 @@ export default function PromptGenerator() {
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
       <header className="space-y-3">
         <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-violet-300">
-          ComfyUI · TextEncodeQwenImageEdit
+          ComfyUI · {selectedModel.comfyNode}
         </div>
         <h1 className="text-3xl font-semibold tracking-tight text-zinc-50 sm:text-4xl">
-          Qwen Image Edit Prompt Generator
+          Qwen Image Prompt Generator
         </h1>
         <p className="max-w-2xl text-base leading-relaxed text-zinc-400">
-          Enter a topic or keywords. The generator paints a complete picture in
-          words—natural-language prose formatted for ComfyUI{" "}
+          Enter a topic or keywords. The generator formats natural-language
+          prompts for your chosen Qwen model—
           <code className="rounded bg-zinc-800 px-1.5 py-0.5 text-sm text-violet-300">
-            TextEncodeQwenImageEdit
+            {selectedModel.comfyNode}
           </code>
           , ready to paste and run.
         </p>
       </header>
 
       <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-xl shadow-black/20 backdrop-blur">
+        <div className="space-y-3">
+          <div>
+            <p className="text-sm font-medium text-zinc-200">Target model</p>
+            <p className="mt-1 text-xs text-zinc-500">
+              Prompt style and size limits depend on the model and detail level
+              you choose.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2">
+            {QWEN_MODELS.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                onClick={() => setQwenModel(entry.id)}
+                className={`rounded-xl border px-4 py-3 text-left transition ${
+                  qwenModel === entry.id
+                    ? "border-violet-500 bg-violet-500/10"
+                    : "border-zinc-700 hover:border-zinc-500"
+                }`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span
+                    className={`text-sm font-medium ${
+                      qwenModel === entry.id ? "text-violet-200" : "text-zinc-200"
+                    }`}
+                  >
+                    {entry.label}
+                  </span>
+                  <span className="font-mono text-[11px] text-zinc-500">
+                    {entry.comfyNode}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                  {entry.description}
+                </p>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="flex flex-wrap items-center justify-between gap-3">
           <label htmlFor="edit-input" className="text-sm font-medium text-zinc-200">
             Scene idea or keywords
@@ -266,11 +343,11 @@ export default function PromptGenerator() {
                 </div>
                 <p className="text-xs text-zinc-500">
                   {detail === "concise" &&
-                    "Shortest output—best when Qwen scenes look cluttered."}
+                    `Shortest output for ${selectedModel.label}—up to ${activeLimits.maxSentences} sentences, ~${activeLimits.maxChars} chars.`}
                   {detail === "balanced" &&
-                    "Default: vivid but still one unified scene (~4 sentences)."}
+                    `Default for ${selectedModel.label}—${activeLimits.minSentences}–${activeLimits.maxSentences} sentences, ~${activeLimits.minChars ?? Math.round(activeLimits.maxChars * 0.65)}–${activeLimits.maxChars} chars.`}
                   {detail === "rich" &&
-                    "Most descriptive—deepens the same moment, not new locations."}
+                    `Most descriptive for ${selectedModel.label}—${activeLimits.minSentences}–${activeLimits.maxSentences} sentences${activeLimits.minChars ? `, at least ${activeLimits.minChars} chars (max ${activeLimits.maxChars})` : `, ~${activeLimits.maxChars} chars`}.`}
                 </p>
               </div>
             </div>
@@ -372,6 +449,13 @@ export default function PromptGenerator() {
               {provider && (
                 <p className="mt-1 text-xs text-zinc-500">
                   via {provider === "llm" ? "LLM" : "template fallback"}
+                  {resultMeta && (
+                    <>
+                      {" "}
+                      · {resultMeta.limits.minChars ? `${resultMeta.limits.minChars}–` : ""}
+                      {resultMeta.limits.maxChars} char limit · {output.length} chars
+                    </>
+                  )}
                 </p>
               )}
             </div>
@@ -389,8 +473,11 @@ export default function PromptGenerator() {
           </pre>
 
           <p className="text-xs text-zinc-500">
-            Paste directly into your positive or negative TextEncodeQwenImageEdit
-            prompt field. Press Ctrl+Enter to regenerate.
+            Paste into{" "}
+            <code className="rounded bg-zinc-800 px-1 text-violet-300">
+              {resultMeta?.comfyNode ?? selectedModel.comfyNode}
+            </code>
+            . Press Ctrl+Enter to regenerate.
           </p>
         </section>
       )}
@@ -399,9 +486,24 @@ export default function PromptGenerator() {
         <h3 className="mb-2 font-medium text-zinc-300">How it works</h3>
         <ul className="list-inside list-disc space-y-1 leading-relaxed">
           <li>
-            <strong className="font-medium text-zinc-400">Balanced</strong>{" "}
-            detail is the default—descriptive without cramming unrelated ideas
-            into one frame.
+            Pick your{" "}
+            <strong className="font-medium text-zinc-400">target model</strong>
+            —Edit, Edit-2511, or Image-2.0—each uses different prompt style and
+            size limits.
+          </li>
+          <li>
+            <strong className="font-medium text-zinc-400">Edit-2511</strong>{" "}
+            favors explicit keep/change instructions and Figure 1 / Figure 2
+            references for multi-image workflows.
+          </li>
+          <li>
+            <strong className="font-medium text-zinc-400">FLUX.2 Klein</strong>{" "}
+            wants subject-first photographic prose—materials, lighting, camera.
+            Negative prompts are ignored; use positive phrasing instead.
+          </li>
+          <li>
+            <strong className="font-medium text-zinc-400">Image-2.0</strong>{" "}
+            Rich detail targets at least ~1100 characters (max ~1400).
           </li>
           <li>
             Use <strong className="font-medium text-zinc-400">Concise</strong>{" "}
