@@ -53,6 +53,8 @@ export async function runSpecializedPrompt(options: {
   metadata?: Record<string, unknown>;
   seed?: string;
   soloSubject?: boolean;
+  enforceMinimum?: boolean;
+  postProcessPrompt?: (prompt: string) => string;
 }): Promise<ToolGenerateResult> {
   const limits = getDetailLimits(options.detail, options.model);
   const maxTokens = options.maxTokens ?? limits.maxTokens;
@@ -81,6 +83,8 @@ Output ONLY the raw prompt text. No quotes around the whole prompt, labels, mark
         options.model,
         options.sanitizeInput ?? options.userMessage,
         options.soloSubject,
+        options.enforceMinimum,
+        options.postProcessPrompt,
       );
 
       return buildToolResult(prompt, "llm", options.model, options.detail, {
@@ -104,6 +108,8 @@ Output ONLY the raw prompt text. No quotes around the whole prompt, labels, mark
     options.model,
     options.sanitizeInput ?? options.userMessage,
     options.soloSubject,
+    options.enforceMinimum,
+    options.postProcessPrompt,
   );
 
   return buildToolResult(prompt, "template", options.model, options.detail, {
@@ -118,6 +124,8 @@ function finalizeSpecializedPrompt(
   model: ComfyImageModel,
   input: string,
   soloSubject = false,
+  enforceMinimum = true,
+  postProcessPrompt?: (prompt: string) => string,
 ): string {
   const cleaned = stripPromptArtifacts(raw);
   if (!cleaned.trim() || isThinkingOnlyArtifact(cleaned)) {
@@ -126,7 +134,12 @@ function finalizeSpecializedPrompt(
 
   let prompt = sanitizeQwenPrompt(cleaned, detail, input, model, {
     soloSubject,
+    enforceMinimum,
   });
+
+  if (postProcessPrompt) {
+    prompt = postProcessPrompt(prompt);
+  }
 
   if (soloSubject) {
     prompt = ensureSinglePersonPrompt(

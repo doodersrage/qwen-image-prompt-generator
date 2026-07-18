@@ -29,10 +29,13 @@ export type RandomSceneOptions = SharedGenerationOptions & {
   wildness?: number;
 };
 
+import type { CharacterPresetOptions } from "../character-options";
+
 export type CharacterOptions = SharedGenerationOptions & {
   hints?: string;
   portraitStyle?: "portrait" | "full-body" | "action";
   variationStrength?: number;
+  presetOptions?: CharacterPresetOptions;
 };
 
 export type BackgroundOptions = SharedGenerationOptions & {

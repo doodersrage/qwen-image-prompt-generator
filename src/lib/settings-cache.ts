@@ -27,11 +27,13 @@ export type RandomSceneToolCache = {
   wildness?: number;
 };
 
+import type { CharacterPresetOptions } from "./character-options";
+
 export type CharacterToolCache = {
   hints?: string;
   portraitStyle?: "portrait" | "full-body" | "action";
   variationStrength?: number;
-};
+} & Partial<CharacterPresetOptions>;
 
 export type BackgroundToolCache = {
   settingType?: string;

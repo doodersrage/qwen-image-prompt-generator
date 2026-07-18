@@ -1,13 +1,17 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import CharacterPresetControls from "@/components/CharacterPresetControls";
 import PromptResultPanel from "@/components/PromptResultPanel";
 import SharedToolControls from "@/components/SharedToolControls";
 import { useCachedSettings } from "@/hooks/useCachedSettings";
 import { getComfyModelDefinition } from "@/lib/comfy-models";
+import { presetOptionsFromCache } from "@/lib/character-options";
 import { DEFAULT_CHARACTER_TOOL_CACHE } from "@/lib/settings-cache";
 import type { ToolGenerateResult } from "@/lib/specialized/types";
 import { variationStrengthLabel } from "@/lib/variation-settings";
+
+const labelClassName = "text-sm font-medium text-zinc-200";
 
 export default function CharacterTool() {
   const { mounted, shared, toolSettings, updateShared, updateToolSettings } =
@@ -40,6 +44,7 @@ export default function CharacterTool() {
           hints: toolSettings.hints,
           portraitStyle: toolSettings.portraitStyle,
           variationStrength: toolSettings.variationStrength,
+          presetOptions: presetOptionsFromCache(toolSettings),
         }),
       });
 
@@ -85,11 +90,13 @@ export default function CharacterTool() {
           Character Generator
         </h1>
         <p className="max-w-2xl text-base leading-relaxed text-zinc-400">
-          Builds a highly detailed single-person prompt—face, hair, clothing,
-          pose, and expression—with no extra people in frame. Include sex/gender
-          and age in hints; they are treated as mandatory. Add a place with{" "}
+          Builds a detailed single-person prompt—face, hair, clothing, pose, and
+          expression. Include sex/gender and age in hints; they are treated as
+          mandatory. Add a place with{" "}
           <code className="text-sky-300">in/at/on …</code>, a trailing clause
           after a comma, or <code className="text-sky-300">location: …</code>.
+          Expand optional presets below for composition, lighting, and pose
+          anchors.
         </p>
       </header>
 
@@ -102,9 +109,7 @@ export default function CharacterTool() {
         />
 
         <div className="space-y-3 border-t border-zinc-800 pt-4">
-          <label className="text-sm font-medium text-zinc-200">
-            Character hints (optional)
-          </label>
+          <label className={labelClassName}>Character hints (optional)</label>
           <textarea
             value={toolSettings.hints ?? ""}
             onChange={(e) => updateToolSettings({ hints: e.target.value })}
@@ -114,8 +119,14 @@ export default function CharacterTool() {
           />
         </div>
 
+        <CharacterPresetControls
+          mounted={mounted}
+          settings={toolSettings}
+          onChange={updateToolSettings}
+        />
+
         <div className="space-y-3 border-t border-zinc-800 pt-4">
-          <p className="text-sm font-medium text-zinc-200">Framing</p>
+          <p className={labelClassName}>Framing</p>
           <div className="flex flex-wrap gap-2">
             {(
               [
