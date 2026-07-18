@@ -64,7 +64,32 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:47832](http://localhost:47832).
+
+## Docker
+
+```bash
+docker build -t qwen-image-prompt .
+docker run --rm -p 47832:47832 \
+  -e LLM_API_BASE_URL=http://host.docker.internal:11434/v1 \
+  -e LLM_MODEL=dolphin-llama3 \
+  -e LLM_VISION_MODEL=qwen3-vl:latest \
+  qwen-image-prompt
+```
+
+On Linux, add `--add-host=host.docker.internal:host-gateway` if Ollama runs on the host. Override `PORT` only if you map a different host port.
+
+## ComfyUI custom nodes
+
+Six nodes under **prompt tools** call this app's HTTP API and output a `prompt` string you can wire into `CLIP Text Encode`, `TextEncodeQwenImageEditPlus`, or any text input.
+
+Install by symlinking into ComfyUI:
+
+```bash
+ln -s "$(pwd)/comfyui/comfyui_image_prompt_tools" /path/to/ComfyUI/custom_nodes/comfyui_image_prompt_tools
+```
+
+Set `COMFY_PROMPT_API_URL=http://127.0.0.1:47832` on the ComfyUI host if the API is not on localhost. See `comfyui/comfyui_image_prompt_tools/README.md` for node list and workflow notes.
 
 ## LLM configuration
 
@@ -118,14 +143,14 @@ All endpoints return **JSON** (`Content-Type: application/json`) and support **C
 
 ```bash
 # API catalog: tools, request/response shapes, curl examples
-curl -sS http://localhost:3000/api | jq .
+curl -sS http://localhost:47832/api | jq .
 
 # Supported models (47 targets) with limits per detail level
-curl -sS http://localhost:3000/api/models | jq .
+curl -sS http://localhost:47832/api/models | jq .
 
 # Filter by family or fetch one model
-curl -sS "http://localhost:3000/api/models?category=flux" | jq .
-curl -sS "http://localhost:3000/api/models?id=sdxl" | jq .
+curl -sS "http://localhost:47832/api/models?category=flux" | jq .
+curl -sS "http://localhost:47832/api/models?id=sdxl" | jq .
 ```
 
 | Endpoint | Method | Purpose |
@@ -144,7 +169,7 @@ Errors use a consistent shape: `{ "error": "message" }` with an appropriate HTTP
 ### Format API
 
 ```bash
-curl -X POST http://localhost:3000/api/format \
+curl -X POST http://localhost:47832/api/format \
   -H "Content-Type: application/json" \
   -d '{"input":"1girl, neon alley, rain, masterpiece","model":"flux-2-klein","detail":"balanced","smartFormat":true}'
 ```
@@ -154,7 +179,7 @@ Set `"smartFormat": false` for instant rules-only cleanup (no LLM).
 ## Generate API
 
 ```bash
-curl -X POST http://localhost:3000/api/generate \
+curl -X POST http://localhost:47832/api/generate \
   -H "Content-Type: application/json" \
   -d '{"input":"neon alley, rain, black cat","mode":"positive","model":"sdxl","detail":"balanced"}'
 ```
