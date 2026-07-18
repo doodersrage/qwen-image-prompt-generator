@@ -1,5 +1,6 @@
 import { ALL_CLOTHING_CATALOG_ENTRIES } from "./clothing-catalog-batches";
-import { trimPromptToMaxChars } from "./qwen-clarity";
+import { hasDistinctPeopleStructure } from "./distinct-people";
+import { splitSentences } from "./prompt-shape";
 import {
   clothingAllowedInScene,
   clothingMatchesGender,
@@ -597,9 +598,203 @@ export function pickRandomCharacterOutfit(
 }
 
 export function wardrobeBudgetForPrompt(maxChars: number, peopleCount = 1): number {
-  const share = peopleCount > 1 ? 0.34 : 0.28;
+  const share = peopleCount > 1 ? 0.22 : 0.18;
   const budget = Math.floor(maxChars * share);
-  return Math.max(48, Math.min(peopleCount > 1 ? 120 : 160, budget));
+  return Math.max(40, Math.min(peopleCount > 1 ? 100 : 120, budget));
+}
+
+export type WardrobeAssignmentLike = {
+  label?: string;
+  summary: string;
+};
+
+function wardrobeSummaryPresent(prompt: string, summary: string): boolean {
+  const normPrompt = prompt.toLowerCase();
+  const chunks = summary
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 8);
+
+  return chunks.some((chunk) =>
+    normPrompt.includes(chunk.toLowerCase().slice(0, Math.min(24, chunk.length))),
+  );
+}
+
+function injectWardrobeIntoSentence(sentence: string, wardrobe: string): string {
+  if (/\bwearing\b/i.test(sentence)) {
+    return sentence;
+  }
+
+  const compact = wardrobe.replace(/\.$/, "").trim();
+  if (!compact) {
+    return sentence;
+  }
+
+  const trimmed = sentence.trim();
+  if (!trimmed) {
+    return `Wearing ${compact}.`;
+  }
+
+  if (/[.!?]$/.test(trimmed)) {
+    return `${trimmed.slice(0, -1)}, wearing ${compact}${trimmed.at(-1)!}`;
+  }
+
+  return `${trimmed}, wearing ${compact}.`;
+}
+
+function integrateSinglePersonWardrobe(
+  prompt: string,
+  summary: string,
+): string | null {
+  const sentences = splitSentences(prompt);
+  if (sentences.length === 0) {
+    return null;
+  }
+
+  const personPattern =
+    /\b(man|woman|person|girl|boy|figure|subject|couple|pair|they|he|she)\b/i;
+  const targetIndex = sentences.findIndex((sentence) => personPattern.test(sentence));
+  const index = targetIndex >= 0 ? targetIndex : 0;
+
+  if (/\bwearing\b/i.test(sentences[index]!)) {
+    return null;
+  }
+
+  const updated = [...sentences];
+  updated[index] = injectWardrobeIntoSentence(updated[index]!, summary);
+  return updated.join(" ");
+}
+
+function integrateDistinctPeopleWardrobe(
+  prompt: string,
+  assignments: WardrobeAssignmentLike[],
+): string | null {
+  if (!hasDistinctPeopleStructure(prompt)) {
+    return null;
+  }
+
+  const leftSummary =
+    assignments.find((entry) => entry.label?.includes("left"))?.summary ??
+    assignments[0]?.summary;
+  const rightSummary =
+    assignments.find((entry) => entry.label?.includes("right"))?.summary ??
+    assignments[1]?.summary;
+
+  if (!leftSummary && !rightSummary) {
+    return null;
+  }
+
+  const sentences = splitSentences(prompt);
+  let changed = false;
+
+  const updated = sentences.map((sentence) => {
+    const lower = sentence.toLowerCase();
+    if (leftSummary && /\b(on the left|to the left)\b/.test(lower)) {
+      if (!/\bwearing\b/i.test(sentence)) {
+        changed = true;
+        return injectWardrobeIntoSentence(sentence, leftSummary);
+      }
+    }
+    if (rightSummary && /\b(on the right|to the right)\b/.test(lower)) {
+      if (!/\bwearing\b/i.test(sentence)) {
+        changed = true;
+        return injectWardrobeIntoSentence(sentence, rightSummary);
+      }
+    }
+    return sentence;
+  });
+
+  return changed ? updated.join(" ") : null;
+}
+
+function fitWardrobeIntoPrompt(
+  prompt: string,
+  summary: string,
+  maxChars: number,
+  peopleCount = 1,
+): string {
+  const trimmed = prompt.trim();
+  if (!summary.trim() || wardrobeSummaryPresent(trimmed, summary)) {
+    return trimmed.length <= maxChars ? trimmed : trimmed;
+  }
+
+  const budgets = [
+    wardrobeBudgetForPrompt(maxChars, peopleCount),
+    Math.max(32, Math.floor(wardrobeBudgetForPrompt(maxChars, peopleCount) * 0.65)),
+  ];
+
+  for (const budget of budgets) {
+    const compact = trimWardrobeSummaryToMaxChars(summary, budget);
+    const integrated = integrateSinglePersonWardrobe(trimmed, compact);
+    if (integrated && integrated.length <= maxChars) {
+      return integrated;
+    }
+  }
+
+  return trimmed;
+}
+
+export function mergeWardrobeAssignmentsIntoPrompt(
+  prompt: string,
+  assignments: WardrobeAssignmentLike[],
+  maxChars?: number,
+): string {
+  const trimmed = prompt.trim();
+  if (assignments.length === 0) {
+    return trimmed;
+  }
+
+  if (
+    assignments.some((assignment) =>
+      wardrobeSummaryPresent(trimmed, assignment.summary),
+    )
+  ) {
+    return trimmed;
+  }
+
+  if (assignments.length === 1 && !assignments[0]?.label) {
+    const summary = assignments[0]!.summary;
+    return maxChars
+      ? fitWardrobeIntoPrompt(trimmed, summary, maxChars, 1)
+      : integrateSinglePersonWardrobe(trimmed, summary) ??
+          mergeAssignedWardrobeIntoPrompt(trimmed, summary);
+  }
+
+  if (maxChars) {
+    const integrated = integrateDistinctPeopleWardrobe(trimmed, assignments);
+    if (integrated && integrated.length <= maxChars) {
+      return integrated;
+    }
+
+    const perPersonBudget = Math.max(
+      32,
+      Math.floor(wardrobeBudgetForPrompt(maxChars, assignments.length) / assignments.length),
+    );
+    const compactAssignments = assignments.map((assignment) => ({
+      ...assignment,
+      summary: trimWardrobeSummaryToMaxChars(assignment.summary, perPersonBudget),
+    }));
+    const retry = integrateDistinctPeopleWardrobe(trimmed, compactAssignments);
+    if (retry && retry.length <= maxChars) {
+      return retry;
+    }
+
+    return trimmed;
+  }
+
+  const integrated = integrateDistinctPeopleWardrobe(trimmed, assignments);
+  if (integrated) {
+    return integrated;
+  }
+
+  const clause = assignments
+    .map((assignment) => {
+      const who = assignment.label ?? "the subject";
+      return `${who} wearing ${assignment.summary.replace(/\.$/, "")}`;
+    })
+    .join("; ");
+
+  return trimmed ? `${clause}. ${trimmed}` : `${clause}.`;
 }
 
 export function trimWardrobeSummaryToMaxChars(
@@ -648,45 +843,26 @@ export function mergeAssignedWardrobeIntoPrompt(
     summary = trimWardrobeSummaryToMaxChars(summary, options.maxWardrobeChars);
   }
 
-  const normPrompt = trimmed.toLowerCase();
-  const chunks = summary
-    .split(",")
-    .map((part) => part.trim())
-    .filter((part) => part.length >= 8);
+  if (wardrobeSummaryPresent(trimmed, summary)) {
+    return trimmed;
+  }
 
-  const alreadyPresent = chunks.some((chunk) =>
-    normPrompt.includes(chunk.toLowerCase().slice(0, Math.min(24, chunk.length))),
-  );
+  if (options?.maxTotalChars) {
+    return fitWardrobeIntoPrompt(
+      trimmed,
+      summary,
+      options.maxTotalChars,
+      1,
+    );
+  }
 
-  if (alreadyPresent) {
-    return options?.maxTotalChars
-      ? trimPromptToMaxChars(trimmed, options.maxTotalChars)
-      : trimmed;
+  const integrated = integrateSinglePersonWardrobe(trimmed, summary);
+  if (integrated) {
+    return integrated;
   }
 
   const clause = summary.endsWith(".") ? `wearing ${summary}` : `wearing ${summary}.`;
-  let merged = trimmed ? `${clause} ${trimmed}` : clause;
-
-  if (options?.maxTotalChars && merged.length > options.maxTotalChars) {
-    const promptRoom = Math.max(
-      32,
-      options.maxTotalChars - trimmed.length - "wearing . ".length,
-    );
-    summary = trimWardrobeSummaryToMaxChars(
-      wardrobeSummary.trim(),
-      Math.min(options.maxWardrobeChars ?? promptRoom, promptRoom),
-    );
-    const retryClause = summary.endsWith(".")
-      ? `wearing ${summary}`
-      : `wearing ${summary}.`;
-    merged = trimmed ? `${retryClause} ${trimmed}` : retryClause;
-  }
-
-  if (options?.maxTotalChars && merged.length > options.maxTotalChars) {
-    merged = trimPromptToMaxChars(merged, options.maxTotalChars);
-  }
-
-  return merged;
+  return trimmed ? `${clause} ${trimmed}` : clause;
 }
 
 export function mergeWardrobeRespectingLimits(

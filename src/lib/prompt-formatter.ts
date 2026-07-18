@@ -15,6 +15,7 @@ import {
 import {
   enforcePromptShapeForProfile,
 } from "./prompt-shape";
+import { hasDistinctPeopleStructure } from "./distinct-people";
 
 export type FormatMode = "positive" | "negative";
 
@@ -78,18 +79,37 @@ function applyModelStructure(
   return enforcePromptShapeForProfile(text, profile, settings.mode, input);
 }
 
+function shouldBalanceDistinctPeople(
+  input: string,
+  draft: string,
+  mode: FormatMode,
+): boolean {
+  if (mode !== "positive") {
+    return false;
+  }
+
+  return (
+    hasDistinctPeopleStructure(input) || hasDistinctPeopleStructure(draft)
+  );
+}
+
 function finalizeFormattedPrompt(
   raw: string,
   input: string,
   settings: FormatSettings,
 ): string {
   const cleaned = applyModelStructure(cleanDraft(raw), settings, input);
+  const distinctPeople = shouldBalanceDistinctPeople(
+    input,
+    cleaned,
+    settings.mode,
+  );
   const sanitized = sanitizeQwenPrompt(
     cleaned,
     settings.detail,
     input,
     settings.model,
-    { enforceMinimum: false },
+    { enforceMinimum: false, distinctPeople },
   );
   return formatPromptForModel(
     sanitized,

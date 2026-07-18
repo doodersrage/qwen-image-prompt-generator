@@ -81,7 +81,7 @@ export const PROFILE_LIMITS: Record<
   ),
   qwen_t2i_factual: limits(
     { ...S2, maxChars: 320, maxTokens: 220 },
-    { ...S34, minChars: 380, maxChars: 650, maxTokens: 420 },
+    { ...S34, minChars: 380, maxChars: 780, maxTokens: 512 },
     { ...S56, minChars: 700, maxChars: 1000, maxTokens: 768 },
   ),
   qwen_t2i_rich: limits(

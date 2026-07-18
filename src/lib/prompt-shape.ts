@@ -335,6 +335,227 @@ function sentenceTrimScore(sentence: string, index: number): number {
   return score;
 }
 
+const LEFT_PLACEMENT =
+  /\b(on the left|to the left|left side of the frame|left side of|left side)\b/i;
+const RIGHT_PLACEMENT =
+  /\b(on the right|to the right|right side of the frame|right side of|right side)\b/i;
+
+export function findDistinctPeopleSentenceIndexes(
+  sentences: string[],
+): { leftIdx: number; rightIdx: number } {
+  return {
+    leftIdx: sentences.findIndex((sentence) => LEFT_PLACEMENT.test(sentence)),
+    rightIdx: sentences.findIndex((sentence) => RIGHT_PLACEMENT.test(sentence)),
+  };
+}
+
+const INCOMPLETE_DISTINCT_PEOPLE_BRIDGE =
+  /^(?:in stark yet complementing contrast|in complementing contrast|in contrast|by contrast)(?:,|\.)?\s*$/i;
+
+/** Drop trailing contrast lead-ins that never introduce the second person. */
+export function stripIncompleteDistinctPeopleBridges(
+  sentences: string[],
+): string[] {
+  return sentences.filter((sentence) => {
+    const trimmed = sentence.trim();
+    if (!trimmed) {
+      return false;
+    }
+    if (INCOMPLETE_DISTINCT_PEOPLE_BRIDGE.test(trimmed)) {
+      return false;
+    }
+    if (
+      /^(?:in stark yet complementing contrast|in contrast),?\s*$/i.test(trimmed) &&
+      !/\b(woman|man|person|figure|girl|boy|they|she|he)\b/i.test(trimmed)
+    ) {
+      return false;
+    }
+    return true;
+  });
+}
+
+function trimDistinctPeoplePairToMaxChars(
+  scene: string,
+  left: string,
+  right: string,
+  maxChars: number,
+): string {
+  const scenePart = scene.trim();
+  const leftPart = left.trim();
+  const rightPart = right.trim();
+  const parts = [scenePart, leftPart, rightPart].filter(Boolean);
+  const joined = parts.join(" ").trim();
+
+  if (joined.length <= maxChars) {
+    return joined;
+  }
+
+  const overhead =
+    scenePart.length +
+    (scenePart && leftPart ? 1 : 0) +
+    (leftPart && rightPart ? 1 : 0) +
+    (scenePart && !leftPart && rightPart ? 1 : 0);
+  const peopleBudget = Math.max(160, maxChars - overhead);
+  const rightReserve = Math.min(
+    rightPart.length,
+    Math.max(120, Math.floor(peopleBudget * 0.34)),
+  );
+  const leftBudget = Math.max(
+    140,
+    peopleBudget - rightReserve - (leftPart && rightPart ? 1 : 0),
+  );
+  const leftTrimmed = trimProseClauseToMaxChars(leftPart, leftBudget);
+  const rightBudget =
+    peopleBudget -
+    leftTrimmed.length -
+    (leftTrimmed && rightPart ? 1 : 0);
+  const rightTrimmed = trimProseClauseToMaxChars(
+    rightPart,
+    Math.max(100, rightBudget),
+  );
+
+  return [scenePart, leftTrimmed, rightTrimmed].filter(Boolean).join(" ").trim();
+}
+
+export function trimDistinctPeopleProseToMaxChars(
+  sentences: string[],
+  maxChars: number,
+): string {
+  if (sentences.length === 0) {
+    return "";
+  }
+
+  const cleaned = stripIncompleteDistinctPeopleBridges(sentences);
+  const working = cleaned.length > 0 ? cleaned : sentences;
+
+  const joined = working.join(" ").trim();
+  if (joined.length <= maxChars) {
+    return joined;
+  }
+
+  const { leftIdx, rightIdx } = findDistinctPeopleSentenceIndexes(working);
+  const scene = working[0] ?? "";
+
+  if (leftIdx >= 0 && rightIdx >= 0) {
+    if (leftIdx === rightIdx) {
+      const pairBudget = Math.max(120, maxChars - scene.length - 1);
+      const combined = trimProseClauseToMaxChars(working[leftIdx]!, pairBudget);
+      return [scene, combined].filter(Boolean).join(" ").trim();
+    }
+
+    return trimDistinctPeoplePairToMaxChars(
+      scene,
+      working[leftIdx]!,
+      working[rightIdx]!,
+      maxChars,
+    );
+  }
+
+  if (leftIdx >= 0) {
+    const leftBudget = Math.max(
+      160,
+      maxChars - scene.length - Math.floor(maxChars * 0.34) - 2,
+    );
+    const leftTrimmed = trimProseClauseToMaxChars(working[leftIdx]!, leftBudget);
+    const result = [scene, leftTrimmed].filter(Boolean).join(" ").trim();
+    if (result.length <= maxChars) {
+      return result;
+    }
+    return trimProseClauseToMaxChars(result, maxChars);
+  }
+
+  const keep = new Set<number>([0]);
+  if (leftIdx >= 0) {
+    keep.add(leftIdx);
+  }
+  if (rightIdx >= 0) {
+    keep.add(rightIdx);
+  }
+
+  let result = [...keep]
+    .sort((a, b) => a - b)
+    .map((index) => working[index]!)
+    .join(" ")
+    .trim();
+
+  if (result.length > maxChars) {
+    return trimCompleteSentencesToMaxChars(
+      [...keep]
+        .sort((a, b) => a - b)
+        .map((index) => working[index]!),
+      maxChars,
+    );
+  }
+
+  for (let index = 0; index < working.length; index += 1) {
+    if (keep.has(index)) {
+      continue;
+    }
+
+    const candidate = `${result} ${working[index]!}`.trim();
+    if (candidate.length <= maxChars) {
+      result = candidate;
+      keep.add(index);
+    } else {
+      break;
+    }
+  }
+
+  return result.trim();
+}
+
+export function trimCompleteSentencesToMaxChars(
+  sentences: string[],
+  maxChars: number,
+): string {
+  if (sentences.length === 0) {
+    return "";
+  }
+
+  let kept = [...sentences];
+  while (kept.length > 1 && kept.join(" ").length > maxChars) {
+    kept.pop();
+  }
+
+  let result = kept.join(" ").trim();
+  if (result.length <= maxChars) {
+    return result;
+  }
+
+  if (kept.length === 1) {
+    return trimProseClauseToMaxChars(kept[0]!, maxChars);
+  }
+
+  return trimProseClauseToMaxChars(result, maxChars);
+}
+
+export function trimProseClauseToMaxChars(text: string, maxChars: number): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= maxChars) {
+    return trimmed;
+  }
+
+  const slice = trimmed.slice(0, maxChars);
+  const lastSentenceBreak = Math.max(
+    slice.lastIndexOf(". "),
+    slice.lastIndexOf("! "),
+    slice.lastIndexOf("? "),
+  );
+
+  if (lastSentenceBreak >= Math.floor(maxChars * 0.55)) {
+    return slice.slice(0, lastSentenceBreak + 1).trim();
+  }
+
+  const lastSpace = slice.lastIndexOf(" ");
+  if (lastSpace >= Math.floor(maxChars * 0.72)) {
+    const wordTrimmed = slice.slice(0, lastSpace).trim();
+    return wordTrimmed.endsWith(".") ? wordTrimmed : `${wordTrimmed}.`;
+  }
+
+  const hardTrim = slice.trimEnd().replace(/[,;:]\s*$/, "");
+  return hardTrim.endsWith(".") ? hardTrim : `${hardTrim}.`;
+}
+
 export function trimSentencesForDistinctPeople(
   sentences: string[],
   maxSentences: number,
@@ -343,12 +564,7 @@ export function trimSentencesForDistinctPeople(
     return sentences;
   }
 
-  const leftIdx = sentences.findIndex((sentence) =>
-    /\bon the left\b/i.test(sentence),
-  );
-  const rightIdx = sentences.findIndex((sentence) =>
-    /\bon the right\b/i.test(sentence),
-  );
+  const { leftIdx, rightIdx } = findDistinctPeopleSentenceIndexes(sentences);
 
   if (leftIdx >= 0 && rightIdx >= 0) {
     const priority =

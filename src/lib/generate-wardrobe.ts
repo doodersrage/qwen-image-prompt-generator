@@ -5,14 +5,11 @@ import {
 } from "./clothing-tags";
 import {
   hintsMentionClothing,
-  mergeAssignedWardrobeIntoPrompt,
+  mergeWardrobeAssignmentsIntoPrompt,
   mergeWardrobeRespectingLimits,
   pickRandomCharacterOutfit,
-  trimWardrobeSummaryToMaxChars,
-  wardrobeBudgetForPrompt,
   type RandomCharacterOutfit,
 } from "./clothing-catalog";
-import { trimPromptToMaxChars } from "./qwen-clarity";
 import {
   isMultiPersonInput,
   parsePeopleConstraint,
@@ -177,6 +174,7 @@ export function buildGenerateWardrobeUserDirective(
 
   return [
     "WARDROBE COHERENCE (mandatory):",
+    "Weave each assigned outfit into that person's sentence—do not add a separate wardrobe paragraph before the scene.",
     "Each person gets their own scene-appropriate outfit.",
     ...lines.map((line) => `- ${line}`),
     "Keep every assigned garment type in the final prompt for each person.",
@@ -190,55 +188,5 @@ export function mergeGenerateWardrobeIntoPrompt(
   assignments: GenerateWardrobeAssignment[],
   maxChars?: number,
 ): string {
-  if (assignments.length === 0) {
-    return prompt.trim();
-  }
-
-  const peopleCount = assignments.length;
-  const wardrobeBudget = maxChars
-    ? wardrobeBudgetForPrompt(maxChars, peopleCount)
-    : undefined;
-  const perPersonBudget =
-    wardrobeBudget && peopleCount > 1
-      ? Math.max(40, Math.floor(wardrobeBudget / peopleCount))
-      : wardrobeBudget;
-
-  if (assignments.length === 1 && !assignments[0]?.label) {
-    const summary = assignments[0]!.summary;
-    return maxChars
-      ? mergeWardrobeRespectingLimits(prompt, summary, maxChars, 1)
-      : mergeAssignedWardrobeIntoPrompt(prompt, summary);
-  }
-
-  const clause = assignments
-    .map((assignment) => {
-      const who = assignment.label ?? "the subject";
-      const summary = perPersonBudget
-        ? trimWardrobeSummaryToMaxChars(
-            assignment.summary.replace(/\.$/, ""),
-            perPersonBudget,
-          )
-        : assignment.summary.replace(/\.$/, "");
-      return `${who} wearing ${summary}`;
-    })
-    .join("; ");
-
-  const normPrompt = prompt.toLowerCase();
-  const firstChunk = assignments[0]?.summary
-    .split(",")[0]
-    ?.trim()
-    .slice(0, 20)
-    .toLowerCase();
-
-  if (firstChunk && normPrompt.includes(firstChunk)) {
-    return maxChars ? trimPromptToMaxChars(prompt.trim(), maxChars) : prompt.trim();
-  }
-
-  let merged = prompt.trim() ? `${clause}. ${prompt.trim()}` : `${clause}.`;
-
-  if (maxChars && merged.length > maxChars) {
-    merged = trimPromptToMaxChars(merged, maxChars);
-  }
-
-  return merged;
+  return mergeWardrobeAssignmentsIntoPrompt(prompt, assignments, maxChars);
 }

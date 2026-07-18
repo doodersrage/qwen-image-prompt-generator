@@ -4,6 +4,7 @@ import {
 } from "./variation-seed";
 import type { DetailLevel } from "./detail-level";
 import type { GenerationSettings } from "./generation-settings";
+import { findDistinctPeopleSentenceIndexes } from "./prompt-shape";
 
 export type PeopleConstraint = {
   count: number | null;
@@ -184,6 +185,10 @@ export function hasDistinctPeopleStructure(text: string): boolean {
     return true;
   }
 
+  if (/\bto the left\b/.test(lower) && /\bto the right\b/.test(lower)) {
+    return true;
+  }
+
   const sentences = text
     .replace(/\s+/g, " ")
     .split(/(?<=[.!?])\s+/)
@@ -191,12 +196,17 @@ export function hasDistinctPeopleStructure(text: string): boolean {
     .filter(Boolean);
 
   const placementSentences = sentences.filter((sentence) =>
-    /\b(on the left|on the right|to the left|to the right|in the foreground|in the midground)\b/i.test(
+    /\b(on the left|on the right|to the left|to the right|left side|right side|in the foreground|in the midground)\b/i.test(
       sentence,
     ),
   );
 
-  return placementSentences.length >= 2;
+  if (placementSentences.length >= 2) {
+    return true;
+  }
+
+  const { leftIdx, rightIdx } = findDistinctPeopleSentenceIndexes(sentences);
+  return leftIdx >= 0 && rightIdx >= 0;
 }
 
 export function buildDistinctPeopleUserDirective(input: string): string {
@@ -206,7 +216,8 @@ export function buildDistinctPeopleUserDirective(input: string): string {
 
   if (count === 2) {
     return [
-      "PEOPLE (mandatory): Two separate individuals—describe the person on the left, then the person on the right.",
+      "PEOPLE (mandatory): Two separate individuals—one sentence for the person on the left, then one for the person on the right.",
+      "Keep each person sentence compact: face, pose, and brief clothing only—do not spend the whole prompt on one woman.",
       genderRule,
       "Do not merge them into one couple blob or a single shared description.",
     ]
@@ -304,7 +315,8 @@ export function buildDistinctPeopleSystemAddendum(input: string): string {
 
   if (constraint.count === 2 || /\b(couple|pair|duo)\b/i.test(input)) {
     return [
-      "Two separate people only: one short sentence each, left and right.",
+      "Two separate people only: one compact sentence each, left then right.",
+      "Each person gets face, pose, and brief clothing in a single sentence—finish both people within the character limit.",
       genderRule,
       "Do not merge them into one couple blob or shared description.",
     ]

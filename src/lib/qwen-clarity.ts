@@ -20,8 +20,12 @@ import {
   resolveProfile,
   splitSentences,
   splitTags,
+  stripIncompleteDistinctPeopleBridges,
   trimSentencesByPriority,
   trimSentencesForDistinctPeople,
+  trimDistinctPeopleProseToMaxChars,
+  trimCompleteSentencesToMaxChars,
+  trimProseClauseToMaxChars,
   trimTagsToMaxChars,
 } from "./prompt-shape";
 
@@ -153,17 +157,7 @@ function expandPromptToMinChars(
   }
 
   if (expanded.length > maxChars) {
-    const trimmed = expanded.slice(0, maxChars);
-    const lastBreak = Math.max(
-      trimmed.lastIndexOf(". "),
-      trimmed.lastIndexOf("! "),
-      trimmed.lastIndexOf("? "),
-      trimmed.lastIndexOf(", "),
-    );
-    expanded =
-      lastBreak > maxChars * 0.45
-        ? trimmed.slice(0, lastBreak + 1)
-        : `${trimmed.trimEnd()}…`;
+    expanded = trimProseClauseToMaxChars(expanded, maxChars);
   }
 
   return expanded.trim();
@@ -221,17 +215,16 @@ function trimTextToMaxChars(text: string, maxChars: number): string {
     return text;
   }
 
-  const trimmed = text.slice(0, maxChars);
-  const lastBreak = Math.max(
-    trimmed.lastIndexOf(". "),
-    trimmed.lastIndexOf("! "),
-    trimmed.lastIndexOf("? "),
-    trimmed.lastIndexOf(", "),
-  );
+  const sentences = splitSentences(text);
+  if (sentences.length > 1) {
+    const complete = trimCompleteSentencesToMaxChars(sentences, maxChars);
+    if (complete.length <= maxChars) {
+      return complete;
+    }
+    text = complete;
+  }
 
-  return lastBreak > maxChars * 0.45
-    ? trimmed.slice(0, lastBreak + 1)
-    : `${trimmed.trimEnd()}…`;
+  return trimProseClauseToMaxChars(text, maxChars);
 }
 
 /** Trim prose or tag prompts to a model char limit at word or clause boundaries. */
@@ -323,6 +316,13 @@ export function sanitizeQwenPrompt(
     }
   } else if (enforceMinimum) {
     text = expandPromptToMinChars(text, detail, model, soloSubject);
+  }
+
+  const finalSentences = stripIncompleteDistinctPeopleBridges(
+    splitSentences(text.trim()),
+  );
+  if (distinctPeople && input.trim() && finalSentences.length > 0) {
+    return trimDistinctPeopleProseToMaxChars(finalSentences, maxChars);
   }
 
   return trimTextToMaxChars(text.trim(), maxChars);
