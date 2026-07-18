@@ -11,6 +11,7 @@ import {
   QWEN_FEW_SHOT_BY_DETAIL,
   sanitizeQwenPrompt,
 } from "./qwen-clarity";
+import { stripPromptArtifacts } from "./prompt-cleanup";
 import {
   DISTINCT_PEOPLE_FEW_SHOT_BY_DETAIL,
   DISTINCT_PEOPLE_FEW_SHOT_INPUT,
@@ -287,11 +288,7 @@ export async function generateWithLlm(
 }
 
 function sanitizePrompt(raw: string): string {
-  return raw
-    .replace(/^["'`]+|["'`]+$/g, "")
-    .replace(/^prompt:\s*/i, "")
-    .replace(/^output:\s*/i, "")
-    .trim();
+  return stripPromptArtifacts(raw);
 }
 
 function capitalize(s: string): string {
@@ -330,6 +327,16 @@ function paintSceneFromKeywords(
       return `Replace the scene with ${capitalize(normalized)} under clear directional light, surfaces showing tangible texture. The main subject anchors the frame while atmosphere builds from foreground to background. One distant environmental beat completes the unified composition.`;
     }
     return `Replace the scene with ${capitalize(normalized)} under clear directional light, with visible texture. The main subject anchors the frame while one background detail adds depth.`;
+  }
+
+  if (settings.model === "qwen-image-2512") {
+    if (settings.detail === "concise") {
+      return `${capitalize(normalized)} under clear light with readable color and spatial depth. The main subject holds the frame in one cohesive moment.`;
+    }
+    if (settings.detail === "rich") {
+      return `${capitalize(normalized)} anchors the midground with clear shape, texture, and color under soft directional light. Foreground and background elements sit in readable spatial layers—near surfaces show material detail while distant forms fade with atmospheric depth. Warm key light from camera-left mixes with cooler ambient fill, keeping subjects and any visible text sharp and legible.`;
+    }
+    return `${capitalize(normalized)} under clear directional light, with visible texture and cohesive color. The main subject sits in the midground while the background adds spatial depth in the same moment.`;
   }
 
   if (settings.model === "flux-2-klein") {
@@ -377,7 +384,7 @@ export function generateWithTemplate(
     if (settings.model === "flux-2-klein") {
       return `Stable composition with unchanged facial features, pose, and proportions. Clean unmarked surfaces. ${trimmed}.`;
     }
-    if (settings.model === "qwen-image-2.0") {
+    if (settings.model === "qwen-image-2512" || settings.model === "qwen-image-2.0") {
       return `Avoid changing facial features, pose, proportions, and composition unless requested. ${trimmed}.`;
     }
     if (settings.model === "qwen-image-edit-2511") {

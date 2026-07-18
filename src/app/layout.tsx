@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import AppNav from "@/components/AppNav";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -15,7 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Qwen Image Prompt Generator",
   description:
-    "Format prompts for Qwen-Image-Edit, Qwen-Image-Edit-2511, and Qwen-Image-2.0 in ComfyUI.",
+    "Format prompts for Qwen-Image-Edit, Edit-2511, Image-2512, Image-2.0, and FLUX.2 Klein in ComfyUI.",
 };
 
 export default function RootLayout({
@@ -29,6 +30,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-zinc-950 text-zinc-100">
+        <AppNav />
         {children}
       </body>
     </html>

@@ -1,5 +1,10 @@
 import type { DetailLevel } from "./detail-level";
 import { getDetailLimits } from "./detail-level";
+import {
+  extractShortTopic,
+  stripMetaInstructions,
+  stripPromptArtifacts,
+} from "./prompt-cleanup";
 import type { QwenImageModel } from "./qwen-model";
 import {
   buildModelClarityAddendum,
@@ -8,6 +13,11 @@ import {
 } from "./qwen-model";
 
 export type { DetailLevel };
+export {
+  extractShortTopic,
+  stripMetaInstructions,
+  stripPromptArtifacts,
+} from "./prompt-cleanup";
 export {
   detailLevelLabel,
   DISTINCT_PEOPLE_FEW_SHOT_BY_DETAIL,
@@ -95,6 +105,20 @@ const RICH_EXPANSION_BEATS = [
   "Small environmental details in the distance—distant glow, fading architecture, or weather-worn surfaces—complete the same continuous moment.",
 ];
 
+const RICH_EXPANSION_BEATS_2512 = [
+  "Foreground and background elements read in clear spatial layers under the same light.",
+  "Surface color and texture stay consistent across the frame with readable depth.",
+  "The main subject remains centered in the midground with supporting details placed left and right.",
+  "Lighting stays even enough to preserve shape, material, and any visible text in the scene.",
+];
+
+function expansionBeatsForModel(model: QwenImageModel): string[] {
+  if (model === "qwen-image-2512") {
+    return RICH_EXPANSION_BEATS_2512;
+  }
+  return RICH_EXPANSION_BEATS;
+}
+
 function expandPromptToMinChars(
   text: string,
   detail: DetailLevel,
@@ -105,19 +129,20 @@ function expandPromptToMinChars(
     return text;
   }
 
+  const beats = expansionBeatsForModel(model);
   let expanded = text;
   let beatIndex = 0;
 
-  while (expanded.length < minChars && beatIndex < RICH_EXPANSION_BEATS.length) {
+  while (expanded.length < minChars && beatIndex < beats.length) {
     const sentences = splitSentences(expanded);
-    const beat = RICH_EXPANSION_BEATS[beatIndex]!.replace(/\.$/, "");
+    const beat = beats[beatIndex]!.replace(/\.$/, "");
 
     if (sentences.length >= maxSentences && sentences.length > 0) {
       const last = sentences[sentences.length - 1]!.replace(/\.$/, "");
       sentences[sentences.length - 1] = `${last}, ${beat}.`;
       expanded = sentences.join(" ");
     } else {
-      expanded = `${expanded} ${RICH_EXPANSION_BEATS[beatIndex]!}`;
+      expanded = `${expanded} ${beats[beatIndex]!}`;
     }
 
     beatIndex += 1;
@@ -153,7 +178,7 @@ function padPromptToMinimum(
     return expandPromptToMinChars(text, detail, model);
   }
 
-  const topic = input.split(/[,;|]+/)[0]?.trim() || "the scene";
+  const topic = extractShortTopic(input);
   const pads: string[] = [];
 
   if (detail === "balanced" && sentences.length < minSentences) {
@@ -162,10 +187,11 @@ function padPromptToMinimum(
     );
   }
 
-  if (detail === "rich" || model === "qwen-image-2.0" || model === "flux-2-klein") {
+  if (detail === "rich" || model === "qwen-image-2512" || model === "qwen-image-2.0" || model === "flux-2-klein") {
     while (sentences.length + pads.length < minSentences) {
-      const index = pads.length % RICH_EXPANSION_BEATS.length;
-      pads.push(RICH_EXPANSION_BEATS[index]!);
+      const beats = expansionBeatsForModel(model);
+      const index = pads.length % beats.length;
+      pads.push(beats[index]!);
     }
   }
 
@@ -173,24 +199,22 @@ function padPromptToMinimum(
   return expandPromptToMinChars(combined, detail, model);
 }
 
+export type SanitizeOptions = {
+  enforceMinimum?: boolean;
+};
+
 export function sanitizeQwenPrompt(
   raw: string,
   detail: DetailLevel = "balanced",
   input = "",
   model: QwenImageModel = DEFAULT_QWEN_MODEL,
+  options: SanitizeOptions = {},
 ): string {
   const { maxSentences, maxChars } = getDetailLimits(detail, model);
+  const enforceMinimum = options.enforceMinimum !== false;
 
-  let text = raw
-    .replace(/^["'`]+|["'`]+$/g, "")
-    .replace(/^prompt:\s*/i, "")
-    .replace(/^output:\s*/i, "")
-    .replace(/\b(DISTINCT INDIVIDUALS MODE|GROUPED \/ COUPLE MODE|MANDATORY|DETAIL LEVEL|Target model).*?\./gi, "")
-    .replace(/\bWrite EXACTLY.*?\./gi, "")
-    .replace(/\bWrite .*? sentences.*?\./gi, "")
-    .replace(/\bOptional flavor only.*?\./gi, "")
-    .replace(/\bPerson [AB] must read as:.*?\./gi, "")
-    .trim();
+  let text = stripPromptArtifacts(raw);
+  text = stripMetaInstructions(text);
 
   let sentences = splitSentences(text);
 
@@ -200,14 +224,14 @@ export function sanitizeQwenPrompt(
 
   text = sentences.join(" ");
 
-  if (input) {
+  if (enforceMinimum && input) {
     text = padPromptToMinimum(text, detail, model, input);
     sentences = splitSentences(text);
     if (sentences.length > maxSentences) {
       text = sentences.slice(0, maxSentences).join(" ");
       text = expandPromptToMinChars(text, detail, model);
     }
-  } else {
+  } else if (enforceMinimum) {
     text = expandPromptToMinChars(text, detail, model);
   }
 

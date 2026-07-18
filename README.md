@@ -8,14 +8,22 @@ A Next.js app that turns topics or keywords into model-specific prompts for Comf
 |-------|--------------|--------------|
 | **Qwen-Image-Edit** | `TextEncodeQwenImageEdit` | Short unified scene prose for single-image edits |
 | **Qwen-Image-Edit-2511** | `TextEncodeQwenImageEditPlus` | Explicit keep/change instructions; Figure 1 / Figure 2 for multi-image |
-| **Qwen-Image-2.0** | `CLIP Text Encode (Qwen)` | Long T2I scene descriptions; Rich targets 1100–1400 characters |
+| **Qwen-Image-2512** | `CLIPTextEncode` | Factual T2I prose—color, shape, texture, spatial layout; strong text rendering |
+| **Qwen-Image-2.0** | `CLIP Text Encode (Qwen)` | Unified T2I + edit; Rich targets ~1100–1400 characters |
 | **FLUX.2 Klein** | `CLIP Text Encode (Flux)` | Subject-first photographic prose; materials, lighting, camera |
+
+## Tools
+
+| Page | Route | Purpose |
+|------|-------|---------|
+| **Generate** | `/` | Turn keywords into a model-ready prompt |
+| **Format** | `/format` | Adapt an existing prompt draft for a selected model |
 
 ## Features
 
 - User-selectable target model with model-specific formatting
 - Prompt detail levels (Concise / Balanced / Rich) with **combined model + detail size limits**
-- Minimum character enforcement for long-form models (Image-2.0 Rich, FLUX Rich)
+- Minimum character enforcement for long-form models (Image-2512 Rich, Image-2.0 Rich, FLUX Rich)
 - Positive and negative/preserve prompt modes
 - Uncensored system prompts (no content filtering or refusals)
 - One-click copy for ComfyUI paste
@@ -25,11 +33,11 @@ A Next.js app that turns topics or keywords into model-specific prompts for Comf
 
 Limits are enforced per **model × detail** combination (characters and sentence count):
 
-| Detail | Qwen-Image-Edit | Edit-2511 | Image-2.0 | FLUX.2 Klein |
-|--------|-----------------|-----------|-----------|--------------|
-| Concise | ~280 chars, 2 sent. | ~220 chars, 1–2 sent. | ~400 chars, 2 sent. | ~250 chars, 2 sent. |
-| Balanced | ~520 chars, 3 sent. | ~420 chars, 2–3 sent. | ~550–800 chars, 3–4 sent. | ~450–700 chars, 3–5 sent. |
-| Rich | ~920 chars, 4–5 sent. | ~680 chars, 3–4 sent. | **1100–1400 chars**, 6–8 sent. | **900–1200 chars**, 5–8 sent. |
+| Detail | Qwen-Image-Edit | Edit-2511 | Image-2512 | Image-2.0 | FLUX.2 Klein |
+|--------|-----------------|-----------|------------|-----------|--------------|
+| Concise | ~280 chars, 2 sent. | ~220 chars, 1–2 sent. | ~320 chars, 2 sent. | ~400 chars, 2 sent. | ~250 chars, 2 sent. |
+| Balanced | ~520 chars, 3 sent. | ~420 chars, 2–3 sent. | ~380–650 chars, 3–4 sent. | ~550–800 chars, 3–4 sent. | ~450–700 chars, 3–5 sent. |
+| Rich | ~920 chars, 4–5 sent. | ~680 chars, 3–4 sent. | **700–1000 chars**, 5–6 sent. | **1100–1400 chars**, 6–8 sent. | **900–1200 chars**, 5–8 sent. |
 
 Rich detail on Image-2.0 and FLUX.2 Klein enforces a **minimum character count** via LLM instructions, long few-shot examples, and post-processing expansion.
 
@@ -83,7 +91,17 @@ LLM_MODEL=dolphin-llama3
 
 Use **Negative / Preserve** mode for protective conditioning. **Note:** FLUX.2 Klein ignores negative prompts—the generator outputs positive preservation phrasing instead.
 
-## API
+## Format API
+
+```bash
+curl -X POST http://localhost:3000/api/format \
+  -H "Content-Type: application/json" \
+  -d '{"input":"1girl, neon alley, rain, masterpiece","model":"flux-2-klein","detail":"balanced","smartFormat":true}'
+```
+
+Set `"smartFormat": false` for instant rules-only cleanup (no LLM).
+
+## Generate API
 
 ```bash
 curl -X POST http://localhost:3000/api/generate \

@@ -488,7 +488,7 @@ export default function PromptGenerator() {
           <li>
             Pick your{" "}
             <strong className="font-medium text-zinc-400">target model</strong>
-            —Edit, Edit-2511, or Image-2.0—each uses different prompt style and
+            —Edit, Edit-2511, Image-2512, Image-2.0, or FLUX.2 Klein—each uses different prompt style and
             size limits.
           </li>
           <li>
@@ -500,6 +500,11 @@ export default function PromptGenerator() {
             <strong className="font-medium text-zinc-400">FLUX.2 Klein</strong>{" "}
             wants subject-first photographic prose—materials, lighting, camera.
             Negative prompts are ignored; use positive phrasing instead.
+          </li>
+          <li>
+            <strong className="font-medium text-zinc-400">Image-2512</strong>{" "}
+            favors concise factual prose with color, texture, and spatial
+            relationships—quote visible text in double quotes.
           </li>
           <li>
             <strong className="font-medium text-zinc-400">Image-2.0</strong>{" "}
