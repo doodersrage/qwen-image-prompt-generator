@@ -1,5 +1,9 @@
 import { generateBackgroundPrompt } from "@/lib/specialized/background-generator";
 import { normalizeSharedGenerationOptions } from "@/lib/specialized/normalize";
+import {
+  normalizeBackgroundPresetOptions,
+  type BackgroundPresetOptions,
+} from "@/lib/background-options";
 import { apiError, apiJson, apiMethodNotAllowed } from "@/lib/api/response";
 import { NextResponse } from "next/server";
 
@@ -11,6 +15,9 @@ type BackgroundRequestBody = {
   settingType?: string;
   timeOfDay?: string;
   mood?: string;
+  presetOptions?: Partial<
+    Record<keyof BackgroundPresetOptions, string | string[]>
+  >;
 };
 
 export async function GET() {
@@ -27,6 +34,7 @@ export async function POST(request: Request) {
       settingType: body.settingType?.trim(),
       timeOfDay: body.timeOfDay?.trim(),
       mood: body.mood?.trim(),
+      presetOptions: normalizeBackgroundPresetOptions(body.presetOptions),
     });
 
     return apiJson(result);

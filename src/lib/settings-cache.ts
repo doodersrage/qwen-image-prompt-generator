@@ -35,11 +35,14 @@ export type CharacterToolCache = {
   variationStrength?: number;
 } & Partial<CharacterPresetOptions>;
 
+import type { BackgroundPresetOptions } from "./background-options";
+
 export type BackgroundToolCache = {
   settingType?: string;
   timeOfDay?: string;
   mood?: string;
-};
+  surfaceMaterials?: string;
+} & Partial<Omit<BackgroundPresetOptions, "surfaceMaterials">>;
 
 export type ImagePromptToolCache = {
   focus?: "full" | "subject" | "background" | "style";

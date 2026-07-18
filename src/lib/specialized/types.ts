@@ -38,10 +38,13 @@ export type CharacterOptions = SharedGenerationOptions & {
   presetOptions?: CharacterPresetOptions;
 };
 
+import type { BackgroundPresetOptions } from "../background-options";
+
 export type BackgroundOptions = SharedGenerationOptions & {
   settingType?: string;
   timeOfDay?: string;
   mood?: string;
+  presetOptions?: BackgroundPresetOptions;
 };
 
 export type ImagePromptFocus = "full" | "subject" | "background" | "style";

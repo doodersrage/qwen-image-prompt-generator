@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import BackgroundPresetControls from "@/components/BackgroundPresetControls";
 import PromptResultPanel from "@/components/PromptResultPanel";
 import SharedToolControls from "@/components/SharedToolControls";
 import { useCachedSettings } from "@/hooks/useCachedSettings";
+import { presetOptionsFromBackgroundCache } from "@/lib/background-options";
 import { getComfyModelDefinition } from "@/lib/comfy-models";
 import { DEFAULT_BACKGROUND_TOOL_CACHE } from "@/lib/settings-cache";
 import type { ToolGenerateResult } from "@/lib/specialized/types";
@@ -39,6 +41,7 @@ export default function BackgroundTool() {
           settingType: toolSettings.settingType,
           timeOfDay: toolSettings.timeOfDay,
           mood: toolSettings.mood,
+          presetOptions: presetOptionsFromBackgroundCache(toolSettings),
         }),
       });
 
@@ -85,7 +88,9 @@ export default function BackgroundTool() {
         </h1>
         <p className="max-w-2xl text-base leading-relaxed text-zinc-400">
           Generates a detailed environment-only prompt—architecture, landscape,
-          weather, materials, and light—with no people or figures.
+          weather, materials, and light—with no people or figures. Expand
+          optional presets for perspective, depth, lighting, and surface
+          textures.
         </p>
       </header>
 
@@ -100,22 +105,28 @@ export default function BackgroundTool() {
           <input
             value={toolSettings.settingType ?? ""}
             onChange={(e) => updateToolSettings({ settingType: e.target.value })}
-            placeholder="Setting type"
-            className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+            placeholder="Setting type (optional)"
+            className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-teal-500"
           />
           <input
             value={toolSettings.timeOfDay ?? ""}
             onChange={(e) => updateToolSettings({ timeOfDay: e.target.value })}
-            placeholder="Time / lighting"
-            className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+            placeholder="Time / lighting (optional)"
+            className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-teal-500"
           />
           <input
             value={toolSettings.mood ?? ""}
             onChange={(e) => updateToolSettings({ mood: e.target.value })}
-            placeholder="Mood"
-            className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+            placeholder="Mood (optional)"
+            className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-teal-500"
           />
         </div>
+
+        <BackgroundPresetControls
+          mounted={mounted}
+          settings={toolSettings}
+          onChange={updateToolSettings}
+        />
 
         <button
           type="button"
