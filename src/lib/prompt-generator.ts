@@ -27,8 +27,10 @@ import {
 } from "./comfy-models";
 import {
   buildDistinctPeopleSystemAddendum,
+  buildDistinctPeopleUserDirective,
   buildGroupedPeopleSystemAddendum,
-  countImpliedPeople,
+  ensureDistinctPeoplePrompt,
+  isMultiPersonInput,
   paintDistinctPeopleScene,
   paintGroupedPeopleScene,
   parsePeopleConstraint,
@@ -64,12 +66,6 @@ type ChatMessage = {
   role: "system" | "user" | "assistant";
   content: string;
 };
-
-function isMultiPersonInput(input: string): boolean {
-  return (
-    countImpliedPeople(input) !== null || /\b(couple|pair|duo)\b/i.test(input)
-  );
-}
 
 function buildFewShotMessages(
   mode: PromptMode,
@@ -132,6 +128,12 @@ function buildUserMessage(
     buildDetailUserDirective(settings.detail, settings.model),
   ];
   const peopleConstraint = parsePeopleConstraint(trimmed);
+
+  if (isMultiPersonInput(trimmed)) {
+    if (settings.distinctPeople) {
+      extras.push(buildDistinctPeopleUserDirective(trimmed));
+    }
+  }
 
   if (settings.variation.enabled) {
     const hint = compactVariationHint(
@@ -207,11 +209,18 @@ function finalizePrompt(
   settings: GenerationSettings,
 ): string {
   const cleaned = sanitizePrompt(raw);
+  const withDistinctPeople =
+    mode === "positive"
+      ? ensureDistinctPeoplePrompt(cleaned, input, settings)
+      : cleaned;
   const sanitized = sanitizeQwenPrompt(
-    cleaned,
+    withDistinctPeople,
     settings.detail,
     input,
     settings.model,
+    {
+      distinctPeople: mode === "positive" && settings.distinctPeople,
+    },
   );
   return formatPromptForModel(sanitized, settings.model, input, mode);
 }

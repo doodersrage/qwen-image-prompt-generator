@@ -65,25 +65,34 @@ export function compactVariationHint(
     gender?: string;
   } = {},
 ): string {
-  if (strength <= 0 || detail === "concise") {
-    return "";
+  const hints: string[] = [];
+
+  if (
+    options.distinctPeople &&
+    (typeof options.peopleCount === "number"
+      ? options.peopleCount >= 2
+      : true)
+  ) {
+    hints.push(
+      options.gender === "women"
+        ? "two separate women"
+        : options.gender === "men"
+          ? "two separate men"
+          : "two separate people",
+    );
   }
 
-  const hints: string[] = [];
+  if (strength <= 0 || detail === "concise") {
+    return hints.length > 0
+      ? `Optional flavor only: ${hints.join(", ")}.`
+      : "";
+  }
 
   if (strength >= 45) {
     hints.push("cohesive palette");
   }
   if (strength >= 70 && detail === "rich") {
     hints.push("layered depth");
-  }
-
-  if (
-    options.distinctPeople &&
-    typeof options.peopleCount === "number" &&
-    options.peopleCount >= 2
-  ) {
-    hints.push(options.gender === "women" ? "two separate women" : "two separate people");
   }
 
   if (hints.length === 0) {
@@ -181,8 +190,57 @@ function padPromptToMinimum(
   return expandPromptToMinChars(combined, detail, model);
 }
 
+function trimSentencesForDistinctPeople(
+  sentences: string[],
+  maxSentences: number,
+): string[] {
+  if (sentences.length <= maxSentences) {
+    return sentences;
+  }
+
+  const leftIdx = sentences.findIndex((sentence) =>
+    /\bon the left\b/i.test(sentence),
+  );
+  const rightIdx = sentences.findIndex((sentence) =>
+    /\bon the right\b/i.test(sentence),
+  );
+
+  if (leftIdx >= 0 && rightIdx >= 0) {
+    const priority =
+      leftIdx === rightIdx
+        ? [leftIdx]
+        : [leftIdx, rightIdx].sort((a, b) => a - b);
+
+    if (maxSentences >= 3 && !priority.includes(0)) {
+      priority.unshift(0);
+    }
+
+    const keepSet = new Set(priority);
+    const result = [...priority];
+
+    for (
+      let index = 0;
+      index < sentences.length && result.length < maxSentences;
+      index += 1
+    ) {
+      if (!keepSet.has(index)) {
+        result.push(index);
+        keepSet.add(index);
+      }
+    }
+
+    return result
+      .sort((a, b) => a - b)
+      .slice(0, maxSentences)
+      .map((index) => sentences[index]!);
+  }
+
+  return sentences.slice(0, maxSentences);
+}
+
 export type SanitizeOptions = {
   enforceMinimum?: boolean;
+  distinctPeople?: boolean;
 };
 
 export function sanitizeQwenPrompt(
@@ -194,14 +252,21 @@ export function sanitizeQwenPrompt(
 ): string {
   const { maxSentences, maxChars } = getDetailLimits(detail, model);
   const enforceMinimum = options.enforceMinimum !== false;
+  const distinctPeople = options.distinctPeople === true;
+  const effectiveMaxSentences =
+    distinctPeople && input.trim()
+      ? Math.max(maxSentences, detail === "concise" ? 2 : 3)
+      : maxSentences;
 
   let text = stripPromptArtifacts(raw);
   text = stripMetaInstructions(text);
 
   let sentences = splitSentences(text);
 
-  if (sentences.length > maxSentences) {
-    sentences = sentences.slice(0, maxSentences);
+  if (sentences.length > effectiveMaxSentences) {
+    sentences = distinctPeople
+      ? trimSentencesForDistinctPeople(sentences, effectiveMaxSentences)
+      : sentences.slice(0, effectiveMaxSentences);
   }
 
   text = sentences.join(" ");
@@ -209,8 +274,10 @@ export function sanitizeQwenPrompt(
   if (enforceMinimum && input) {
     text = padPromptToMinimum(text, detail, model, input);
     sentences = splitSentences(text);
-    if (sentences.length > maxSentences) {
-      text = sentences.slice(0, maxSentences).join(" ");
+    if (sentences.length > effectiveMaxSentences) {
+      text = distinctPeople
+        ? trimSentencesForDistinctPeople(sentences, effectiveMaxSentences).join(" ")
+        : sentences.slice(0, effectiveMaxSentences).join(" ");
       text = expandPromptToMinChars(text, detail, model);
     }
   } else if (enforceMinimum) {

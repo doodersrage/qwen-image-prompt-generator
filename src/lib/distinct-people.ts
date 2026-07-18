@@ -23,6 +23,97 @@ function parseCount(raw: string): number {
   return wordToNumber[raw] ?? Number.parseInt(raw, 10);
 }
 
+const PERSON_NOUNS =
+  "men|man|women|woman|people|persons|person|guys|guy|girls|girl|boys|boy|figures|characters|models|friends|strangers|lovers|dancers|soldiers|students|teachers|artists|models";
+
+const COUNT_WORDS = "two|three|four|five|six|seven|eight|\\d+";
+
+function matchCountAndGender(lower: string): PeopleConstraint | null {
+  const numericMatch = lower.match(
+    new RegExp(
+      `\\b(${COUNT_WORDS})\\s+(?:\\w+\\s+){0,4}(${PERSON_NOUNS})\\b`,
+      "i",
+    ),
+  );
+
+  if (numericMatch) {
+    const count = parseCount(numericMatch[1]!);
+    const gender = nounToGender(numericMatch[2]!);
+    if (Number.isFinite(count) && count >= 2) {
+      return { count, gender };
+    }
+  }
+
+  return null;
+}
+
+function matchAndPair(lower: string): PeopleConstraint | null {
+  const mixedPatterns = [
+    /\b(man|men|boy|boys|guy|guys|male)\b.*\band\b.*\b(woman|women|girl|girls|female)\b/,
+    /\b(woman|women|girl|girls|female)\b.*\band\b.*\b(man|men|boy|boys|guy|guys|male)\b/,
+  ];
+
+  if (mixedPatterns.some((pattern) => pattern.test(lower))) {
+    return { count: 2, gender: "mixed" };
+  }
+
+  if (
+    /\b(man|men|boy|boys|guy|guys)\b.*\band\b.*\b(man|men|boy|boys|guy|guys)\b/.test(
+      lower,
+    )
+  ) {
+    return { count: 2, gender: "men" };
+  }
+
+  if (
+    /\b(woman|women|girl|girls)\b.*\band\b.*\b(woman|women|girl|girls)\b/.test(
+      lower,
+    )
+  ) {
+    return { count: 2, gender: "women" };
+  }
+
+  return null;
+}
+
+function matchExplicitTwo(lower: string): PeopleConstraint | null {
+  if (/\b(two|2)\s+(women|woman|girls|girl|female)\b/.test(lower)) {
+    return { count: 2, gender: "women" };
+  }
+
+  if (/\b(two|2)\s+(men|man|guys|guy|boys|boy|male)\b/.test(lower)) {
+    return { count: 2, gender: "men" };
+  }
+
+  if (/\bboth\s+(women|woman|girls|girl)\b/.test(lower)) {
+    return { count: 2, gender: "women" };
+  }
+
+  if (/\bboth\s+(men|man|guys|guy|boys|boy)\b/.test(lower)) {
+    return { count: 2, gender: "men" };
+  }
+
+  if (/\b(twins|twin sisters|twin brothers)\b/.test(lower)) {
+    if (/\bbrother|male|men\b/.test(lower)) {
+      return { count: 2, gender: "men" };
+    }
+    if (/\bsister|female|women\b/.test(lower)) {
+      return { count: 2, gender: "women" };
+    }
+    return { count: 2, gender: "any" };
+  }
+
+  if (/\bsisters\b/.test(lower)) {
+    return { count: 2, gender: "women" };
+  }
+
+  if (/\bbrothers\b/.test(lower)) {
+    return { count: 2, gender: "men" };
+  }
+
+  return null;
+}
+
 function nounToGender(noun: string): SubjectGender {
   if (/^(men|man|guys|guy|boys|boy)$/.test(noun)) {
     return "men";
@@ -36,41 +127,30 @@ function nounToGender(noun: string): SubjectGender {
 export function parsePeopleConstraint(input: string): PeopleConstraint {
   const lower = input.toLowerCase();
 
-  const numericMatch = lower.match(
-    /\b(\d+|two|three|four|five|six|seven|eight)\s+(men|man|women|woman|people|persons|person|guys|guy|girls|girl|boys|boy|figures|characters|models|friends|strangers|lovers)\b/,
+  return (
+    matchCountAndGender(lower) ??
+    matchExplicitTwo(lower) ??
+    matchAndPair(lower) ??
+    matchCouplePhrase(lower, input) ??
+    { count: null, gender: "any" }
   );
+}
 
-  if (numericMatch) {
-    const count = parseCount(numericMatch[1]!);
-    const gender = nounToGender(numericMatch[2]!);
-    if (Number.isFinite(count) && count >= 2) {
-      return { count, gender };
-    }
+function matchCouplePhrase(
+  lower: string,
+  input: string,
+): PeopleConstraint | null {
+  if (!/\b(couple|pair|duo|twosome|both of them)\b/.test(lower)) {
+    return null;
   }
 
-  if (/\b(two|2)\s+(women|woman|girls|girl)\b/.test(lower)) {
-    return { count: 2, gender: "women" };
-  }
-
-  if (/\b(two|2)\s+(men|man|guys|guy|boys|boy)\b/.test(lower)) {
+  if (/\b(two men|2 men|gay men|men only)\b/i.test(input)) {
     return { count: 2, gender: "men" };
   }
-
-  if (/\b(couple|pair|duo|twosome|both of them)\b/.test(lower)) {
-    if (/\b(two men|2 men|gay men|men only)\b/i.test(input)) {
-      return { count: 2, gender: "men" };
-    }
-    if (/\b(two women|2 women|lesbian|women only)\b/i.test(input)) {
-      return { count: 2, gender: "women" };
-    }
-    return { count: 2, gender: "mixed" };
+  if (/\b(two women|2 women|lesbian|women only)\b/i.test(input)) {
+    return { count: 2, gender: "women" };
   }
-
-  if (/\b(group|crowd|party of|gathering)\b/.test(lower)) {
-    return { count: null, gender: "any" };
-  }
-
-  return { count: null, gender: "any" };
+  return { count: 2, gender: "mixed" };
 }
 
 export function countImpliedPeople(input: string): number | null {
@@ -78,15 +158,111 @@ export function countImpliedPeople(input: string): number | null {
 }
 
 export function impliesMultiplePeople(input: string): boolean {
-  return countImpliedPeople(input) !== null;
+  return isMultiPersonInput(input);
+}
+
+export function isMultiPersonInput(input: string): boolean {
+  const lower = input.toLowerCase();
+
+  if (/\b(group|crowd|party of|gathering|audience|mob)\b/.test(lower)) {
+    return false;
+  }
+
+  return (
+    countImpliedPeople(input) !== null || /\b(couple|pair|duo|twosome)\b/i.test(input)
+  );
+}
+
+export function hasDistinctPeopleStructure(text: string): boolean {
+  const lower = text.toLowerCase();
+
+  if (/\bon the left\b/.test(lower) && /\bon the right\b/.test(lower)) {
+    return true;
+  }
+
+  if (/\bto the left\b/.test(lower) && /\bto the right\b/.test(lower)) {
+    return true;
+  }
+
+  const sentences = text
+    .replace(/\s+/g, " ")
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+
+  const placementSentences = sentences.filter((sentence) =>
+    /\b(on the left|on the right|to the left|to the right|in the foreground|in the midground)\b/i.test(
+      sentence,
+    ),
+  );
+
+  return placementSentences.length >= 2;
+}
+
+export function buildDistinctPeopleUserDirective(input: string): string {
+  const constraint = parsePeopleConstraint(input);
+  const genderRule = genderMandate(constraint.gender);
+  const count = constraint.count ?? 2;
+
+  if (count === 2) {
+    return [
+      "PEOPLE (mandatory): Two separate individuals—describe the person on the left, then the person on the right.",
+      genderRule,
+      "Do not merge them into one couple blob or a single shared description.",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (count > 2) {
+    return [
+      `PEOPLE (mandatory): ${count} separate individuals—one short sentence each with distinct face, clothing, and pose.`,
+      genderRule,
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  return [
+    "PEOPLE (mandatory): If multiple people appear, one short sentence each—fully separate individuals.",
+    genderRule,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+export function ensureDistinctPeoplePrompt(
+  prompt: string,
+  input: string,
+  settings: GenerationSettings,
+): string {
+  if (!settings.distinctPeople || !isMultiPersonInput(input)) {
+    return prompt;
+  }
+
+  if (hasDistinctPeopleStructure(prompt)) {
+    return prompt;
+  }
+
+  const fallback = paintDistinctPeopleScene(input, settings);
+  return fallback ?? prompt;
 }
 
 function extractSceneSetting(input: string): string {
   const stripped = input
     .replace(
-      /\b(\d+|two|three|four|five|six|seven|eight)\s+(men|man|women|woman|people|persons|person|guys|guy|girls|girl|boys|boy|figures|characters|models|friends|strangers|lovers)\b/gi,
+      new RegExp(
+        `\\b(${COUNT_WORDS})\\s+(?:\\w+\\s+){0,4}(${PERSON_NOUNS})\\b`,
+        "gi",
+      ),
       "",
     )
+    .replace(
+      /\b(man|men|boy|boys|guy|guys|woman|women|girl|girls)\b\s+\band\b\s+\b(man|men|boy|boys|guy|guys|woman|women|girl|girls)\b/gi,
+      "",
+    )
+    .replace(/\b(two|2)\s+(female|male|women|men|woman|man)\b/gi, "")
+    .replace(/\b(twins|sisters|brothers|both\s+\w+)\b/gi, "")
     .replace(/\b(couple|pair|duo|twosome)\b/gi, "")
     .replace(/^[,;\s|]+|[,;\s|]+$/g, "")
     .trim();
