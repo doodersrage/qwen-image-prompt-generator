@@ -83,21 +83,23 @@ On Linux, add `--add-host=host.docker.internal:host-gateway` if Ollama runs on t
 
 Six nodes under **prompt tools** call this app's HTTP API and output a `prompt` string you can wire into `CLIP Text Encode`, `TextEncodeQwenImageEditPlus`, or any text input.
 
-Install into the ComfyUI instance you actually run (not necessarily `~/comfy/ComfyUI`):
+Install into the ComfyUI instance you actually run (on this machine, `/opt/comfyui` on port 8188):
 
 ```bash
-./comfyui/install.sh /opt/comfyui
+sudo ./comfyui/install.sh --copy /opt/comfyui
 ```
 
-Or symlink manually:
+**Do not symlink into `~/Projects/...` for `/opt/comfyui`.** ComfyUI runs as the `comfy` user and cannot read your home directory (`/home/robertsm` is mode `700`), so symlinks fail with `IMPORT FAILED` in the log.
+
+For a user-owned ComfyUI under your home directory, a symlink is fine:
 
 ```bash
-ln -sfn "$(pwd)/comfyui" /opt/comfyui/custom_nodes/qwen-image-prompt-tools
+./comfyui/install.sh --link ~/comfy/ComfyUI
 ```
 
 Verify with ComfyUI's Python: `/opt/comfyui/venv/bin/python comfyui/verify_install.py`
 
-If nodes do not appear: fully restart ComfyUI (browser reload is not enough), search **Prompt Tools**, and check the terminal for `IMPORT FAILED`. See `comfyui/comfyui_image_prompt_tools/README.md`.
+If nodes do not appear: fully restart ComfyUI, search **Prompt Tools**, and check `/opt/comfyui/user/comfyui_8188.log`.
 
 Set `COMFY_PROMPT_API_URL=http://127.0.0.1:47832` on the ComfyUI host if the API is not on localhost.
 

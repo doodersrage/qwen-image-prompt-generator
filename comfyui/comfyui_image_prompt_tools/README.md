@@ -12,17 +12,18 @@ Custom ComfyUI nodes that call the qwen-image-prompt HTTP API and return prompt 
 
 **Install into the ComfyUI you actually run.** If you have multiple copies (e.g. `~/comfy/ComfyUI` and `/opt/comfyui`), only the running one loads custom nodes.
 
-Recommended:
+Recommended on this machine (`/opt/comfyui`, runs as user `comfy`):
 
 ```bash
-/path/to/qwen-image-prompt/comfyui/install.sh /opt/comfyui
+sudo /path/to/qwen-image-prompt/comfyui/install.sh --copy /opt/comfyui
 ```
 
-Or manually:
+This copies `comfyui_image_prompt_tools/` into `/opt/comfyui/custom_nodes/`. A symlink to your home directory **will not work** because ComfyUI cannot traverse `/home/robertsm` (permissions).
+
+For a ComfyUI install you own under your home directory:
 
 ```bash
-ln -sfn /path/to/qwen-image-prompt/comfyui \
-  /opt/comfyui/custom_nodes/qwen-image-prompt-tools
+/path/to/qwen-image-prompt/comfyui/install.sh --link /path/to/ComfyUI
 ```
 
 Restart ComfyUI completely after installing (a browser reload is not enough).
@@ -39,15 +40,21 @@ You should see `OK: loaded 6 node(s)`.
 
 ## Nodes not showing?
 
-1. **Wrong ComfyUI folder** — Most common issue. Check which server is running:
+1. **Home directory permissions** — If ComfyUI runs as `comfy` from `/opt/comfyui`, symlinks into `~/Projects/...` fail silently. Check the log:
+   ```bash
+   rg 'qwen-image-prompt|comfyui_image_prompt|IMPORT FAILED' /opt/comfyui/user/comfyui_8188.log
+   ```
+   Fix with a copy install:
+   ```bash
+   sudo ./comfyui/install.sh --copy /opt/comfyui
+   ```
+
+2. **Wrong ComfyUI folder** — Install into the instance that is actually running:
    ```bash
    pgrep -af 'main.py' | rg -i comfy
    ```
-   Install into that path's `custom_nodes/` (on this machine, often `/opt/comfyui`, not `~/comfy/ComfyUI`).
 
-2. **Restart ComfyUI** — custom nodes load only at startup. Reloading the browser tab is not enough.
-
-3. **Check the terminal/log** — import errors appear as `IMPORT FAILED` or `Cannot import ... qwen-image-prompt-tools`.
+3. **Restart ComfyUI** — custom nodes load only at startup.
 
 4. **Search in the UI** — double-click the canvas and search `Prompt Tools` (category: **prompt tools**).
 
