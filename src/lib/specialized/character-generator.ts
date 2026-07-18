@@ -4,6 +4,10 @@ import {
   pickCharacterIdentitySeed,
 } from "../character-hints";
 import {
+  buildMandatoryLocationBlock,
+  parseSettingHint,
+} from "../hint-location";
+import {
   buildSinglePersonSystemAddendum,
   buildSinglePersonUserDirective,
 } from "../single-person";
@@ -32,9 +36,11 @@ export async function generateCharacterPrompt(
   const detail = options.detail === "concise" ? "balanced" : options.detail;
   const portraitStyle = options.portraitStyle ?? "portrait";
   const parsed = parseCharacterHints(options.hints);
+  const settingHint = parseSettingHint(options.hints);
   const seed = buildRandomCharacterSeed(options.hints, portraitStyle);
   const identitySeed = pickCharacterIdentitySeed(parsed);
   const mandatoryBlock = buildCharacterMandatoryBlock(parsed);
+  const locationBlock = buildMandatoryLocationBlock(settingHint.location);
 
   const actionBlock =
     portraitStyle === "action" ? `\n${ACTION_INSTRUCTIONS}` : "";
@@ -43,7 +49,8 @@ export async function generateCharacterPrompt(
 - Describe EXACTLY ONE person—never a couple, group, crowd, or background extras with faces.
 - ${PORTRAIT_FRAMING[portraitStyle]}${actionBlock}
 - Include concrete visual identity: age read, ethnicity, face shape, hair, eyes, skin details, clothing materials, accessories, pose, expression, and one environmental context beat.
-- When an environment seed is provided, place the character in that specific setting with visible location detail—not a generic studio or blank room unless the seed says so.
+- When a MANDATORY SETTING block is present, place the character in that exact location with visible environmental detail.
+- When an environment seed is provided, use it for pose/mood/lighting—but never override a mandatory setting with a different place.
 - Be highly specific and renderable—avoid generic phrases like "beautiful woman" without detail.
 - No second person, no silhouettes, no reflections with another face, no bystanders, no staff, no audience.
 - When a MANDATORY CHARACTER block is present, follow it exactly for sex/gender, age, and hair. Never override it with a random identity seed.
@@ -53,6 +60,7 @@ ${buildSinglePersonSystemAddendum()}`;
 
   const userParts = [
     mandatoryBlock,
+    locationBlock || null,
     mandatoryBlock
       ? null
       : identitySeed
@@ -86,6 +94,7 @@ ${buildSinglePersonSystemAddendum()}`;
     metadata: {
       portraitStyle,
       hints: parsed.raw || null,
+      location: settingHint.location,
       seed,
       identitySeed,
       parsedHints: parsed,
@@ -100,19 +109,21 @@ function buildCharacterTemplate(
 ): string {
   const subject = hints.trim() || identitySeed || "a distinctive original person";
   const parsed = parseCharacterHints(hints);
+  const location = parseSettingHint(hints).location;
+  const locationNote = location ? ` The scene is set in ${location}.` : "";
   const hairNote = parsed.wantsMinimalHair
     ? "Head and scalp read exactly as described."
     : "Hair is visible and specific—color, length, and texture read clearly—not bald or shaved unless requested.";
 
   if (portraitStyle === "full-body") {
-    return `${capitalize(subject)} stands in clear directional light, full body visible from head to worn shoes. ${hairNote} Clothing shows material texture and fit; posture and expression read distinctly in the same moment. No other people appear anywhere in the frame.`;
+    return `${capitalize(subject)} stands in clear directional light, full body visible from head to worn shoes.${locationNote} ${hairNote} Clothing shows material texture and fit; posture and expression read distinctly in the same moment. No other people appear anywhere in the frame.`;
   }
 
   if (portraitStyle === "action") {
-    return `${capitalize(subject)} is caught mid-action—body driving through the scene with clear momentum under sharp directional light. Weight shifts forward, limbs extend, and clothing or hair reacts to the movement; muscles read engaged, not at rest. ${hairNote} One concrete environment beat ties to the motion (dust, spray, wind, or debris). No other people appear anywhere in the frame.`;
+    return `${capitalize(subject)} is caught mid-action—body driving through the scene with clear momentum under sharp directional light.${locationNote} Weight shifts forward, limbs extend, and clothing or hair reacts to the movement; muscles read engaged, not at rest. ${hairNote} One concrete environment beat ties to the motion (dust, spray, wind, or debris). No other people appear anywhere in the frame.`;
   }
 
-  return `${capitalize(subject)} in a close portrait under soft directional light. ${hairNote} Face, skin texture, and expression are rendered with specific detail; shoulders and clothing edge into frame. No other people appear anywhere in the frame.`;
+  return `${capitalize(subject)} in a close portrait under soft directional light.${locationNote} ${hairNote} Face, skin texture, and expression are rendered with specific detail; shoulders and clothing edge into frame. No other people appear anywhere in the frame.`;
 }
 
 function capitalize(value: string): string {

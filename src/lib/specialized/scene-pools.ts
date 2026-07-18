@@ -2,6 +2,7 @@ import {
   composeActionLocation,
   composeSceneLocation,
 } from "./location-composer";
+import { parseSettingHint } from "../hint-location";
 
 const LOCATIONS = [
   "abandoned observatory on a windy cliff",
@@ -743,23 +744,40 @@ function pick<T>(items: readonly T[]): T {
   return items[randomInt(items.length)]!;
 }
 
+function pickCharacterEnvironmentSetting(
+  location: string | null,
+  portraitStyle: "portrait" | "full-body" | "action",
+): string {
+  if (location) {
+    return portraitStyle === "action"
+      ? `${location}, empty except the moving subject`
+      : `${location}${SOLO_LOCATION_SUFFIX}`;
+  }
+
+  return portraitStyle === "action"
+    ? pickCharacterActionSetting()
+    : pickCharacterSetting();
+}
+
 export function buildRandomSceneSeed(options: {
   genre?: string;
   includePeople?: boolean;
 }): string {
-  const parts = [
-    pickSceneLocation(),
-    pick(WEATHER),
-    pick(LIGHTING),
-    pick(MOODS),
-  ];
+  const genreHint = parseSettingHint(options.genre);
+  const location = genreHint.location || pickSceneLocation();
+  const parts = [location, pick(WEATHER), pick(LIGHTING), pick(MOODS)];
 
   if (options.includePeople !== false) {
     parts.unshift(pick(SUBJECTS));
   }
 
   if (options.genre?.trim()) {
-    parts.unshift(options.genre.trim());
+    const genreLabel = genreHint.hasExplicitLocation
+      ? genreHint.remainder || genreHint.location || options.genre.trim()
+      : options.genre.trim();
+    if (genreLabel) {
+      parts.unshift(genreLabel);
+    }
   }
 
   return parts.join(", ");
@@ -770,9 +788,15 @@ export function buildRandomBackgroundSeed(options: {
   timeOfDay?: string;
   mood?: string;
 }): string {
+  const settingHint = parseSettingHint(options.settingType);
+  const location = settingHint.location || pickSceneLocation();
+  const backdrop = settingHint.hasExplicitLocation
+    ? settingHint.remainder || pick(BACKDROP_TYPES)
+    : options.settingType?.trim() || pick(BACKDROP_TYPES);
+
   const parts = [
-    options.settingType?.trim() || pick(BACKDROP_TYPES),
-    pickSceneLocation(),
+    backdrop,
+    location,
     options.timeOfDay?.trim() || pick(LIGHTING),
     options.mood?.trim() || pick(MOODS),
     pick(WEATHER),
@@ -787,11 +811,12 @@ export function buildRandomCharacterSeed(
   hints?: string,
   portraitStyle: "portrait" | "full-body" | "action" = "portrait",
 ): string {
+  const location = parseSettingHint(hints).location;
   const parts = ["solo subject only, no other people anywhere"];
 
   if (portraitStyle === "action") {
     parts.push(
-      pickCharacterActionSetting(),
+      pickCharacterEnvironmentSetting(location, portraitStyle),
       pick(CHARACTER_ACTION_POSES),
       pick(CHARACTER_ACTION_MOTION),
       pick(LIGHTING),
@@ -799,7 +824,7 @@ export function buildRandomCharacterSeed(
     );
   } else {
     parts.push(
-      pickCharacterSetting(),
+      pickCharacterEnvironmentSetting(location, portraitStyle),
       pick(CHARACTER_POSES),
       pick(LIGHTING),
       pick(MOODS),
@@ -829,20 +854,22 @@ const SEED_TOPIC_ANGLES = [
 ];
 
 export function buildRandomTopicPhrase(seed?: string): string {
-  const location = pickSceneLocation();
+  const settingHint = parseSettingHint(seed);
+  const location = settingHint.location || pickSceneLocation();
   const subject = pick(SUBJECTS);
   const mood = pick(MOODS);
   const lighting = pick(LIGHTING);
 
   if (seed?.trim()) {
-    const theme = seed.trim();
+    const theme = settingHint.remainder || seed.trim();
     return pick([
       `${theme} — ${location}`,
-      `${theme}, ${mood}`,
-      `${theme} under ${lighting}`,
-      `${subject} in a ${theme} setting`,
+      `${theme}, ${pick(MOODS)}`,
+      `${theme} under ${pick(LIGHTING)}`,
+      `${pick(SUBJECTS)} in a ${theme} setting`,
       `${theme} ${pick(SEED_TOPIC_ANGLES)}`,
       `${theme} meets ${pick(BACKDROP_TYPES)} at ${location}`,
+      settingHint.location ? `${theme} in ${settingHint.location}` : `${theme} — ${location}`,
     ]);
   }
 

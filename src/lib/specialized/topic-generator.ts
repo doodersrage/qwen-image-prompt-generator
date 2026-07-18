@@ -1,4 +1,8 @@
 import {
+  buildMandatoryLocationBlock,
+  parseSettingHint,
+} from "../hint-location";
+import {
   allowTemplateFallback,
   chatCompletion,
   isLlmEnabled,
@@ -49,22 +53,31 @@ export async function generateTopics(
   const count = clamp(options.count ?? 10, 3, 24);
   const variety = clamp(options.variety ?? 50, 0, 100);
   const seedTopic = options.seedTopic?.trim() || null;
+  const settingHint = parseSettingHint(seedTopic ?? undefined);
+  const locationBlock = buildMandatoryLocationBlock(settingHint.location);
 
   const systemPrompt = `You are a creative topic generator for AI image generation.
 - Produce exactly ${count} distinct topic ideas as brief phrases (roughly 4–18 words each).
 - Each topic must be visually concrete—settings, subjects, moods, or scenes someone could turn into an image prompt.
 - Topics must differ meaningfully; avoid near-duplicates or rephrasings of the same idea.
 - ${
-    seedTopic
-      ? `Every topic should relate to, riff on, or expand the seed theme "${seedTopic}". Vary angle, setting, mood, era, and subject while staying connected.`
-      : "Cover diverse genres, moods, and settings with no single required theme."
+    settingHint.location
+      ? `When a mandatory setting is provided, every topic must take place in or clearly relate to "${settingHint.location}". Vary subject, mood, and activity—not the city or environment.`
+      : seedTopic
+        ? `Every topic should relate to, riff on, or expand the seed theme "${seedTopic}". Vary angle, setting, mood, era, and subject while staying connected.`
+        : "Cover diverse genres, moods, and settings with no single required theme."
   }
 - Variety level: ${variety}/100 (higher = bolder, stranger, more unexpected combinations).
 - Output ONLY the topic lines, one per line. No numbering, bullets, labels, markdown, or blank lines.`;
 
-  const userMessage = seedTopic
-    ? `Seed theme: ${seedTopic}\n\nWrite ${count} related image topics.`
-    : `Write ${count} varied image topics with no seed theme.`;
+  const userMessage = [
+    locationBlock,
+    seedTopic
+      ? `Seed theme: ${settingHint.remainder || seedTopic}\n\nWrite ${count} related image topics.`
+      : `Write ${count} varied image topics with no seed theme.`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   if (isLlmEnabled()) {
     try {
