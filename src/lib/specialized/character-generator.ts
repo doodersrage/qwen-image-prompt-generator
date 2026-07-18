@@ -24,6 +24,11 @@ import {
   buildSinglePersonUserDirective,
 } from "../single-person";
 import {
+  buildClothingCoherenceUserDirective,
+  buildClothingPickFilters,
+  subjectGenderToClothingGender,
+} from "../clothing-tags";
+import {
   hasWardrobeCatalogSelection,
   hintsMentionClothing,
   pickRandomCharacterOutfit,
@@ -52,19 +57,29 @@ export async function generateCharacterPrompt(
 ): Promise<ToolGenerateResult> {
   const detail = options.detail === "concise" ? "balanced" : options.detail;
   const portraitStyle = options.portraitStyle ?? "portrait";
-  const presetOptions = normalizeCharacterPresetOptions(options.presetOptions);
-  const duoMode = isDuoHeadcount(presetOptions);
   const parsed = parseCharacterHints(options.hints);
+  const presetOptions = normalizeCharacterPresetOptions(options.presetOptions, {
+    clothingGender: subjectGenderToClothingGender(parsed.gender),
+  });
+  const duoMode = isDuoHeadcount(presetOptions);
   const settingHint = parseSettingHint(options.hints);
   const { seed, location: sceneLocation } = buildRandomCharacterSeed(
     options.hints,
     portraitStyle,
     options.recentLocations,
   );
+  const clothingFilters = buildClothingPickFilters({
+    gender: parsed.gender,
+    sceneLocation,
+    environmentSeed: seed,
+    hints: options.hints,
+    presetOptions,
+    excludeIds: options.recentClothing,
+  });
   const randomOutfit =
     !hasWardrobeCatalogSelection(presetOptions) &&
     !hintsMentionClothing(options.hints)
-      ? pickRandomCharacterOutfit(options.recentClothing)
+      ? pickRandomCharacterOutfit(clothingFilters)
       : null;
   const environmentSeed = randomOutfit
     ? `${seed}, wearing ${randomOutfit.summary}`
@@ -107,9 +122,16 @@ ${soloRules}
 - Positional anchors must tie limbs to the named object; avoid impossible contortions or floating limbs.
 - Be highly specific and renderable—avoid generic phrases like "beautiful woman" without detail.
 - When a MANDATORY CHARACTER block is present, follow it exactly for sex/gender, age, and hair. Never override it with a random identity seed.
+- When wardrobe catalog ingredients or a random outfit seed is present, keep every assigned garment and make styling fit the subject's gender and the scene (weather, location, activity)—do not swap to an unrelated outfit.
 - Do not default to bald or shaved hair unless the mandatory block explicitly requests it.`;
 
   const poseAnchorDirective = buildPoseAnchorUserDirective(presetOptions);
+  const clothingDirective = randomOutfit
+    ? buildClothingCoherenceUserDirective(
+        randomOutfit.filters,
+        randomOutfit.summary,
+      )
+    : null;
 
   const userParts = [
     presetBlock,
@@ -123,6 +145,7 @@ ${soloRules}
         ? `Optional identity inspiration (use only if compatible with mandatory direction): ${identitySeed}`
         : null,
     `Environment and mood: ${environmentSeed}`,
+    clothingDirective,
     hasPoseAnchor(presetOptions)
       ? "Pose anchor preset is active—prioritize it over default portrait/action framing."
       : `Framing: ${portraitStyle}`,

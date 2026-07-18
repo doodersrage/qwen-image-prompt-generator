@@ -1,4 +1,14 @@
 import { ALL_CLOTHING_CATALOG_ENTRIES } from "./clothing-catalog-batches";
+import {
+  clothingMatchesGender,
+  inferClothingContexts,
+  inferClothingGender,
+  normalizeClothingContextTags,
+  scoreClothingContextMatch,
+  type ClothingContextTag,
+  type ClothingGenderTag,
+  type ClothingPickFilters,
+} from "./clothing-tags";
 
 export type ClothingCategory =
   | "outfit"
@@ -13,9 +23,18 @@ export type ClothingCatalogEntry = {
   label: string;
   category: ClothingCategory;
   script: string;
+  gender?: ClothingGenderTag;
+  contexts?: readonly ClothingContextTag[];
 };
 
-const CATALOG: ClothingCatalogEntry[] = [...ALL_CLOTHING_CATALOG_ENTRIES];
+export type EnrichedClothingEntry = ClothingCatalogEntry & {
+  gender: ClothingGenderTag;
+  contexts: ClothingContextTag[];
+};
+
+const CATALOG: EnrichedClothingEntry[] = (
+  ALL_CLOTHING_CATALOG_ENTRIES as ClothingCatalogEntry[]
+).map(enrichEntry);
 
 const BY_ID = new Map(CATALOG.map((entry) => [entry.id, entry]));
 
@@ -24,7 +43,7 @@ const BY_CATEGORY = CATALOG.reduce(
     (acc[entry.category] ??= []).push(entry);
     return acc;
   },
-  {} as Record<ClothingCategory, ClothingCatalogEntry[]>,
+  {} as Record<ClothingCategory, EnrichedClothingEntry[]>,
 );
 
 const WARDROBE_CATEGORIES: ClothingCategory[] = [
@@ -34,11 +53,23 @@ const WARDROBE_CATEGORIES: ClothingCategory[] = [
   "outerwear",
 ];
 
+function enrichEntry(raw: ClothingCatalogEntry): EnrichedClothingEntry {
+  const text = `${raw.label} ${raw.script}`;
+
+  return {
+    ...raw,
+    gender: raw.gender ?? inferClothingGender(text),
+    contexts: raw.contexts?.length
+      ? normalizeClothingContextTags([...raw.contexts])
+      : inferClothingContexts(text),
+  };
+}
+
 export function getClothingCatalogSize(): number {
   return CATALOG.length;
 }
 
-export function getClothingEntry(id: string | undefined): ClothingCatalogEntry | null {
+export function getClothingEntry(id: string | undefined): EnrichedClothingEntry | null {
   if (!id?.trim()) {
     return null;
   }
@@ -50,8 +81,11 @@ export function getClothingScript(id: string | undefined): string | null {
   return getClothingEntry(id)?.script ?? null;
 }
 
+export type ClothingSelectFilters = Pick<ClothingPickFilters, "gender">;
+
 export function getClothingSelectOptions(
   categories: ClothingCategory[],
+  filters?: ClothingSelectFilters,
 ): Array<{ value: string; label: string; group?: string }> {
   const options: Array<{ value: string; label: string; group?: string }> = [
     { value: "", label: "Default (random / LLM)" },
@@ -59,6 +93,10 @@ export function getClothingSelectOptions(
 
   for (const category of categories) {
     for (const entry of BY_CATEGORY[category] ?? []) {
+      if (filters && !clothingMatchesGender(entry.gender, filters.gender)) {
+        continue;
+      }
+
       options.push({
         value: entry.id,
         label: entry.label,
@@ -92,6 +130,7 @@ function categoryLabel(category: ClothingCategory): string {
 export function normalizeClothingCatalogId(
   raw: string | undefined,
   allowedCategories?: ClothingCategory[],
+  filters?: ClothingSelectFilters,
 ): string {
   if (!raw?.trim()) {
     return "";
@@ -103,6 +142,10 @@ export function normalizeClothingCatalogId(
   }
 
   if (allowedCategories && !allowedCategories.includes(entry.category)) {
+    return "";
+  }
+
+  if (filters && !clothingMatchesGender(entry.gender, filters.gender)) {
     return "";
   }
 
@@ -131,23 +174,79 @@ function isExcluded(id: string, exclude: readonly string[] | undefined): boolean
   return exclude.includes(id);
 }
 
-function pickFromCategory(
-  category: ClothingCategory,
+function filterPoolByGender(
+  pool: readonly EnrichedClothingEntry[],
+  gender: ClothingPickFilters["gender"],
+): EnrichedClothingEntry[] {
+  const strict = pool.filter((entry) => clothingMatchesGender(entry.gender, gender));
+  if (strict.length > 0) {
+    return strict;
+  }
+
+  const neutral = pool.filter((entry) => entry.gender === "neutral");
+  if (neutral.length > 0) {
+    return neutral;
+  }
+
+  return [...pool];
+}
+
+function pickScoredEntry(
+  pool: readonly EnrichedClothingEntry[],
+  contexts: readonly ClothingContextTag[],
   exclude: readonly string[] = [],
-): ClothingCatalogEntry | null {
-  const pool = BY_CATEGORY[category] ?? [];
+): EnrichedClothingEntry | null {
   if (pool.length === 0) {
     return null;
   }
 
+  const scored = pool.map((entry) => ({
+    entry,
+    score: scoreClothingContextMatch(entry.contexts, contexts),
+  }));
+  scored.sort((a, b) => b.score - a.score);
+
+  const topScore = scored[0]?.score ?? 0;
+  const tier = scored.filter(
+    (item) => item.score >= topScore || (topScore === 0 && item.score === 0),
+  );
+
   for (let attempt = 0; attempt < 24; attempt += 1) {
-    const candidate = pick(pool);
+    const candidate = pick(tier).entry;
     if (!isExcluded(candidate.id, exclude)) {
       return candidate;
     }
   }
 
-  return pick(pool);
+  const fallback = tier.find((item) => !isExcluded(item.entry.id, exclude));
+  return fallback?.entry ?? pick(pool);
+}
+
+function pickFromCategory(
+  category: ClothingCategory,
+  filters: ClothingPickFilters,
+): EnrichedClothingEntry | null {
+  const basePool = BY_CATEGORY[category] ?? [];
+  if (basePool.length === 0) {
+    return null;
+  }
+
+  const genderPool = filterPoolByGender(basePool, filters.gender);
+  let picked = pickScoredEntry(
+    genderPool,
+    filters.contexts,
+    filters.excludeIds,
+  );
+
+  if (!picked && filters.contexts.length > 1) {
+    picked = pickScoredEntry(genderPool, ["casual"], filters.excludeIds);
+  }
+
+  if (!picked) {
+    picked = pickScoredEntry(genderPool, [], filters.excludeIds);
+  }
+
+  return picked;
 }
 
 export type RandomCharacterOutfit = {
@@ -158,28 +257,34 @@ export type RandomCharacterOutfit = {
   footwear: string | null;
   accessories: string | null;
   summary: string;
+  filters: ClothingPickFilters;
 };
 
 export function pickRandomCharacterOutfit(
-  excludeIds: readonly string[] = [],
+  filters: ClothingPickFilters = { gender: "any", contexts: ["casual"] },
 ): RandomCharacterOutfit {
-  const used = new Set(excludeIds);
-  const exclude = () => [...used];
+  const used = new Set(filters.excludeIds ?? []);
+  const workingFilters: ClothingPickFilters = {
+    ...filters,
+    excludeIds: [...used],
+  };
 
   const useOutfit = randomInt(100) < 42;
-  let wardrobe: ClothingCatalogEntry | null = null;
-  let bottom: ClothingCatalogEntry | null = null;
+  let wardrobe: EnrichedClothingEntry | null = null;
+  let bottom: EnrichedClothingEntry | null = null;
 
   if (useOutfit) {
-    wardrobe = pickFromCategory("outfit", exclude());
+    wardrobe = pickFromCategory("outfit", workingFilters);
   } else {
-    wardrobe = pickFromCategory("top", exclude());
-    bottom = pickFromCategory("bottom", exclude());
+    wardrobe = pickFromCategory("top", workingFilters);
+    bottom = pickFromCategory("bottom", workingFilters);
   }
 
-  const footwear = pickFromCategory("footwear", exclude());
+  const footwear = pickFromCategory("footwear", workingFilters);
   const accessory =
-    randomInt(100) < 55 ? pickFromCategory("accessory", exclude()) : null;
+    randomInt(100) < 55
+      ? pickFromCategory("accessory", workingFilters)
+      : null;
 
   if (wardrobe) used.add(wardrobe.id);
   if (bottom) used.add(bottom.id);
@@ -201,6 +306,7 @@ export function pickRandomCharacterOutfit(
     footwear: footwear?.script ?? null,
     accessories: accessory?.script ?? null,
     summary: parts.join(", "),
+    filters,
   };
 }
 
@@ -251,3 +357,5 @@ export function getClothingCatalogFieldCategories(
       return [];
   }
 }
+
+export type { ClothingPickFilters } from "./clothing-tags";

@@ -3,8 +3,17 @@ import { CLOTHING_CATALOG_1 } from "./clothing-catalog-1";
 import { CLOTHING_CATALOG_2 } from "./clothing-catalog-2";
 import { CLOTHING_CATALOG_3 } from "./clothing-catalog-3";
 
-export const ALL_CLOTHING_CATALOG_ENTRIES = [
-  ...CLOTHING_CATALOG_1,
-  ...CLOTHING_CATALOG_2,
-  ...CLOTHING_CATALOG_3,
-] as const;
+type ClothingBatchEntry = {
+  readonly id: string;
+  readonly label: string;
+  readonly category: string;
+  readonly script: string;
+  readonly gender?: string;
+  readonly contexts?: readonly string[];
+};
+
+export const ALL_CLOTHING_CATALOG_ENTRIES: readonly ClothingBatchEntry[] = [
+  ...(CLOTHING_CATALOG_1 as readonly ClothingBatchEntry[]),
+  ...(CLOTHING_CATALOG_2 as readonly ClothingBatchEntry[]),
+  ...(CLOTHING_CATALOG_3 as readonly ClothingBatchEntry[]),
+];

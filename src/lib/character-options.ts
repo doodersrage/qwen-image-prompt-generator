@@ -5,6 +5,8 @@ import {
   getClothingScript,
   normalizeClothingCatalogId,
 } from "./clothing-catalog";
+import { parseCharacterHints } from "./character-hints";
+import { subjectGenderToClothingGender } from "./clothing-tags";
 
 export type CharacterHeadcount = "" | "solo" | "duo";
 
@@ -1296,8 +1298,12 @@ function pickOption<T extends string>(
 
 export function normalizeCharacterPresetOptions(
   input?: Partial<Record<keyof CharacterPresetOptions, string | undefined>> | null,
+  options?: { clothingGender?: "women" | "men" | "any" },
 ): CharacterPresetOptions {
   const normalized = {} as CharacterPresetOptions;
+  const clothingFilters = options?.clothingGender
+    ? { gender: options.clothingGender }
+    : undefined;
 
   for (const key of PRESET_SELECT_KEYS) {
     normalized[key as keyof CharacterPresetOptions] = pickOption(
@@ -1311,6 +1317,7 @@ export function normalizeCharacterPresetOptions(
     normalized[key] = normalizeClothingCatalogId(
       input?.[key],
       getClothingCatalogFieldCategories(key),
+      clothingFilters,
     );
   }
   for (const key of PRESET_TEXT_KEYS) {
@@ -1321,9 +1328,12 @@ export function normalizeCharacterPresetOptions(
 }
 
 export function presetOptionsFromCache(
-  cache: Partial<CharacterPresetOptions>,
+  cache: Partial<CharacterPresetOptions> & { hints?: string },
 ): CharacterPresetOptions {
-  return normalizeCharacterPresetOptions(cache);
+  const parsed = parseCharacterHints(cache.hints);
+  return normalizeCharacterPresetOptions(cache, {
+    clothingGender: subjectGenderToClothingGender(parsed.gender),
+  });
 }
 
 export function clearCharacterPresetPatch(): Partial<CharacterPresetOptions> {

@@ -6,6 +6,8 @@ import {
   getClothingSelectOptions,
   type ClothingCatalogFieldKey,
 } from "@/lib/clothing-catalog";
+import { parseCharacterHints } from "@/lib/character-hints";
+import { subjectGenderToClothingGender } from "@/lib/clothing-tags";
 import {
   CHARACTER_POSE_TARGET_PLACEHOLDERS,
   CHARACTER_PRESET_UI_SECTIONS,
@@ -31,15 +33,22 @@ function ClothingCatalogSelect({
   label,
   value,
   catalogKey,
+  hints,
   onChange,
 }: {
   label: string;
   value: string;
   catalogKey: ClothingCatalogFieldKey;
+  hints?: string;
   onChange: (value: string) => void;
 }) {
+  const clothingGender = useMemo(
+    () => subjectGenderToClothingGender(parseCharacterHints(hints).gender),
+    [hints],
+  );
   const options = getClothingSelectOptions(
     getClothingCatalogFieldCategories(catalogKey),
+    { gender: clothingGender },
   );
   const groups = new Map<string, Array<{ value: string; label: string }>>();
 
@@ -140,6 +149,7 @@ function PresetField({
       <ClothingCatalogSelect
         label={field.label}
         catalogKey={field.key}
+        hints={settings.hints}
         value={(settings[field.key] as string | undefined) ?? ""}
         onChange={(value) => onChange({ [field.key]: value })}
       />
