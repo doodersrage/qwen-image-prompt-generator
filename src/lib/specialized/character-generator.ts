@@ -17,8 +17,14 @@ const PORTRAIT_FRAMING: Record<
 > = {
   portrait: "tight portrait framing on face, hair, expression, and shoulders",
   "full-body": "full-body framing from head to shoes with readable posture",
-  action: "dynamic action framing with visible motion and environment interaction",
+  action:
+    "dynamic action framing: mid-motion body with visible momentum, engaged muscles, and environment interaction—never a static standing pose",
 };
+
+const ACTION_INSTRUCTIONS = `- Name a specific verb/action (sprint, leap, dodge, climb, strike, vault, slide, reach, etc.) and show the body mid-movement.
+- Describe weight shift, limb extension, muscle tension, and fabric/hair reacting to motion.
+- Include one concrete environment beat tied to the action (splashing water, kicked dust, swinging door, wind-lifted coat).
+- Prefer energetic camera language: low angle, slight motion blur on extremities, or freeze-frame peak action.`;
 
 export async function generateCharacterPrompt(
   options: CharacterOptions,
@@ -26,13 +32,16 @@ export async function generateCharacterPrompt(
   const detail = options.detail === "concise" ? "balanced" : options.detail;
   const portraitStyle = options.portraitStyle ?? "portrait";
   const parsed = parseCharacterHints(options.hints);
-  const seed = buildRandomCharacterSeed(options.hints);
+  const seed = buildRandomCharacterSeed(options.hints, portraitStyle);
   const identitySeed = pickCharacterIdentitySeed(parsed);
   const mandatoryBlock = buildCharacterMandatoryBlock(parsed);
 
+  const actionBlock =
+    portraitStyle === "action" ? `\n${ACTION_INSTRUCTIONS}` : "";
+
   const toolInstructions = `You are a single-character prompt generator for ComfyUI.
 - Describe EXACTLY ONE person—never a couple, group, crowd, or background extras with faces.
-- ${PORTRAIT_FRAMING[portraitStyle]}
+- ${PORTRAIT_FRAMING[portraitStyle]}${actionBlock}
 - Include concrete visual identity: age read, ethnicity, face shape, hair, eyes, skin details, clothing materials, accessories, pose, expression, and one environmental context beat.
 - Be highly specific and renderable—avoid generic phrases like "beautiful woman" without detail.
 - No second person, no silhouettes, no reflections with another face, no bystanders, no staff, no audience.
@@ -50,6 +59,9 @@ ${buildSinglePersonSystemAddendum()}`;
         : null,
     `Environment and mood: ${seed}`,
     `Framing: ${portraitStyle}`,
+    portraitStyle === "action"
+      ? "The character must be actively doing something—not posing for a portrait."
+      : null,
     buildSinglePersonUserDirective(),
     "Write one model-ready character prompt.",
   ].filter(Boolean);
@@ -96,7 +108,7 @@ function buildCharacterTemplate(
   }
 
   if (portraitStyle === "action") {
-    return `${capitalize(subject)} moves through a concrete environment, body caught mid-action under sharp directional light. ${hairNote} Fabric, muscle tension, and expression read clearly while the background stays secondary. No other people appear anywhere in the frame.`;
+    return `${capitalize(subject)} is caught mid-action—body driving through the scene with clear momentum under sharp directional light. Weight shifts forward, limbs extend, and clothing or hair reacts to the movement; muscles read engaged, not at rest. ${hairNote} One concrete environment beat ties to the motion (dust, spray, wind, or debris). No other people appear anywhere in the frame.`;
   }
 
   return `${capitalize(subject)} in a close portrait under soft directional light. ${hairNote} Face, skin texture, and expression are rendered with specific detail; shoulders and clothing edge into frame. No other people appear anywhere in the frame.`;

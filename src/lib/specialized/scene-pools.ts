@@ -47,6 +47,42 @@ const CHARACTER_POSES = [
   "perched on a low crate",
 ];
 
+const CHARACTER_ACTION_POSES = [
+  "sprinting across wet pavement with forward lean",
+  "leaping over a low barrier, knees tucked mid-air",
+  "ducking under a hanging beam at full speed",
+  "spinning with arms extended and fabric whipping outward",
+  "climbing a rusted ladder, one boot finding the next rung",
+  "sliding to a stop on gravel, dust kicking up behind",
+  "drawing a bow at full draw, shoulders twisted with tension",
+  "vaulting a railing in one continuous motion",
+  "diving sideways with arms shielding the face",
+  "charging uphill with clenched fists and driving stride",
+  "landing hard from a jump, knees bent to absorb impact",
+  "reaching desperately for a ledge, fingers stretched",
+];
+
+const CHARACTER_ACTION_SETTINGS = [
+  "a wind-swept rooftop with loose papers and fabric in the air",
+  "a rain-soaked alley with puddle splashes and neon reflections",
+  "a dusty warehouse with sunbeams and floating particles",
+  "a forest trail with kicked leaves and broken branches",
+  "a crumbling stairwell with falling plaster dust",
+  "a rocky shoreline with spray and wet stone",
+  "a narrow bridge in high wind with cables vibrating",
+  "an industrial catwalk above spinning machinery",
+  "a flooded corridor with water surging around boots",
+  "a cliff edge with grass bending in gusts",
+];
+
+const CHARACTER_ACTION_MOTION = [
+  "freeze-frame peak action with readable momentum",
+  "motion blur on extremities while the face stays sharp",
+  "fabric, hair, and debris reacting to the movement",
+  "weight clearly shifted—never a neutral standing pose",
+  "environment interaction: splashes, dust, sparks, or wind",
+];
+
 const CHARACTER_SETTINGS = [
   "a plain studio backdrop",
   "an empty sunlit room",
@@ -172,17 +208,35 @@ export function buildRandomBackgroundSeed(options: {
   return parts.join(", ");
 }
 
-export function buildRandomCharacterSeed(hints?: string): string {
-  const parts = [
-    "solo subject only, no other people anywhere",
-    pick(CHARACTER_SETTINGS),
-    pick(CHARACTER_POSES),
-    pick(LIGHTING),
-    pick(MOODS),
-  ];
+export function buildRandomCharacterSeed(
+  hints?: string,
+  portraitStyle: "portrait" | "full-body" | "action" = "portrait",
+): string {
+  const parts = ["solo subject only, no other people anywhere"];
+
+  if (portraitStyle === "action") {
+    parts.push(
+      pick(CHARACTER_ACTION_SETTINGS),
+      pick(CHARACTER_ACTION_POSES),
+      pick(CHARACTER_ACTION_MOTION),
+      pick(LIGHTING),
+      pick(MOODS),
+    );
+  } else {
+    parts.push(
+      pick(CHARACTER_SETTINGS),
+      pick(CHARACTER_POSES),
+      pick(LIGHTING),
+      pick(MOODS),
+    );
+  }
 
   if (!hints?.trim()) {
-    parts.push("distinct face, clothing, posture, and expression");
+    parts.push(
+      portraitStyle === "action"
+        ? "decisive mid-action instant with engaged muscles and expressive face"
+        : "distinct face, clothing, posture, and expression",
+    );
   }
 
   return parts.join(", ");
