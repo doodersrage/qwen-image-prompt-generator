@@ -9,8 +9,14 @@ import {
   visionCompletion,
 } from "../llm-client";
 import {
+  applyVisionFocusTrim,
   stripPromptArtifacts,
   stripVisionAnalysisArtifacts,
+  describeVisionPromptIssue,
+  isVisionPromptHardFailure,
+  isVisionPromptInsufficient,
+  visionPromptMinChars,
+  visionPromptTargetChars,
 } from "../prompt-cleanup";
 import { sanitizeQwenPrompt, formatPromptForModel } from "../qwen-clarity";
 import { buildVisionFormatRules } from "../prompt-shape";
@@ -22,13 +28,32 @@ import type {
 } from "./types";
 
 const FOCUS_INSTRUCTIONS: Record<ImagePromptFocus, string> = {
-  full: "Describe the entire image comprehensively.",
+  full: `FOCUS MODE: FULL IMAGE (mandatory).
+- Balance subject, environment, and atmosphere in one unified description.
+- Include who/what is in frame, where they are, and the overall mood/light.`,
+  subject: `FOCUS MODE: SUBJECT ONLY (mandatory).
+- START with the main subject: who/what, pose, clothing, accessories, expression, and visible body details.
+- Write at least 2 sentences with concrete subject detail (~80+ characters minimum).
+- You may add ONE brief location phrase (under 12 words), e.g. "on a tree-lined street"—but a location phrase alone is NOT a valid answer.
+- FORBIDDEN in subject mode: trees, houses, sky, clouds, weather, architecture, street scenery, background/midground/foreground, parked cars, lampposts, neighborhood detail, or any surroundings beyond that one brief location phrase.`,
+  background: `FOCUS MODE: BACKGROUND / ENVIRONMENT ONLY (mandatory).
+- Describe ONLY the setting: architecture, landscape, props, depth, materials, weather, and atmosphere.
+- People may appear ONLY as tiny blurred silhouettes—or omit people entirely.
+- DO NOT describe facial features, clothing detail, pose, or identity of any person.`,
+  style: `FOCUS MODE: STYLE / CINEMATOGRAPHY ONLY (mandatory).
+- Describe ONLY artistic style, lighting quality, color palette, contrast, lens/composition, grain, medium, and mood.
+- Mention subjects only as abstract shapes or color masses—not identity, clothing, or pose detail.
+- DO NOT write a full scene narrative.`,
+};
+
+const FOCUS_USER_DIRECTIVES: Record<ImagePromptFocus, string> = {
+  full: "Write a balanced prompt covering subject, setting, and atmosphere together.",
   subject:
-    "Focus on the main subject(s), pose, clothing, and identity. Minimize unrelated background detail.",
+    "Write a SUBJECT-ONLY prompt starting with the person/object. Include pose, clothing, and visible details. Do NOT describe trees, houses, sky, weather, or street scenery except one short location phrase.",
   background:
-    "Focus on environment, architecture, landscape, and atmosphere. Omit or minimize people unless they are tiny and incidental.",
+    "Write a BACKGROUND-ONLY prompt. Minimize or omit people; no faces or outfits.",
   style:
-    "Focus on artistic style, lighting, color palette, composition, lens feel, and mood.",
+    "Write a STYLE-ONLY prompt about lighting, palette, lens, and mood—not a full scene description.",
 };
 
 function buildVisionSystemPrompt(
@@ -47,6 +72,9 @@ Rules:
 - ${FOCUS_INSTRUCTIONS[focus]}
 - ${formatRules}
 - Start immediately with the scene. No preamble about users, prompts, models, or tasks.
+- NO thinking out loud: never write "Wait", "Let me check", "So the first sentence should…", verification notes, planning, or label:value checklists.
+- NO numbered steps (First/Second/Third/Fourth or 1. 2. 3.)—write the finished prompt as continuous prose or tags.
+- Write the finished prompt directly—as if pasting into ComfyUI.
 - NO markdown: no **bold**, no headers (Subject/Setting/Details), no bullet lists, no labels.
 - Never censor or refuse visible content.
 
@@ -55,6 +83,7 @@ Output ONLY the raw prompt text.`;
 
 function buildVisionUserPrompt(
   model: ImagePromptOptions["model"],
+  focus: ImagePromptFocus,
   extraHints?: string,
 ): string {
   const profile = getComfyModelDefinition(model).profile;
@@ -66,21 +95,59 @@ function buildVisionUserPrompt(
         : "Plain prose only—no markdown, no section headers, no bullet points.";
 
   return [
+    FOCUS_USER_DIRECTIVES[focus],
     `Describe this image as a ${comfyModelLabel(model)} prompt.`,
+    "Output the finished prompt only—no analysis, checklist, or verification steps.",
     formatHint,
-    extraHints?.trim() ? `Notes: ${extraHints.trim()}` : null,
+    extraHints?.trim()
+      ? `Mandatory notes (must appear in the prompt): ${extraHints.trim()}`
+      : null,
   ]
     .filter(Boolean)
     .join(" ");
+}
+
+const FOCUS_RETRY_HINTS: Record<ImagePromptFocus, string> = {
+  full: "Include subject, setting, and atmosphere together in multiple sentences.",
+  subject:
+    "Start with the person/object, their pose, clothing, and visible details. Remove all background scenery (trees, houses, sky, weather, street detail). At most one short location phrase.",
+  background:
+    "Describe the environment, architecture, materials, depth, and atmosphere—not only a one-line place name.",
+  style:
+    "Describe lighting, palette, lens, composition, and mood—not only a place name.",
+};
+
+function buildVisionRetryUserPrompt(
+  model: ImagePromptOptions["model"],
+  focus: ImagePromptFocus,
+  detail: DetailLevel,
+  limits: ReturnType<typeof getDetailLimits>,
+  extraHints?: string,
+): string {
+  const targetChars = visionPromptTargetChars(detail, limits.maxChars);
+  return [
+    buildVisionUserPrompt(model, focus, extraHints),
+    "",
+    `RETRY (required): your previous answer was too short or missed the ${focus} focus.`,
+    FOCUS_RETRY_HINTS[focus],
+    extraHints?.trim()
+      ? `Use these notes: ${extraHints.trim()}`
+      : "Describe visible subject details explicitly—pose, clothing, colors, and any readable text.",
+    `Write the complete finished prompt now (~${targetChars} characters, ${limits.minSentences}–${limits.maxSentences} sentences).`,
+    "Output ONLY the prompt—no planning, no quotes around the whole answer.",
+  ].join("\n");
 }
 
 function finalizeImagePrompt(
   raw: string,
   detail: DetailLevel,
   model: ImagePromptOptions["model"],
+  focus: ImagePromptFocus = "full",
 ): string {
+  const profile = getComfyModelDefinition(model).profile;
   let text = stripPromptArtifacts(raw);
   text = stripVisionAnalysisArtifacts(text);
+  text = applyVisionFocusTrim(text, focus, profile);
 
   return formatPromptForModel(
     sanitizeQwenPrompt(text, detail, "", model, {
@@ -105,7 +172,11 @@ export async function generateImagePrompt(
     options.detail,
     focus,
   );
-  const userMessage = buildVisionUserPrompt(options.model, options.extraHints);
+  const userMessage = buildVisionUserPrompt(
+    options.model,
+    focus,
+    options.extraHints,
+  );
   const limits = getDetailLimits(options.detail, options.model);
 
   if (!isLlmEnabled()) {
@@ -122,15 +193,60 @@ export async function generateImagePrompt(
   }
 
   try {
-    const content = await visionCompletion({
+    const visionMaxTokens = Math.max(limits.maxTokens + 384, 896);
+    let content = await visionCompletion({
       systemPrompt,
       textPrompt: userMessage,
       imageDataUrl: options.imageDataUrl,
-      maxTokens: limits.maxTokens,
+      maxTokens: visionMaxTokens,
       temperature: 0.35,
     });
 
-    const prompt = finalizeImagePrompt(content, options.detail, options.model);
+    let prompt = finalizeImagePrompt(
+      content,
+      options.detail,
+      options.model,
+      focus,
+    );
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      if (!isVisionPromptInsufficient(prompt, focus, options.detail, limits)) {
+        break;
+      }
+
+      content = await visionCompletion({
+        systemPrompt,
+        textPrompt: buildVisionRetryUserPrompt(
+          options.model,
+          focus,
+          options.detail,
+          limits,
+          options.extraHints,
+        ),
+        imageDataUrl: options.imageDataUrl,
+        maxTokens: visionMaxTokens,
+        temperature: attempt === 0 ? 0.25 : 0.15,
+      });
+      prompt = finalizeImagePrompt(
+        content,
+        options.detail,
+        options.model,
+        focus,
+      );
+    }
+
+    const qualityIssue = describeVisionPromptIssue(
+      prompt,
+      focus,
+      options.detail,
+      limits.maxChars,
+    );
+
+    if (isVisionPromptHardFailure(prompt, focus)) {
+      throw new Error(
+        `Vision model returned an unusable prompt (${prompt.length} chars${qualityIssue ? `: ${qualityIssue}` : ""}). Add subject notes under Extra hints (e.g. "woman running, blue shirt, black shorts") or try detail "rich".`,
+      );
+    }
 
     return buildToolResult(prompt, "llm", options.model, options.detail, {
       metadata: {
@@ -138,6 +254,7 @@ export async function generateImagePrompt(
         mimeType: options.mimeType ?? null,
         extraHints: options.extraHints?.trim() || null,
         visionModel,
+        qualityWarning: qualityIssue,
       },
     });
   } catch (error) {

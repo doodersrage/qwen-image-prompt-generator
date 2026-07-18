@@ -1,3 +1,10 @@
+import {
+  isIncompleteVisionFragment,
+  isThinkingOnlyArtifact,
+  repairVisionDraft,
+  stripPromptArtifacts,
+} from "./prompt-cleanup";
+
 export type ChatMessage = {
   role: "system" | "user" | "assistant";
   content: string | ChatContentPart[];
@@ -82,54 +89,141 @@ export function extractBase64FromDataUrl(dataUrl: string): {
   };
 }
 
-function extractVisionAssistantText(message?: {
+type AssistantMessage = {
   content?: string | ChatContentPart[] | null;
   reasoning?: string | null;
   thinking?: string | null;
-}): string {
-  if (!message) {
-    return "";
+};
+
+function extractContentText(content?: string | ChatContentPart[] | null): string {
+  if (typeof content === "string" && content.trim()) {
+    return content.trim();
   }
 
-  if (typeof message.content === "string" && message.content.trim()) {
-    return message.content.trim();
-  }
-
-  if (Array.isArray(message.content)) {
-    const text = message.content
+  if (Array.isArray(content)) {
+    return content
       .filter((part): part is { type: "text"; text: string } => part.type === "text")
       .map((part) => part.text)
       .join("\n")
       .trim();
-    if (text) {
-      return text;
+  }
+
+  return "";
+}
+
+function extractThinkingFallback(
+  reasoning?: string | null,
+  thinking?: string | null,
+): string {
+  for (const raw of [reasoning, thinking]) {
+    if (!raw?.trim()) {
+      continue;
+    }
+
+    let candidate = raw.trim();
+
+    const handoff = candidate.match(
+      /(?:final prompt|output prompt|the prompt(?: text)?|prompt output|scene description)\s*[:\n]+\s*([\s\S]+)$/i,
+    );
+    if (handoff?.[1]?.trim()) {
+      candidate = handoff[1].trim();
+    } else {
+      const paragraphs = candidate
+        .split(/\n{2,}/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+      if (paragraphs.length > 1) {
+        const last = paragraphs.at(-1)!;
+        if (
+          last.length >= 30 &&
+          !/^(?:let me|i need to|first,? i|the user wants|analyze)/i.test(last)
+        ) {
+          candidate = last;
+        }
+      }
+    }
+
+    candidate = repairVisionDraft(stripPromptArtifacts(candidate));
+    if (
+      candidate.length >= 20 &&
+      !isThinkingOnlyArtifact(candidate) &&
+      !isIncompleteVisionFragment(candidate)
+    ) {
+      return candidate;
     }
   }
 
   return "";
 }
 
-function extractAssistantText(message?: {
-  content?: string | ChatContentPart[] | null;
-  reasoning?: string | null;
-  thinking?: string | null;
-}): string {
+function normalizeVisionModelOutput(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const repaired = repairVisionDraft(stripPromptArtifacts(trimmed));
+  const minUsable = 60;
+
+  if (
+    repaired.length >= minUsable &&
+    !isThinkingOnlyArtifact(repaired) &&
+    !isIncompleteVisionFragment(repaired)
+  ) {
+    return repaired;
+  }
+
+  const lightlyCleaned = stripPromptArtifacts(trimmed);
+  if (
+    lightlyCleaned.length >= minUsable &&
+    lightlyCleaned.length > repaired.length &&
+    !isThinkingOnlyArtifact(lightlyCleaned) &&
+    !isIncompleteVisionFragment(lightlyCleaned)
+  ) {
+    return lightlyCleaned;
+  }
+
+  if (
+    repaired.length >= 20 &&
+    !isThinkingOnlyArtifact(repaired) &&
+    !isIncompleteVisionFragment(repaired)
+  ) {
+    return repaired;
+  }
+
+  return "";
+}
+
+function extractModelOutputText(message?: AssistantMessage): string {
   if (!message) {
     return "";
   }
 
-  if (typeof message.content === "string" && message.content.trim()) {
-    return message.content.trim();
+  const contentText = extractContentText(message.content);
+  if (contentText) {
+    const normalized = normalizeVisionModelOutput(contentText);
+    if (
+      normalized &&
+      !isThinkingOnlyArtifact(normalized) &&
+      !isIncompleteVisionFragment(normalized)
+    ) {
+      return normalized;
+    }
   }
 
-  if (Array.isArray(message.content)) {
-    const text = message.content
-      .filter((part): part is { type: "text"; text: string } => part.type === "text")
-      .map((part) => part.text)
-      .join("\n")
-      .trim();
-    if (text) {
-      return text;
+  const thinkingText = extractThinkingFallback(message.reasoning, message.thinking);
+  if (
+    thinkingText &&
+    !isIncompleteVisionFragment(thinkingText) &&
+    !isThinkingOnlyArtifact(thinkingText)
+  ) {
+    return thinkingText;
+  }
+
+  if (contentText) {
+    const repaired = repairVisionDraft(stripPromptArtifacts(contentText));
+    if (repaired.length >= 20 && !isIncompleteVisionFragment(repaired)) {
+      return repaired;
     }
   }
 
@@ -215,7 +309,7 @@ async function ollamaNativeChatCompletion(options: {
     };
   };
 
-  const text = extractAssistantText(data.message);
+  const text = extractModelOutputText(data.message);
   if (!text) {
     throw new Error(
       "LLM returned an empty response. If using a thinking model, ensure Ollama supports think:false or returns content.",
@@ -246,27 +340,33 @@ async function ollamaNativeVisionCompletion(options: {
   imageBase64: string;
   maxTokens: number;
   temperature?: number;
+  think?: boolean;
 }): Promise<string> {
+  const body: Record<string, unknown> = {
+    model: options.model,
+    messages: [
+      { role: "system", content: options.systemPrompt },
+      {
+        role: "user",
+        content: options.textPrompt,
+        images: [options.imageBase64],
+      },
+    ],
+    stream: false,
+    options: {
+      temperature: getLlmTemperature(options.temperature),
+      num_predict: options.maxTokens,
+    },
+  };
+
+  if (typeof options.think === "boolean") {
+    body.think = options.think;
+  }
+
   const response = await fetch(`${ollamaNativeBaseUrl(options.baseUrl)}/api/chat`, {
     method: "POST",
     headers: buildAuthHeaders(options.apiKey),
-    body: JSON.stringify({
-      model: options.model,
-      messages: [
-        { role: "system", content: options.systemPrompt },
-        {
-          role: "user",
-          content: options.textPrompt,
-          images: [options.imageBase64],
-        },
-      ],
-      stream: false,
-      think: false,
-      options: {
-        temperature: getLlmTemperature(options.temperature),
-        num_predict: options.maxTokens,
-      },
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -277,17 +377,86 @@ async function ollamaNativeVisionCompletion(options: {
   }
 
   const data = (await response.json()) as {
-    message?: {
-      content?: string;
-      thinking?: string;
-    };
+    message?: AssistantMessage;
   };
 
-  const text = extractVisionAssistantText(data.message);
+  const text = extractModelOutputText(data.message);
   if (!text) {
     throw new Error(
       "Vision model returned an empty response. If using a thinking model, ensure Ollama supports think:false or returns content.",
     );
+  }
+
+  return text;
+}
+
+async function ollamaNativeVisionCompletionWithFallback(options: {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  systemPrompt: string;
+  textPrompt: string;
+  imageBase64: string;
+  maxTokens: number;
+  temperature?: number;
+}): Promise<string> {
+  const attempts: Array<boolean | undefined> = [false, true, undefined];
+
+  let lastError: Error | null = null;
+  for (const think of attempts) {
+    try {
+      return await ollamaNativeVisionCompletion({ ...options, think });
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+
+  throw (
+    lastError ??
+    new Error("Vision model returned an empty response after all Ollama attempts.")
+  );
+}
+
+async function openAiCompatibleChatCompletion(options: {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  messages: ChatMessage[];
+  maxTokens: number;
+  temperature?: number;
+  extraBody?: Record<string, unknown>;
+}): Promise<string> {
+  const response = await fetch(`${options.baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: buildAuthHeaders(options.apiKey),
+    body: JSON.stringify({
+      model: options.model,
+      messages: options.messages,
+      temperature: getLlmTemperature(options.temperature),
+      max_tokens: options.maxTokens,
+      stream: false,
+      top_p: 0.9,
+      think: false,
+      ...options.extraBody,
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(
+      `LLM request failed (${response.status}): ${detail.slice(0, 300)}`,
+    );
+  }
+
+  const data = (await response.json()) as {
+    choices?: Array<{
+      message?: AssistantMessage;
+    }>;
+  };
+
+  const text = extractModelOutputText(data.choices?.[0]?.message);
+  if (!text) {
+    throw new Error("LLM returned an empty response.");
   }
 
   return text;
@@ -301,7 +470,6 @@ export async function chatCompletion(options: {
   extraBody?: Record<string, unknown>;
 }): Promise<string> {
   const { baseUrl, apiKey, model } = getLlmConfig();
-  const headers = buildAuthHeaders(apiKey);
   const resolvedModel = options.model ?? model;
   const extraBody = { think: false, ...options.extraBody };
 
@@ -324,43 +492,15 @@ export async function chatCompletion(options: {
     }
   }
 
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      model: resolvedModel,
-      messages: options.messages,
-      temperature: getLlmTemperature(options.temperature),
-      max_tokens: options.maxTokens,
-      stream: false,
-      top_p: 0.9,
-      ...extraBody,
-    }),
+  return openAiCompatibleChatCompletion({
+    baseUrl,
+    apiKey,
+    model: resolvedModel,
+    messages: options.messages,
+    maxTokens: options.maxTokens,
+    temperature: options.temperature,
+    extraBody,
   });
-
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(
-      `LLM request failed (${response.status}): ${detail.slice(0, 300)}`,
-    );
-  }
-
-  const data = (await response.json()) as {
-    choices?: Array<{
-      message?: {
-        content?: string | ChatContentPart[];
-        reasoning?: string;
-        thinking?: string;
-      };
-    }>;
-  };
-
-  const text = extractAssistantText(data.choices?.[0]?.message);
-  if (!text) {
-    throw new Error("LLM returned an empty response.");
-  }
-
-  return text;
 }
 
 export async function visionCompletion(options: {
@@ -376,7 +516,7 @@ export async function visionCompletion(options: {
 
   if (isOllamaBaseUrl(baseUrl)) {
     try {
-      return await ollamaNativeVisionCompletion({
+      return await ollamaNativeVisionCompletionWithFallback({
         baseUrl,
         apiKey,
         model: visionModel,
@@ -394,7 +534,10 @@ export async function visionCompletion(options: {
     }
   }
 
-  return chatCompletion({
+  return openAiCompatibleChatCompletion({
+    baseUrl,
+    apiKey,
+    model: visionModel,
     messages: [
       { role: "system", content: options.systemPrompt },
       {
@@ -407,7 +550,6 @@ export async function visionCompletion(options: {
     ],
     maxTokens: options.maxTokens,
     temperature: options.temperature,
-    model: visionModel,
     extraBody: { think: false },
   });
 }

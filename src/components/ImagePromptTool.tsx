@@ -17,9 +17,9 @@ export default function ImagePromptTool() {
   const [provider, setProvider] = useState<ToolGenerateResult["provider"] | null>(
     null,
   );
-  const [meta, setMeta] = useState<Pick<ToolGenerateResult, "comfyNode" | "limits"> | null>(
-    null,
-  );
+  const [meta, setMeta] = useState<
+    Pick<ToolGenerateResult, "comfyNode" | "limits"> & { qualityWarning?: string | null }
+  | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -69,7 +69,14 @@ export default function ImagePromptTool() {
 
       setOutput(data.prompt);
       setProvider(data.provider);
-      setMeta({ comfyNode: data.comfyNode, limits: data.limits });
+      setMeta({
+        comfyNode: data.comfyNode,
+        limits: data.limits,
+        qualityWarning:
+          typeof data.metadata?.qualityWarning === "string"
+            ? data.metadata.qualityWarning
+            : null,
+      });
     } catch (err) {
       setOutput("");
       setProvider(null);
@@ -196,6 +203,11 @@ export default function ImagePromptTool() {
         limits={meta?.limits}
         copied={copied}
         onCopy={() => void copyOutput()}
+        extraMeta={
+          meta?.qualityWarning
+            ? `shorter than ideal: ${meta.qualityWarning}`
+            : undefined
+        }
       />
     </div>
   );

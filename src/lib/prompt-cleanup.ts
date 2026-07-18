@@ -127,6 +127,14 @@ function looksLikePromptProse(text: string): boolean {
     return false;
   }
 
+  if (looksLikeUnrepairedVisionReasoning(trimmed)) {
+    return false;
+  }
+
+  if (isIncompleteVisionFragment(trimmed)) {
+    return false;
+  }
+
   return true;
 }
 
@@ -235,7 +243,815 @@ export function isThinkingOnlyArtifact(text: string): boolean {
     return true;
   }
 
+  if (looksLikeUnrepairedVisionReasoning(trimmed)) {
+    return true;
+  }
+
   return false;
+}
+
+const VISION_ORDINAL_LABEL =
+  /^(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|\d{1,2})(?:st|nd|rd|th)?\s*[:\.)]\s*/i;
+
+export function isIncompleteVisionFragment(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return true;
+  }
+
+  if (VISION_ORDINAL_LABEL.test(trimmed)) {
+    return true;
+  }
+
+  if (
+    !/[.!?]$/.test(trimmed) &&
+    /\b(includes?|should be|need to|check if|let me|the user wants|location context)\b/i.test(
+      trimmed,
+    )
+  ) {
+    return true;
+  }
+
+  if (!/[.!?]$/.test(trimmed) && trimmed.length < 100 && /^["']/.test(trimmed)) {
+    return true;
+  }
+
+  return false;
+}
+
+function parseNumberedVisionItems(text: string): string[] {
+  const normalized = normalizeAsciiQuotes(text).replace(/\s+/g, " ");
+  const parts = normalized.split(
+    /\s*(?=(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|\d{1,2})(?:st|nd|rd|th)?\s*[:\.)]\s*)/i,
+  );
+
+  const values: string[] = [];
+  for (const part of parts) {
+    const match = part.match(
+      /^(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|\d{1,2})(?:st|nd|rd|th)?\s*[:\.)]\s*(.+)$/i,
+    );
+    if (!match?.[1]) {
+      continue;
+    }
+
+    const value = match[1]
+      .trim()
+      .replace(/^["']|["']$/g, "")
+      .replace(/[,.;]+$/, "")
+      .trim();
+    if (value.length >= 8) {
+      values.push(value);
+    }
+  }
+
+  return values;
+}
+
+function composeFromNumberedVisionItems(text: string): string | null {
+  const items = parseNumberedVisionItems(text);
+  if (items.length < 2) {
+    return null;
+  }
+
+  const phrases = items.map((item) => item.replace(/[.!?]+$/, "").trim()).filter(Boolean);
+  if (phrases.length < 2) {
+    return null;
+  }
+
+  return capitalizeSentence(`${phrases.join(", ")}.`);
+}
+
+function stripVisionNumberedReasoning(text: string): string {
+  const composed = composeFromNumberedVisionItems(text);
+  if (composed && !isIncompleteVisionFragment(composed)) {
+    return composed;
+  }
+
+  if (VISION_ORDINAL_LABEL.test(text.trim())) {
+    const remainder = text.trim().replace(VISION_ORDINAL_LABEL, "").trim();
+    if (remainder.length >= 40 && !isIncompleteVisionFragment(remainder)) {
+      return finalizeVisionPromptFragment(remainder);
+    }
+    return "";
+  }
+
+  return text;
+}
+
+const VISION_REASONING_LEAD =
+  /^(?:wait(?:,\s*)?|let me(?:\s+\w+){0,5}|i(?:'ll| will)?(?:\s+\w+){0,4}|check(?:ing)?(?:\s+\w+){0,8}|okay(?:,\s*)?|now(?:,\s*)?)[^.!?]*[.!?]\s*/i;
+
+const VISION_META_WRAPPER =
+  /^(?:so(?:,\s*)?|therefore(?:,\s*)?|thus(?:,\s*)?|okay(?:,\s*)?|now(?:,\s*)?|next(?:,\s*)?|then(?:,\s*)?)?(?:the )?(?:first sentence|prompt|output|description|result)?[^:]{0,140}?(?:should be|needs to be|must be|will be|would be|could be|is going to be|i(?:'ll| will) (?:write|use|start with|begin with))[^:]{0,140}:\s*/i;
+
+const VISION_META_SENTENCE =
+  /^(?:so|therefore|thus|okay|now|next|then|the first sentence|i(?:'ll| will)|let me)\b[^.!?]*(?:should be|needs to be|must be|will be|would be|has to be|start with|begin with|write)\b[^.!?]*[.!?]\s*/i;
+
+function capitalizeSentence(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+}
+
+function stripVisionReasoningLead(text: string): string {
+  let cleaned = text.trim();
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const next = cleaned.replace(VISION_REASONING_LEAD, "").trim();
+    if (next === cleaned) {
+      break;
+    }
+    cleaned = next;
+  }
+  return cleaned;
+}
+
+function extractQuotedPromptFragment(text: string): string | null {
+  const normalized = normalizeAsciiQuotes(text.trim());
+  const closedQuotes = [...normalized.matchAll(/"([^"]{15,})"/g)].map((match) =>
+    match[1]!.trim(),
+  );
+  if (closedQuotes.length > 0) {
+    return closedQuotes.at(-1)!;
+  }
+
+  const openQuote = normalized.match(/:\s*"([^"]{15,})$/);
+  if (openQuote?.[1]) {
+    return openQuote[1].trim();
+  }
+
+  const leadingQuote = normalized.match(/^"([^"]{15,})$/);
+  if (leadingQuote?.[1]) {
+    return leadingQuote[1].trim();
+  }
+
+  return null;
+}
+
+function finalizeVisionPromptFragment(text: string): string {
+  let cleaned = normalizeAsciiQuotes(text.trim())
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned) {
+    return cleaned;
+  }
+
+  if (!/[.!?]$/.test(cleaned)) {
+    cleaned = `${cleaned}.`;
+  }
+
+  return capitalizeSentence(cleaned);
+}
+
+function extractPromptAfterMetaColon(rest: string): string {
+  let text = normalizeAsciiQuotes(rest.trim());
+  if (!text) {
+    return text;
+  }
+
+  if (
+    text.startsWith('"') &&
+    text.endsWith('"') &&
+    text.slice(1, -1).trim().length > 0
+  ) {
+    return text.slice(1, -1).trim();
+  }
+
+  return text.replace(/^"([^"]*)"\s*/, "$1 ").trim();
+}
+
+function stripVisionMetaInstruction(text: string): string {
+  let cleaned = normalizeAsciiQuotes(text.trim());
+  if (!cleaned) {
+    return cleaned;
+  }
+
+  const wrapperMatch = cleaned.match(VISION_META_WRAPPER);
+  if (wrapperMatch) {
+    const rest = cleaned.slice(wrapperMatch[0].length).trim();
+    const tail = extractPromptAfterMetaColon(rest);
+    if (tail.length >= 40 && !looksLikeUnrepairedVisionReasoning(tail)) {
+      return finalizeVisionPromptFragment(tail);
+    }
+
+    const quoted = extractQuotedPromptFragment(rest);
+    if (quoted && quoted.length >= 60) {
+      return finalizeVisionPromptFragment(quoted);
+    }
+    if (rest.length >= 40 && !looksLikeUnrepairedVisionReasoning(rest)) {
+      return finalizeVisionPromptFragment(extractPromptAfterMetaColon(rest));
+    }
+  }
+
+  if (
+    /^(?:so|the first sentence|i(?:'ll| will)|let me)\b/i.test(cleaned) &&
+    /\b(?:should be|needs to be|must be|will be|start with|write)\b/i.test(cleaned) &&
+    cleaned.includes(":")
+  ) {
+    const rest = cleaned.slice(cleaned.indexOf(":") + 1).trim();
+    const tail = extractPromptAfterMetaColon(rest);
+    if (tail.length >= 40) {
+      return finalizeVisionPromptFragment(tail);
+    }
+  }
+
+  const embeddedQuote = extractQuotedPromptFragment(cleaned);
+  if (
+    embeddedQuote &&
+    embeddedQuote.length >= 60 &&
+    /\b(?:should be|needs to be|must be|will be|start with|write|location context)\b/i.test(
+      cleaned,
+    )
+  ) {
+    return finalizeVisionPromptFragment(embeddedQuote);
+  }
+
+  return cleaned;
+}
+
+function looksLikeVisionChecklist(text: string): boolean {
+  const labels =
+    text.match(/(?:^|[.!?]\s+|,\s*)(?:The\s+)?[A-Za-z][^:,.!?]{0,55}:\s/g) ?? [];
+  return labels.length >= 2;
+}
+
+function looksLikeUnrepairedVisionReasoning(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  if (/^(?:wait(?:,\s*)?|let me|check(?:ing)? if|i need to)\b/i.test(trimmed)) {
+    return true;
+  }
+
+  if (VISION_META_WRAPPER.test(trimmed) || VISION_META_SENTENCE.test(trimmed)) {
+    return true;
+  }
+
+  if (VISION_ORDINAL_LABEL.test(trimmed)) {
+    return true;
+  }
+
+  if (isIncompleteVisionFragment(trimmed)) {
+    return true;
+  }
+
+  if (
+    /^(?:so|the first sentence|i(?:'ll| will)|let me)\b/i.test(trimmed) &&
+    /\b(?:should be|needs to be|must be|will be|start with|write)\b/i.test(trimmed)
+  ) {
+    return true;
+  }
+
+  if (looksLikeVisionChecklist(trimmed) && !looksLikePromptProse(trimmed)) {
+    return true;
+  }
+
+  return false;
+}
+
+type VisionChecklistItem = { label: string; value: string };
+
+function parseVisionChecklistItems(text: string): VisionChecklistItem[] {
+  const normalized = text
+    .replace(/\bis visible\b/gi, "")
+    .replace(/\bare visible\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const chunks = normalized
+    .split(/(?<=[.!?])\s+|,\s+(?=(?:The\s+)?[A-Za-z][^:]{0,40}:)/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const items: VisionChecklistItem[] = [];
+
+  for (const chunk of chunks) {
+    const colonIndex = chunk.indexOf(":");
+    if (colonIndex <= 0) {
+      continue;
+    }
+
+    const label = chunk
+      .slice(0, colonIndex)
+      .replace(/^the\s+/i, "")
+      .trim()
+      .toLowerCase();
+    const value = chunk
+      .slice(colonIndex + 1)
+      .trim()
+      .replace(/[,.;]+$/, "")
+      .trim();
+
+    if (label && value) {
+      items.push({ label, value });
+    }
+  }
+
+  return items;
+}
+
+function findChecklistValue(
+  items: VisionChecklistItem[],
+  patterns: RegExp[],
+): string | undefined {
+  return items.find((item) => patterns.some((pattern) => pattern.test(item.label)))
+    ?.value;
+}
+
+function normalizeAsciiQuotes(text: string): string {
+  return text
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'");
+}
+
+function composePromptFromVisionChecklist(items: VisionChecklistItem[]): string {
+  const pose = findChecklistValue(items, [/^pose$/, /action/, /activity/, /movement/]);
+  const topColor = findChecklistValue(items, [
+    /color of the top/,
+    /top color/,
+    /^top$/,
+    /^shirt$/,
+    /upper body/,
+  ]);
+  const shirtText = findChecklistValue(items, [
+    /shirt.*text/,
+    /text on/,
+    /print/,
+    /logo/,
+    /slogan/,
+  ]);
+  const bottoms = findChecklistValue(items, [/^shorts$/, /^pants$/, /^jeans$/, /bottoms/]);
+  const shoes = findChecklistValue(items, [/^shoes$/, /^footwear$/, /^sneakers$/]);
+  const hair = findChecklistValue(items, [/^hair$/, /hairstyle/]);
+  const expression = findChecklistValue(items, [/^expression$/, /facial expression/]);
+  const subject = findChecklistValue(items, [
+    /^subject$/,
+    /^person$/,
+    /^woman$/,
+    /^man$/,
+    /^girl$/,
+    /^boy$/,
+  ]);
+
+  const clothing: string[] = [];
+  if (topColor || shirtText) {
+    let detail = "";
+    if (shirtText) {
+      const normalizedShirt = normalizeAsciiQuotes(shirtText);
+      const graphicMatch = normalizedShirt.match(/\bwith the graphic\s*\(([^)]+)\)/i);
+      const graphic = graphicMatch?.[1]?.trim();
+      const quoted =
+        normalizedShirt.match(/["']([^"']+)["']/)?.[1]?.trim().replace(/[,.]+$/, "") ??
+        normalizedShirt
+          .replace(/\bwith the graphic\s*\([^)]+\)/i, "")
+          .replace(/^["'`]+|["'`]+$/g, "")
+          .trim();
+
+      const detailParts: string[] = [];
+      if (quoted) {
+        detailParts.push(`"${quoted}" text`);
+      }
+      if (graphic) {
+        detailParts.push(`a ${graphic} graphic`);
+      }
+      detail = detailParts.join(" and ");
+    }
+
+    if (topColor && detail) {
+      clothing.push(`${topColor} top with ${detail}`);
+    } else if (topColor) {
+      clothing.push(`${topColor} top`);
+    } else if (detail) {
+      clothing.push(`top with ${detail}`);
+    }
+  }
+  if (bottoms) {
+    clothing.push(/\b(shorts|pants|jeans)\b/i.test(bottoms) ? bottoms : `${bottoms} shorts`);
+  }
+  if (shoes) {
+    clothing.push(/\b(shoes|sneakers|boots)\b/i.test(shoes) ? shoes : `${shoes} shoes`);
+  }
+
+  let lead = subject ?? "A person";
+  if (!/^a(n)?\s/i.test(lead)) {
+    lead = /^((?:woman|man|person|girl|boy)\b)/i.test(lead) ? `A ${lead}` : `A ${lead}`;
+  }
+
+  const traits: string[] = [];
+  if (pose) {
+    traits.push(pose.replace(/^[,.\s]+/, "").replace(/[,.]$/, ""));
+  }
+  if (hair) {
+    traits.push(`${hair} hair`);
+  }
+  if (expression) {
+    traits.push(`${expression} expression`);
+  }
+  if (clothing.length > 0) {
+    traits.push(`wearing ${clothing.join(", ")}`);
+  }
+
+  let sentence =
+    traits.length > 0
+      ? `${lead}${pose ? " " : ", "}${traits.join(", ")}`
+      : lead;
+
+  if (pose && traits.length > 1) {
+    sentence = `${lead} ${pose.replace(/^[,.\s]+/, "").replace(/[,.]$/, "")}, ${traits
+      .slice(1)
+      .join(", ")}`;
+  }
+
+  if (!/[.!?]$/.test(sentence)) {
+    sentence = `${sentence}.`;
+  }
+
+  return capitalizeSentence(sentence);
+}
+
+function trimIncompleteVisionTail(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+
+  if (/[.!?]$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  if (/,\s*[^,.!?]{0,40}$/.test(trimmed) && !looksLikePromptProse(trimmed)) {
+    return trimmed.replace(/,\s*[^,.!?]{0,80}$/, "").trim();
+  }
+
+  return trimmed;
+}
+
+export function repairVisionDraft(text: string): string {
+  let cleaned = stripVisionNumberedReasoning(
+    stripVisionMetaInstruction(stripVisionReasoningLead(text)),
+  );
+  if (!cleaned) {
+    return "";
+  }
+
+  cleaned = cleaned
+    .replace(/\bis visible\b/gi, "")
+    .replace(/\bare visible\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (looksLikeVisionChecklist(cleaned)) {
+    const items = parseVisionChecklistItems(cleaned);
+    if (items.length >= 2) {
+      cleaned = composePromptFromVisionChecklist(items);
+    }
+  }
+
+  cleaned = trimIncompleteVisionTail(cleaned);
+  cleaned = stripVisionMetaInstruction(cleaned);
+  cleaned = stripVisionNumberedReasoning(cleaned);
+  cleaned = cleaned.replace(/^(?:wait(?:,\s*)?|let me|check(?:ing)? if)[^.!?]*[.!?]\s*/i, "");
+  cleaned = cleaned.replace(/\s+/g, " ").trim();
+
+  if (isIncompleteVisionFragment(cleaned)) {
+    return "";
+  }
+
+  return cleaned;
+}
+
+const VISION_SUBJECT_TERMS =
+  /\b(?:woman|man|person|girl|boy|female|male|runner|running|jogging|running woman|walking|standing|sitting|wearing|dressed|hair|face|pose|shirt|top|tank top|shorts|shoes|jacket|hoodie|expression|smiling|looking|holding|arms|legs|figure|character|subject|graphic|printed|logo|slogan|tee|t-shirt|sneakers|denim|athlete|jogger|cyclist|portrait)\b/i;
+
+function splitVisionSentences(text: string): string[] {
+  return text
+    .replace(/\s+/g, " ")
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+function looksLikeVisionTags(text: string): boolean {
+  if (/[.!?]\s/.test(text) && text.split(/[.!?]/).filter(Boolean).length >= 2) {
+    return false;
+  }
+
+  const parts = text
+    .split(/[,;|]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return parts.length >= 3 && parts.every((part) => part.split(/\s+/).length <= 8);
+}
+
+const VISION_ENVIRONMENT_TERMS =
+  /\b(?:architecture|architectural|building|buildings|houses?|homes?|suburban|residential|tree-lined|trees|foliage|sky|clouds|horizon|landscape|neighborhood|streetscape|street surface|lamppost|lampposts|sidewalk|pavement|facade|rooftops?|lawns?|gardens?|scenery|surroundings|background|midground|foreground|parked|vehicles?|cars|fence|fences|mountains?|ocean|beach|sunset|sunrise|overcast|atmospheric|depth layers|street-level|neighbourhood)\b/i;
+
+const VISION_LOCATION_PHRASE =
+  /\b(?:on|in|along|at|through)\s+(?:a |an |the )?(?:[\w-]+\s+){0,6}(?:street|road|alley|path|sidewalk|track|trail|beach|park|forest|field|gym|studio|room|hall|kitchen|office|rooftop|neighborhood|neighbourhood)\b(?:\s+[\w-]+){0,4}/i;
+
+const VISION_BRIEF_LOCATION =
+  /\b(?:tree-lined|residential|urban|quiet|busy|sunny|shaded)\s+(?:street|road|path|alley|neighborhood|neighbourhood)\b(?:\s+[\w-]+){0,3}/i;
+
+function isPureEnvironmentSentence(sentence: string): boolean {
+  return VISION_ENVIRONMENT_TERMS.test(sentence) && !VISION_SUBJECT_TERMS.test(sentence);
+}
+
+function extractBriefLocationPhrase(text: string): string | null {
+  for (const pattern of [VISION_LOCATION_PHRASE, VISION_BRIEF_LOCATION]) {
+    const match = text.match(pattern);
+    if (!match?.[0]) {
+      continue;
+    }
+
+    const phrase = match[0].trim();
+    if (phrase.split(/\s+/).length <= 12) {
+      return phrase;
+    }
+  }
+
+  return null;
+}
+
+function locationPhraseAlreadyPresent(text: string, phrase: string): boolean {
+  const haystack = text.toLowerCase();
+  const needle = phrase.toLowerCase().trim();
+  if (haystack.includes(needle)) {
+    return true;
+  }
+
+  const stem = needle.replace(/^(?:on|in|along|at|through)\s+(?:a |an |the )?/i, "");
+  return stem.length >= 6 && haystack.includes(stem);
+}
+
+function stripEnvironmentClausesFromSentence(sentence: string): string {
+  let cleaned = sentence;
+
+  cleaned = cleaned.replace(
+    /,\s*(?:with|while|as|where|and(?:\s+also)?)\s+(?:[^,.!?]*(?:background|sky|trees|houses|buildings|streetscape|horizon|neighborhood|landscape|scenery|foliage|architecture|residential|suburban|midground|foreground|surroundings|lamppost|sidewalk|pavement|facade|parked)[^,.!?]*)[.!?]?$/gi,
+    "",
+  );
+  cleaned = cleaned.replace(
+    /,\s*(?:[^,.!?]*\b(?:in the background|behind (?:her|him|them|the subject)|under (?:a |the )?(?:blue|clear|cloudy|overcast) sky|beneath (?:a |the )?(?:blue|clear) sky|against (?:a |the )?(?:blue|clear) sky)\b[^,.!?]*)[.!?]?$/gi,
+    "",
+  );
+  cleaned = cleaned.replace(
+    /\b(?:with|and)\s+(?:sunny|green|tall|leafy|residential|suburban)\s+(?:houses|homes|trees|foliage|buildings|neighborhood|neighbourhood)[^,.!?]*/gi,
+    "",
+  );
+  cleaned = cleaned.replace(
+    /\b(?:houses|homes|buildings|trees|foliage|sky|clouds|horizon|landscape|neighborhood|neighbourhood|streetscape|architecture|scenery|residential area)\s+(?:line|lining|stretch|visible|appear|show|feature|fill)[^,.!?]*/gi,
+    "",
+  );
+  cleaned = cleaned.replace(
+    /\b(?:in the background|in the distance|behind (?:her|him|them)|background (?:shows|features|includes)|surrounded by (?:trees|houses|buildings|foliage))[^,.!?]*/gi,
+    "",
+  );
+
+  return cleaned
+    .replace(/\s+/g, " ")
+    .replace(/,\s*,/g, ", ")
+    .replace(/,\s*\./g, ".")
+    .replace(/,\s+(?=[.!?]|$)/g, "")
+    .trim();
+}
+
+function appendBriefLocationPhrase(text: string, location: string): string {
+  const base = text.replace(/[.!?]\s*$/, "").trim();
+  if (!base) {
+    return location.endsWith(".") ? location : `${location}.`;
+  }
+
+  const suffix =
+    /^(?:on|in|along|at|through)\b/i.test(location) ? location : `on ${location}`;
+
+  return `${base}, ${suffix}.`;
+}
+
+function trimProseForSubjectFocus(text: string): string {
+  const sentences = splitVisionSentences(text);
+
+  if (sentences.length === 0) {
+    return polishImagePromptProse(stripEnvironmentClausesFromSentence(text));
+  }
+
+  const subjectParts: string[] = [];
+  const environmentParts: string[] = [];
+
+  for (const sentence of sentences) {
+    if (isPureEnvironmentSentence(sentence)) {
+      environmentParts.push(sentence);
+      continue;
+    }
+
+    if (VISION_SUBJECT_TERMS.test(sentence)) {
+      subjectParts.push(stripEnvironmentClausesFromSentence(sentence));
+      continue;
+    }
+
+    environmentParts.push(sentence);
+  }
+
+  let location =
+    extractBriefLocationPhrase(environmentParts.join(" ")) ??
+    extractBriefLocationPhrase(text);
+
+  let result = subjectParts.filter(Boolean).join(" ").trim();
+
+  if (!result) {
+    const fallback =
+      sentences.find((sentence) => VISION_SUBJECT_TERMS.test(sentence)) ??
+      sentences[0] ??
+      text;
+    result = stripEnvironmentClausesFromSentence(fallback);
+  }
+
+  if (location && !locationPhraseAlreadyPresent(result, location)) {
+    result = appendBriefLocationPhrase(result, location);
+  }
+
+  return polishImagePromptProse(result);
+}
+
+const VISION_ENVIRONMENT_TAG =
+  /\b(?:architecture|building|houses?|homes?|suburban|residential|tree(?:s|-lined)?|foliage|sky|clouds|horizon|landscape|neighborhood|streetscape|lamppost|sidewalk|pavement|facade|rooftops?|scenery|background|midground|foreground|parked|sunset|sunrise|overcast|atmospheric|depth of field|bokeh background|neighbourhood)\b/i;
+
+function isEnvironmentOnlyTag(tag: string): boolean {
+  return VISION_ENVIRONMENT_TAG.test(tag) && !VISION_SUBJECT_TERMS.test(tag);
+}
+
+function isLocationTag(tag: string): boolean {
+  return (
+    VISION_LOCATION_PHRASE.test(tag) ||
+    VISION_BRIEF_LOCATION.test(tag) ||
+    /^(?:tree-lined|residential|urban)\s+(?:street|road|path|alley)/i.test(tag)
+  );
+}
+
+function trimTagsForSubjectFocus(text: string): string {
+  const tags = text
+    .split(/[,;|]+/)
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+
+  if (tags.length === 0) {
+    return text;
+  }
+
+  const subjectTags = tags.filter((tag) => !isEnvironmentOnlyTag(tag));
+  const locationTags = tags.filter(
+    (tag) => isLocationTag(tag) && !subjectTags.includes(tag),
+  );
+
+  const kept = subjectTags.length > 0 ? [...subjectTags] : tags.filter((tag) => VISION_SUBJECT_TERMS.test(tag));
+
+  if (kept.length === 0) {
+    kept.push(...tags.filter((tag) => !isPureEnvironmentSentence(tag)));
+  }
+
+  if (locationTags.length > 0 && kept.length > 0) {
+    kept.push(locationTags[0]!);
+  }
+
+  return kept.join(", ");
+}
+
+export function isSubjectPromptBackgroundHeavy(prompt: string): boolean {
+  const trimmed = prompt.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  if (looksLikeVisionTags(trimmed)) {
+    const envTags = trimmed
+      .split(/[,;|]+/)
+      .map((tag) => tag.trim())
+      .filter((tag) => isEnvironmentOnlyTag(tag));
+    return envTags.length > 1;
+  }
+
+  const pureEnvironmentSentences = splitVisionSentences(trimmed).filter(
+    isPureEnvironmentSentence,
+  );
+  if (pureEnvironmentSentences.length >= 1) {
+    return true;
+  }
+
+  const envMatches = trimmed.match(
+    /\b(?:architecture|building|houses?|homes?|tree(?:s|-lined)?|foliage|sky|clouds|horizon|landscape|neighborhood|streetscape|lamppost|sidewalk|facade|scenery|background|midground|foreground|parked|residential|suburban|sunset|sunrise)\b/gi,
+  );
+
+  return (envMatches?.length ?? 0) >= 4;
+}
+
+export type VisionPromptFocus = "full" | "subject" | "background" | "style";
+
+export function applyVisionFocusTrim(
+  text: string,
+  focus: VisionPromptFocus,
+  profile?: string,
+): string {
+  const trimmed = text.trim();
+  if (!trimmed || focus !== "subject") {
+    return trimmed;
+  }
+
+  if (profile === "sd15_weighted" || looksLikeVisionTags(trimmed)) {
+    return trimTagsForSubjectFocus(trimmed);
+  }
+
+  return trimProseForSubjectFocus(trimmed);
+}
+
+export function visionPromptMinChars(detail: "concise" | "balanced" | "rich"): number {
+  if (detail === "rich") {
+    return 100;
+  }
+  if (detail === "concise") {
+    return 45;
+  }
+  return 70;
+}
+
+export function visionPromptTargetChars(
+  detail: "concise" | "balanced" | "rich",
+  maxChars: number,
+): number {
+  const floor = visionPromptMinChars(detail);
+  return Math.min(Math.max(floor, Math.floor(maxChars * 0.22)), maxChars);
+}
+
+export function isVisionPromptHardFailure(
+  prompt: string,
+  focus: VisionPromptFocus,
+): boolean {
+  const trimmed = prompt.trim();
+  if (trimmed.length < 35) {
+    return true;
+  }
+
+  if (isIncompleteVisionFragment(trimmed)) {
+    return true;
+  }
+
+  if (focus === "subject" && !VISION_SUBJECT_TERMS.test(trimmed)) {
+    return true;
+  }
+
+  return false;
+}
+
+export function describeVisionPromptIssue(
+  prompt: string,
+  focus: VisionPromptFocus,
+  detail: "concise" | "balanced" | "rich",
+  maxChars: number,
+): string | null {
+  const trimmed = prompt.trim();
+  if (!trimmed) {
+    return "empty response";
+  }
+
+  if (focus === "subject" && !VISION_SUBJECT_TERMS.test(trimmed)) {
+    return "missing subject detail (pose, clothing, or identity)";
+  }
+
+  if (focus === "subject" && isSubjectPromptBackgroundHeavy(trimmed)) {
+    return "includes too much background or scenery for subject focus";
+  }
+
+  const target = visionPromptTargetChars(detail, maxChars);
+  if (trimmed.length < visionPromptMinChars(detail)) {
+    return `only ${trimmed.length} characters (minimum ~${visionPromptMinChars(detail)})`;
+  }
+
+  if (trimmed.length < target) {
+    return `shorter than ideal (${trimmed.length}/${target} chars)`;
+  }
+
+  return null;
+}
+
+export function isVisionPromptInsufficient(
+  prompt: string,
+  focus: VisionPromptFocus,
+  detail: "concise" | "balanced" | "rich",
+  limits: { minChars?: number; maxChars: number },
+): boolean {
+  if (isVisionPromptHardFailure(prompt, focus)) {
+    return true;
+  }
+
+  if (focus === "subject" && isSubjectPromptBackgroundHeavy(prompt)) {
+    return true;
+  }
+
+  return prompt.trim().length < visionPromptMinChars(detail);
 }
 
 const EXPANSION_PADDING_FRAGMENTS = [
@@ -392,7 +1208,7 @@ function flattenMarkdownSections(text: string): string {
 }
 
 export function stripVisionAnalysisArtifacts(text: string): string {
-  let cleaned = text.trim();
+  let cleaned = repairVisionDraft(text);
   if (!cleaned) {
     return cleaned;
   }
@@ -406,6 +1222,10 @@ export function stripVisionAnalysisArtifacts(text: string): string {
     .replace(/^Here(?:'s| is) (?:a |the )?(?:detailed )?(?:description|prompt)[^.!?]*[.!?]\s*/i, "")
     .replace(/^For (?:Qwen|ComfyUI|the target model)[^.!?]*[.!?]\s*/i, "")
     .replace(/^Convert(?:ing)? this image[^.!?]*[.!?]\s*/i, "")
+    .replace(
+      /^(?:so|therefore|thus|okay|now|next|then|the first sentence)[^.!?]*(?:should be|needs to be|must be|will be|start with|write)[^.!?]*[.!?]\s*/i,
+      "",
+    )
     .trim();
 
   cleaned = flattenMarkdownSections(cleaned);
