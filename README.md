@@ -27,6 +27,10 @@ Video, audio, and 3D-only architectures (WAN, Hunyuan Video, Stable Audio, etc.)
 |------|-------|---------|
 | **Generate** | `/` | Turn keywords into a model-ready prompt |
 | **Format** | `/format` | Adapt an existing prompt draft for a selected model |
+| **Random Scene** | `/random-scene` | Roll random ingredients into a cohesive scene |
+| **Character** | `/character` | Highly detailed single-person prompt |
+| **Background** | `/background` | Environment-only prompt with no people |
+| **Image → Prompt** | `/image-prompt` | Upload an image; vision LLM writes the prompt |
 
 ## Features
 
@@ -38,6 +42,7 @@ Video, audio, and 3D-only architectures (WAN, Hunyuan Video, Stable Audio, etc.)
 - Uncensored system prompts (no content filtering or refusals)
 - One-click copy for ComfyUI paste
 - LLM-powered generation/formatting with rules fallback
+- **Settings cache** — target model, detail level, and per-tool options persist in `localStorage` across reloads and pages
 
 ## Prompt size limits (selected models)
 
@@ -129,6 +134,10 @@ curl -sS "http://localhost:3000/api/models?id=sdxl" | jq .
 | `/api/models` | GET | List models (`?category=`, `?id=`) |
 | `/api/generate` | POST | Keywords → model-ready prompt |
 | `/api/format` | POST | Existing draft → model-ready prompt |
+| `/api/random-scene` | POST | Random cohesive scene prompt |
+| `/api/character` | POST | Detailed single-person prompt |
+| `/api/background` | POST | People-free environment prompt |
+| `/api/image-prompt` | POST | Image upload/base64 → prompt (vision LLM) |
 
 Errors use a consistent shape: `{ "error": "message" }` with an appropriate HTTP status (400, 404, 405, 500).
 

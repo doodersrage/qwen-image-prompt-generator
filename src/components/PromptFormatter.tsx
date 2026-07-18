@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ModelSelector from "@/components/ModelSelector";
+import { useCachedSettings } from "@/hooks/useCachedSettings";
 import type { DetailLevel } from "@/lib/detail-level";
 import { getDetailLimits } from "@/lib/detail-level";
-import { DEFAULT_GENERATION_SETTINGS } from "@/lib/generation-settings";
 import {
   getComfyModelDefinition,
   type ComfyImageModel,
 } from "@/lib/comfy-models";
+import { DEFAULT_FORMAT_TOOL_CACHE } from "@/lib/settings-cache";
 
 type FormatMode = "positive" | "negative";
 
@@ -35,13 +36,12 @@ const EXAMPLE_DRAFTS = [
 ];
 
 export default function PromptFormatter() {
+  const { mounted, shared, toolSettings, updateShared, updateToolSettings } =
+    useCachedSettings("format", DEFAULT_FORMAT_TOOL_CACHE);
   const [input, setInput] = useState("");
-  const [mode, setMode] = useState<FormatMode>("positive");
-  const [detail, setDetail] = useState<DetailLevel>("balanced");
-  const [targetModel, setTargetModel] = useState<ComfyImageModel>(
-    DEFAULT_GENERATION_SETTINGS.model,
+  const [mode, setMode] = useState<FormatMode>(
+    DEFAULT_FORMAT_TOOL_CACHE.mode ?? "positive",
   );
-  const [smartFormat, setSmartFormat] = useState(true);
   const [output, setOutput] = useState("");
   const [provider, setProvider] = useState<"llm" | "rules" | null>(null);
   const [resultMeta, setResultMeta] = useState<Omit<
@@ -51,7 +51,19 @@ export default function PromptFormatter() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [mounted, setMounted] = useState(false);
+
+  const targetModel = shared.model;
+  const detail = shared.detail;
+  const smartFormat = toolSettings.smartFormat ?? true;
+
+  const setTargetModel = (model: ComfyImageModel) => updateShared({ model });
+  const setDetail = (value: DetailLevel) => updateShared({ detail: value });
+  const setSmartFormat = (value: boolean) =>
+    updateToolSettings({ smartFormat: value });
+  const setModeAndCache = (value: FormatMode) => {
+    setMode(value);
+    updateToolSettings({ mode: value });
+  };
 
   const selectedModel = useMemo(
     () => getComfyModelDefinition(targetModel),
@@ -64,8 +76,10 @@ export default function PromptFormatter() {
   );
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    if (toolSettings.mode) {
+      setMode(toolSettings.mode);
+    }
+  }, [toolSettings.mode]);
 
   const submitDisabled = !mounted || loading || !input.trim();
 
@@ -164,7 +178,7 @@ export default function PromptFormatter() {
           <div className="flex rounded-lg border border-zinc-700 p-0.5">
             <button
               type="button"
-              onClick={() => setMode("positive")}
+              onClick={() => setModeAndCache("positive")}
               className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 mode === "positive"
                   ? "bg-emerald-600 text-white"
@@ -175,7 +189,7 @@ export default function PromptFormatter() {
             </button>
             <button
               type="button"
-              onClick={() => setMode("negative")}
+              onClick={() => setModeAndCache("negative")}
               className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 mode === "negative"
                   ? "bg-rose-600 text-white"

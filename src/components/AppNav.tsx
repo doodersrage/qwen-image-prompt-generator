@@ -6,6 +6,10 @@ import { usePathname } from "next/navigation";
 const links = [
   { href: "/", label: "Generate", description: "Keywords → prompt" },
   { href: "/format", label: "Format", description: "Draft → model-ready" },
+  { href: "/random-scene", label: "Random", description: "Surprise me" },
+  { href: "/character", label: "Character", description: "Single person" },
+  { href: "/background", label: "Background", description: "No people" },
+  { href: "/image-prompt", label: "Image → Prompt", description: "Vision upload" },
 ] as const;
 
 export default function AppNav() {
@@ -13,7 +17,7 @@ export default function AppNav() {
 
   return (
     <nav className="border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur">
-      <div className="mx-auto flex max-w-3xl items-center gap-1 px-4 py-3 sm:px-6">
+      <div className="mx-auto flex max-w-6xl items-center gap-1 overflow-x-auto px-4 py-3 sm:px-6">
         {links.map((link) => {
           const active = pathname === link.href;
 
@@ -21,7 +25,7 @@ export default function AppNav() {
             <Link
               key={link.href}
               href={link.href}
-              className={`group rounded-lg px-3 py-2 transition ${
+              className={`group shrink-0 rounded-lg px-3 py-2 transition ${
                 active ? "bg-zinc-900" : "hover:bg-zinc-900/60"
               }`}
             >

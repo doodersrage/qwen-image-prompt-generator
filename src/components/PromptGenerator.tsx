@@ -2,13 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ModelSelector from "@/components/ModelSelector";
-import { DEFAULT_GENERATION_SETTINGS } from "@/lib/generation-settings";
+import { useCachedSettings } from "@/hooks/useCachedSettings";
 import type { DetailLevel } from "@/lib/detail-level";
 import { getDetailLimits } from "@/lib/detail-level";
 import {
   getComfyModelDefinition,
   type ComfyImageModel,
 } from "@/lib/comfy-models";
+import {
+  DEFAULT_GENERATE_TOOL_CACHE,
+} from "@/lib/settings-cache";
 import { variationStrengthLabel } from "@/lib/variation-settings";
 
 type PromptMode = "positive" | "negative";
@@ -35,33 +38,40 @@ const EXAMPLE_INPUTS = [
 ];
 
 export default function PromptGenerator() {
+  const { mounted, shared, toolSettings, updateShared, updateToolSettings } =
+    useCachedSettings("generate", DEFAULT_GENERATE_TOOL_CACHE);
   const [input, setInput] = useState("");
-  const [mode, setMode] = useState<PromptMode>("positive");
+  const [mode, setMode] = useState<PromptMode>(
+    DEFAULT_GENERATE_TOOL_CACHE.mode ?? "positive",
+  );
   const [output, setOutput] = useState("");
   const [provider, setProvider] = useState<"llm" | "template" | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  const [variationEnabled, setVariationEnabled] = useState(
-    DEFAULT_GENERATION_SETTINGS.variation.enabled,
-  );
-  const [variationStrength, setVariationStrength] = useState(
-    DEFAULT_GENERATION_SETTINGS.variation.strength,
-  );
-  const [distinctPeople, setDistinctPeople] = useState(
-    DEFAULT_GENERATION_SETTINGS.distinctPeople,
-  );
-  const [detail, setDetail] = useState<DetailLevel>(
-    DEFAULT_GENERATION_SETTINGS.detail,
-  );
-  const [qwenModel, setQwenModel] = useState<ComfyImageModel>(
-    DEFAULT_GENERATION_SETTINGS.model,
-  );
   const [resultMeta, setResultMeta] = useState<Pick<
     GenerateResponse,
     "model" | "comfyNode" | "limits"
   > | null>(null);
+
+  const qwenModel = shared.model;
+  const detail = shared.detail;
+  const variationEnabled = toolSettings.variationEnabled ?? true;
+  const variationStrength = toolSettings.variationStrength ?? 65;
+  const distinctPeople = toolSettings.distinctPeople ?? true;
+
+  const setQwenModel = (model: ComfyImageModel) => updateShared({ model });
+  const setDetail = (value: DetailLevel) => updateShared({ detail: value });
+  const setVariationEnabled = (enabled: boolean) =>
+    updateToolSettings({ variationEnabled: enabled });
+  const setVariationStrength = (strength: number) =>
+    updateToolSettings({ variationStrength: strength });
+  const setDistinctPeople = (value: boolean) =>
+    updateToolSettings({ distinctPeople: value });
+  const setModeAndCache = (value: PromptMode) => {
+    setMode(value);
+    updateToolSettings({ mode: value });
+  };
 
   const selectedModel = useMemo(
     () => getComfyModelDefinition(qwenModel),
@@ -74,8 +84,10 @@ export default function PromptGenerator() {
   );
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    if (toolSettings.mode) {
+      setMode(toolSettings.mode);
+    }
+  }, [toolSettings.mode]);
 
   const submitDisabled = !mounted || loading || !input.trim();
 
@@ -181,7 +193,7 @@ export default function PromptGenerator() {
           <div className="flex rounded-lg border border-zinc-700 p-0.5">
             <button
               type="button"
-              onClick={() => setMode("positive")}
+              onClick={() => setModeAndCache("positive")}
               className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 mode === "positive"
                   ? "bg-violet-600 text-white"
@@ -192,7 +204,7 @@ export default function PromptGenerator() {
             </button>
             <button
               type="button"
-              onClick={() => setMode("negative")}
+              onClick={() => setModeAndCache("negative")}
               className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 mode === "negative"
                   ? "bg-rose-600 text-white"
