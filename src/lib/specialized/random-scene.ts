@@ -11,9 +11,10 @@ export async function generateRandomScene(
   options: RandomSceneOptions,
 ): Promise<ToolGenerateResult> {
   const genreHint = parseSettingHint(options.genre);
-  const seed = buildRandomSceneSeed({
+  const { seed, location: sceneLocation } = buildRandomSceneSeed({
     genre: options.genre,
     includePeople: options.includePeople,
+    recentLocations: options.recentLocations,
   });
   const locationBlock = buildMandatoryLocationBlock(genreHint.location);
 
@@ -40,6 +41,7 @@ export async function generateRandomScene(
     wildness,
     genre: options.genre?.trim() || null,
     location: genreHint.location,
+    sceneLocation,
   };
 
   const templateFallback = async () =>

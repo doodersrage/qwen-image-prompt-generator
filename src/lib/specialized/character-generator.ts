@@ -51,7 +51,11 @@ export async function generateCharacterPrompt(
   const duoMode = isDuoHeadcount(presetOptions);
   const parsed = parseCharacterHints(options.hints);
   const settingHint = parseSettingHint(options.hints);
-  const seed = buildRandomCharacterSeed(options.hints, portraitStyle);
+  const { seed, location: sceneLocation } = buildRandomCharacterSeed(
+    options.hints,
+    portraitStyle,
+    options.recentLocations,
+  );
   const identitySeed = pickCharacterIdentitySeed(parsed);
   const mandatoryBlock = buildCharacterMandatoryBlock(parsed);
   const locationBlock = buildMandatoryLocationBlock(settingHint.location);
@@ -143,6 +147,7 @@ ${soloRules}
       portraitStyle,
       hints: parsed.raw || null,
       location: settingHint.location,
+      sceneLocation,
       seed,
       identitySeed,
       parsedHints: parsed,

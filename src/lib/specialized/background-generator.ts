@@ -21,10 +21,11 @@ export async function generateBackgroundPrompt(
   const presetOptions = normalizeBackgroundPresetOptions(options.presetOptions);
   const hasPresets = hasBackgroundPresetOptions(presetOptions);
   const settingHint = parseSettingHint(options.settingType);
-  const seed = buildRandomBackgroundSeed({
+  const { seed, location: sceneLocation } = buildRandomBackgroundSeed({
     settingType: options.settingType,
     timeOfDay: options.timeOfDay,
     mood: options.mood,
+    recentLocations: options.recentLocations,
   });
   const locationBlock = buildMandatoryLocationBlock(settingHint.location);
   const presetBlock = buildBackgroundPresetBlock(presetOptions);
@@ -69,6 +70,7 @@ export async function generateBackgroundPrompt(
       seed,
       settingType: options.settingType?.trim() || null,
       location: settingHint.location,
+      sceneLocation,
       timeOfDay: options.timeOfDay?.trim() || null,
       mood: options.mood?.trim() || null,
       presetOptions,

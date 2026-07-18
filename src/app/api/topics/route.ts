@@ -1,3 +1,4 @@
+import { normalizeRecentLocations } from "@/lib/specialized/normalize";
 import { generateTopics } from "@/lib/specialized/topic-generator";
 import { apiError, apiJson, apiMethodNotAllowed } from "@/lib/api/response";
 import { NextResponse } from "next/server";
@@ -8,6 +9,7 @@ type TopicsRequestBody = {
   seedTopic?: string;
   count?: number;
   variety?: number;
+  recentLocations?: string[];
 };
 
 export async function GET() {
@@ -35,6 +37,7 @@ export async function POST(request: Request) {
         typeof body.variety === "number"
           ? Math.min(100, Math.max(0, body.variety))
           : 50,
+      recentLocations: normalizeRecentLocations(body.recentLocations),
     });
 
     return apiJson(result);

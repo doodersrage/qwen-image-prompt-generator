@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useCachedSettings } from "@/hooks/useCachedSettings";
+import { useRecentLocations } from "@/hooks/useRecentLocations";
 import { DEFAULT_TOPIC_TOOL_CACHE } from "@/lib/settings-cache";
 import type { TopicGenerateResult } from "@/lib/specialized/types";
 import { variationStrengthLabel } from "@/lib/variation-settings";
@@ -11,6 +12,7 @@ export default function TopicTool() {
     "topics",
     DEFAULT_TOPIC_TOOL_CACHE,
   );
+  const { getRecent } = useRecentLocations();
   const [topics, setTopics] = useState<string[]>([]);
   const [provider, setProvider] = useState<TopicGenerateResult["provider"] | null>(
     null,
@@ -32,6 +34,7 @@ export default function TopicTool() {
           seedTopic: toolSettings.seedTopic,
           count: toolSettings.count,
           variety: toolSettings.variety,
+          recentLocations: getRecent(),
         }),
       });
 
@@ -52,7 +55,7 @@ export default function TopicTool() {
     } finally {
       setLoading(false);
     }
-  }, [toolSettings]);
+  }, [toolSettings, getRecent]);
 
   const copyTopics = useCallback(async (value: string, index: number | "all") => {
     try {

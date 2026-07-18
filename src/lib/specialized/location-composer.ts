@@ -62,6 +62,19 @@ const SETTING_ADJECTIVES = [
   "bioluminescent",
   "steam-wreathed",
   "petroleum-rainbow",
+  "lichen-encrusted",
+  "salt-crusted",
+  "charcoal-smoked",
+  "mold-spotted",
+  "sun-scorched",
+  "frost-rimed",
+  "oil-slick",
+  "mica-flecked",
+  "obsidian-gloss",
+  "chalk-dusted",
+  "honey-lit",
+  "sodium-amber",
+  "ultraviolet-hazed",
 ] as const;
 
 const ARCHITECTURE_TYPES = [
@@ -116,6 +129,15 @@ const ARCHITECTURE_TYPES = [
   "planetarium gift shop mezzanine",
   "film color grading suite",
   "sound mixing dub stage",
+  "hydroponic spiral greenhouse",
+  "particle accelerator cryostat hall",
+  "deep-sea pressure hull chamber",
+  "orbital solar array maintenance ring",
+  "desalination membrane hall",
+  "vertical mushroom fruiting room",
+  "automated fulfillment robot aisle",
+  "glassblowing glory hole studio",
+  "letterpress type case hall",
 ] as const;
 
 const TERRAIN_FEATURES = [
@@ -169,6 +191,15 @@ const TERRAIN_FEATURES = [
   "prairie pothole rim",
   "boreal muskeg edge",
   "heathland gorse hollow",
+  "volcanic tuff chimney field",
+  "karst polje seasonal lake",
+  "raised bog quaking mat edge",
+  "coral bommie lagoon pass",
+  "granite tor wind-scoured summit",
+  "limestone pavement grike maze",
+  "black sand dune slip face",
+  "salt marsh tidal creek bend",
+  "alpine scree slope bench",
 ] as const;
 
 const MICRO_STRUCTURES = [
@@ -222,6 +253,15 @@ const MICRO_STRUCTURES = [
   "caravanserai courtyard gate",
   "border checkpoint lane",
   "customs inspection bay",
+  "abandoned ski lift tower foot",
+  "floating solar pontoon dock",
+  "storm drain outfall barricade",
+  "railway turntable pit rim",
+  "coastal foghorn bunker mouth",
+  "wind turbine blade storage yard",
+  "geothermal wellhead valve pad",
+  "satellite uplink radome base",
+  "cargo airship mooring mast",
 ] as const;
 
 const REGION_EPITHETS = [
@@ -275,6 +315,17 @@ const REGION_EPITHETS = [
   "Orkney",
   "Svalbard",
   "Lapland",
+  "Tuareg",
+  "Amazigh",
+  "Khmer",
+  "Burmese",
+  "Tibetan",
+  "Uyghur",
+  "Kurdish",
+  "Hmong",
+  "Pashtun",
+  "Zulu",
+  "Yoruba",
 ] as const;
 
 const TIME_AND_WEATHER_PHRASES = [
@@ -308,6 +359,15 @@ const TIME_AND_WEATHER_PHRASES = [
   "at siesta hour silence",
   "during a midnight sun",
   "in polar twilight",
+  "during a heat lightning watch",
+  "in ash fall after eruption",
+  "at misty dawn after frost",
+  "during a kelp-strewn low tide",
+  "in diesel-smoke winter dusk",
+  "at mirror-still dawn on water",
+  "during a dust devil crossing",
+  "in ozone-sharp post-storm air",
+  "at firefly dusk in humid air",
 ] as const;
 
 const ACTION_ENVIRONMENT_BEATS = [
@@ -331,6 +391,15 @@ const ACTION_ENVIRONMENT_BEATS = [
   "with foam surging around the ankles",
   "with oil rainbow sheen on wet concrete",
   "with neon reflections streaking in puddles",
+  "with confetti suspended mid-air",
+  "with steam venting from a grate",
+  "with pollen clouds catching sidelight",
+  "with shattered ice spraying outward",
+  "with rope fibers fraying under tension",
+  "with chalk dust hanging in a beam",
+  "with sparks tracing an arc weld line",
+  "with feathers drifting on a gust",
+  "with oil rainbow sheen rippling on water",
 ] as const;
 
 export function composeSceneLocation(): string {

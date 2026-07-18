@@ -5,7 +5,9 @@ import BackgroundPresetControls from "@/components/BackgroundPresetControls";
 import PromptResultPanel from "@/components/PromptResultPanel";
 import SharedToolControls from "@/components/SharedToolControls";
 import { useCachedSettings } from "@/hooks/useCachedSettings";
+import { useRecentLocations } from "@/hooks/useRecentLocations";
 import { presetOptionsFromBackgroundCache } from "@/lib/background-options";
+import { readSceneLocationFromMetadata } from "@/lib/recent-locations";
 import { getComfyModelDefinition } from "@/lib/comfy-models";
 import { DEFAULT_BACKGROUND_TOOL_CACHE } from "@/lib/settings-cache";
 import type { ToolGenerateResult } from "@/lib/specialized/types";
@@ -13,6 +15,7 @@ import type { ToolGenerateResult } from "@/lib/specialized/types";
 export default function BackgroundTool() {
   const { mounted, shared, toolSettings, updateShared, updateToolSettings } =
     useCachedSettings("background", DEFAULT_BACKGROUND_TOOL_CACHE);
+  const { getRecent, record } = useRecentLocations();
   const [output, setOutput] = useState("");
   const [provider, setProvider] = useState<ToolGenerateResult["provider"] | null>(
     null,
@@ -42,6 +45,7 @@ export default function BackgroundTool() {
           timeOfDay: toolSettings.timeOfDay,
           mood: toolSettings.mood,
           presetOptions: presetOptionsFromBackgroundCache(toolSettings),
+          recentLocations: getRecent(),
         }),
       });
 
@@ -52,6 +56,8 @@ export default function BackgroundTool() {
       if (!response.ok) {
         throw new Error(data.error ?? "Generation failed.");
       }
+
+      record(readSceneLocationFromMetadata(data.metadata));
 
       setOutput(data.prompt);
       setProvider(data.provider);
@@ -64,7 +70,7 @@ export default function BackgroundTool() {
     } finally {
       setLoading(false);
     }
-  }, [shared, toolSettings]);
+  }, [shared, toolSettings, getRecent, record]);
 
   const copyOutput = useCallback(async () => {
     if (!output) return;

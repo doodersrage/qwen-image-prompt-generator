@@ -5,6 +5,8 @@ import CharacterPresetControls from "@/components/CharacterPresetControls";
 import PromptResultPanel from "@/components/PromptResultPanel";
 import SharedToolControls from "@/components/SharedToolControls";
 import { useCachedSettings } from "@/hooks/useCachedSettings";
+import { useRecentLocations } from "@/hooks/useRecentLocations";
+import { readSceneLocationFromMetadata } from "@/lib/recent-locations";
 import { getComfyModelDefinition } from "@/lib/comfy-models";
 import { presetOptionsFromCache } from "@/lib/character-options";
 import { DEFAULT_CHARACTER_TOOL_CACHE } from "@/lib/settings-cache";
@@ -16,6 +18,7 @@ const labelClassName = "text-sm font-medium text-zinc-200";
 export default function CharacterTool() {
   const { mounted, shared, toolSettings, updateShared, updateToolSettings } =
     useCachedSettings("character", DEFAULT_CHARACTER_TOOL_CACHE);
+  const { getRecent, record } = useRecentLocations();
   const [output, setOutput] = useState("");
   const [provider, setProvider] = useState<ToolGenerateResult["provider"] | null>(
     null,
@@ -45,6 +48,7 @@ export default function CharacterTool() {
           portraitStyle: toolSettings.portraitStyle,
           variationStrength: toolSettings.variationStrength,
           presetOptions: presetOptionsFromCache(toolSettings),
+          recentLocations: getRecent(),
         }),
       });
 
@@ -55,6 +59,8 @@ export default function CharacterTool() {
       if (!response.ok) {
         throw new Error(data.error ?? "Generation failed.");
       }
+
+      record(readSceneLocationFromMetadata(data.metadata));
 
       setOutput(data.prompt);
       setProvider(data.provider);
@@ -67,7 +73,7 @@ export default function CharacterTool() {
     } finally {
       setLoading(false);
     }
-  }, [shared, toolSettings]);
+  }, [shared, toolSettings, getRecent, record]);
 
   const copyOutput = useCallback(async () => {
     if (!output) return;

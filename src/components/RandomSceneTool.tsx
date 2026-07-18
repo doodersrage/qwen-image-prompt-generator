@@ -4,6 +4,8 @@ import { useCallback, useState } from "react";
 import PromptResultPanel from "@/components/PromptResultPanel";
 import SharedToolControls from "@/components/SharedToolControls";
 import { useCachedSettings } from "@/hooks/useCachedSettings";
+import { useRecentLocations } from "@/hooks/useRecentLocations";
+import { readSceneLocationFromMetadata } from "@/lib/recent-locations";
 import { getComfyModelDefinition } from "@/lib/comfy-models";
 import {
   DEFAULT_RANDOM_SCENE_TOOL_CACHE,
@@ -14,6 +16,7 @@ import { variationStrengthLabel } from "@/lib/variation-settings";
 export default function RandomSceneTool() {
   const { mounted, shared, toolSettings, updateShared, updateToolSettings } =
     useCachedSettings("randomScene", DEFAULT_RANDOM_SCENE_TOOL_CACHE);
+  const { getRecent, record } = useRecentLocations();
   const [output, setOutput] = useState("");
   const [provider, setProvider] = useState<ToolGenerateResult["provider"] | null>(
     null,
@@ -43,6 +46,7 @@ export default function RandomSceneTool() {
           genre: toolSettings.genre,
           includePeople: toolSettings.includePeople,
           wildness: toolSettings.wildness,
+          recentLocations: getRecent(),
         }),
       });
 
@@ -53,6 +57,8 @@ export default function RandomSceneTool() {
       if (!response.ok) {
         throw new Error(data.error ?? "Generation failed.");
       }
+
+      record(readSceneLocationFromMetadata(data.metadata));
 
       setOutput(data.prompt);
       setProvider(data.provider);
@@ -67,7 +73,7 @@ export default function RandomSceneTool() {
     } finally {
       setLoading(false);
     }
-  }, [shared, toolSettings]);
+  }, [shared, toolSettings, getRecent, record]);
 
   const copyOutput = useCallback(async () => {
     if (!output) return;

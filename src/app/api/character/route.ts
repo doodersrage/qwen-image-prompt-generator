@@ -1,5 +1,5 @@
 import { generateCharacterPrompt } from "@/lib/specialized/character-generator";
-import { normalizeSharedGenerationOptions } from "@/lib/specialized/normalize";
+import { normalizeSharedGenerationOptions, normalizeRecentLocations } from "@/lib/specialized/normalize";
 import {
   normalizeCharacterPresetOptions,
   type CharacterPresetOptions,
@@ -16,6 +16,7 @@ type CharacterRequestBody = {
   portraitStyle?: "portrait" | "full-body" | "action";
   variationStrength?: number;
   presetOptions?: Partial<Record<keyof CharacterPresetOptions, string>>;
+  recentLocations?: string[];
 };
 
 export async function GET() {
@@ -43,6 +44,7 @@ export async function POST(request: Request) {
           ? Math.min(100, Math.max(0, body.variationStrength))
           : 50,
       presetOptions: normalizeCharacterPresetOptions(body.presetOptions),
+      recentLocations: normalizeRecentLocations(body.recentLocations),
     });
 
     return apiJson(result);

@@ -118,6 +118,7 @@ export async function generateTopics(
   const topics = buildTemplateTopicList({
     seedTopic: seedTopic ?? undefined,
     count,
+    recentLocations: options.recentLocations,
   });
 
   return {

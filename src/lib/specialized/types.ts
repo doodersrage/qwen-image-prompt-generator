@@ -27,6 +27,7 @@ export type RandomSceneOptions = SharedGenerationOptions & {
   genre?: string;
   includePeople?: boolean;
   wildness?: number;
+  recentLocations?: string[];
 };
 
 import type { CharacterPresetOptions } from "../character-options";
@@ -36,6 +37,7 @@ export type CharacterOptions = SharedGenerationOptions & {
   portraitStyle?: "portrait" | "full-body" | "action";
   variationStrength?: number;
   presetOptions?: CharacterPresetOptions;
+  recentLocations?: string[];
 };
 
 import type { BackgroundPresetOptions } from "../background-options";
@@ -45,6 +47,7 @@ export type BackgroundOptions = SharedGenerationOptions & {
   timeOfDay?: string;
   mood?: string;
   presetOptions?: BackgroundPresetOptions;
+  recentLocations?: string[];
 };
 
 export type ImagePromptFocus = "full" | "subject" | "background" | "style";
@@ -60,6 +63,7 @@ export type TopicOptions = {
   seedTopic?: string;
   count?: number;
   variety?: number;
+  recentLocations?: string[];
 };
 
 export type TopicGenerateResult = {
