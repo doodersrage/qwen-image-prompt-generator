@@ -1,4 +1,5 @@
 import type { WorkflowParamValues } from "./comfyui-config";
+import { appendWebhookLogEntry } from "./webhook-log";
 
 export const WEBHOOK_SETTINGS_KEY = "comfy-prompt-webhook-v1";
 
@@ -76,8 +77,21 @@ export async function dispatchWebhook(payload: WebhookJobPayload): Promise<boole
         payload,
       }),
     });
-    return response.ok;
-  } catch {
+    const ok = response.ok;
+    appendWebhookLogEntry({
+      ok,
+      url: settings.url.trim(),
+      message: ok ? "Delivered" : "Dispatch failed",
+      payload,
+    });
+    return ok;
+  } catch (error) {
+    appendWebhookLogEntry({
+      ok: false,
+      url: settings.url.trim(),
+      message: error instanceof Error ? error.message : "Dispatch error",
+      payload,
+    });
     return false;
   }
 }

@@ -20,6 +20,14 @@ import { queueMutatedGalleryJobs } from "@/lib/gallery-mutations";
 import { queueNegativeAbTest } from "@/lib/negative-ab-queue";
 import { queueSeedExperiment } from "@/lib/seed-experiment-queue";
 import {
+  queueParamExperiment,
+  type ParamExperimentAxis,
+} from "@/lib/param-experiment-queue";
+import { downloadCompareExport } from "@/lib/gallery-compare-export";
+import { runAutoImproveOnFavorite, runAutoImproveOnRating } from "@/lib/auto-improve-loop";
+import { setLineageParent } from "@/lib/prompt-lineage-session";
+import { loadActiveProjectId, loadPromptProjects } from "@/lib/prompt-projects";
+import {
   galleryTopicsPath,
   galleryVariationsPath,
   saveGalleryTopicsHandoff,
@@ -111,6 +119,25 @@ export default function ComfyUiGalleryPanel({
   const [viewPrefsLoaded, setViewPrefsLoaded] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [compareStatus, setCompareStatus] = useState<string | null>(null);
+  const [paramAxis, setParamAxis] = useState<ParamExperimentAxis>("cfg");
+  const [projectFilter, setProjectFilter] = useState(false);
+  const activeProjectId = useMemo(
+    () => (projectFilter ? loadActiveProjectId() : undefined),
+    [projectFilter, entries],
+  );
+  const activeProjectName = useMemo(() => {
+    if (!activeProjectId) {
+      return null;
+    }
+    return loadPromptProjects().find((project) => project.id === activeProjectId)?.name;
+  }, [activeProjectId]);
+
+  useEffect(() => {
+    setFilter((previous) => ({
+      ...previous,
+      projectId: activeProjectId,
+    }));
+  }, [activeProjectId, setFilter]);
 
   const bulkEnabled = showFilters && !compact;
   const paginationEnabled = showFilters && !compact && !limit;
@@ -384,6 +411,16 @@ export default function ComfyUiGalleryPanel({
           <label className="flex items-center gap-2 pb-1.5 text-xs text-zinc-300">
             <input
               type="checkbox"
+              checked={projectFilter}
+              onChange={(event) => setProjectFilter(event.target.checked)}
+              className="h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-violet-500"
+            />
+            Active project{activeProjectName ? `: ${activeProjectName}` : ""}
+          </label>
+
+          <label className="flex items-center gap-2 pb-1.5 text-xs text-zinc-300">
+            <input
+              type="checkbox"
               checked={filter.favoritesOnly ?? false}
               onChange={(event) =>
                 setFilter({ ...filter, favoritesOnly: event.target.checked })
@@ -597,6 +634,53 @@ export default function ComfyUiGalleryPanel({
           </button>
           <button
             type="button"
+            disabled={selectedIds.length < 2 || selectedIds.length > 4}
+            onClick={() =>
+              downloadCompareExport(selectedEntries.slice(0, 4), "json")
+            }
+            className="rounded-lg border border-zinc-700 px-2 py-1 text-zinc-300 hover:border-zinc-500 disabled:opacity-40"
+          >
+            Export compare JSON
+          </button>
+          <button
+            type="button"
+            disabled={selectedIds.length < 2 || selectedIds.length > 4}
+            onClick={() =>
+              downloadCompareExport(selectedEntries.slice(0, 4), "html")
+            }
+            className="rounded-lg border border-zinc-700 px-2 py-1 text-zinc-300 hover:border-zinc-500 disabled:opacity-40"
+          >
+            Export compare HTML
+          </button>
+          <button
+            type="button"
+            disabled={selectedIds.length !== 1}
+            onClick={() => {
+              const entry = selectedEntries[0];
+              if (!entry) return;
+              setFilter((previous) => ({
+                ...previous,
+                similarToEntryId: entry.id,
+                query: undefined,
+              }));
+              setRequeueStatus(`Finding outputs similar to ${entry.model ?? "selection"}…`);
+            }}
+            className="rounded-lg border border-zinc-700 px-2 py-1 text-zinc-300 hover:border-zinc-500 disabled:opacity-40"
+          >
+            Find similar
+          </button>
+          <button
+            type="button"
+            disabled={!filter.similarToEntryId}
+            onClick={() =>
+              setFilter((previous) => ({ ...previous, similarToEntryId: undefined }))
+            }
+            className="rounded-lg border border-zinc-700 px-2 py-1 text-zinc-300 hover:border-zinc-500 disabled:opacity-40"
+          >
+            Clear similar
+          </button>
+          <button
+            type="button"
             disabled={selectedIds.length !== 1}
             onClick={() => {
               const entry = selectedEntries[0];
@@ -615,6 +699,46 @@ export default function ComfyUiGalleryPanel({
             className="rounded-lg border border-violet-700/60 px-2 py-1 text-violet-200 hover:border-violet-500 disabled:opacity-40"
           >
             Seed experiment
+          </button>
+          <label className="flex items-center gap-1 text-[11px] text-zinc-400">
+            Param axis
+            <select
+              value={paramAxis}
+              onChange={(event) =>
+                setParamAxis(event.target.value as ParamExperimentAxis)
+              }
+              className="rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-200"
+            >
+              <option value="cfg">CFG</option>
+              <option value="steps">Steps</option>
+              <option value="width">Width</option>
+              <option value="seed">Seed</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            disabled={selectedIds.length !== 1}
+            onClick={() => {
+              const entry = selectedEntries[0];
+              if (!entry) return;
+              setRequeueStatus(`Queueing ${paramAxis} experiment…`);
+              void queueParamExperiment({
+                prompt: entry.prompt,
+                model: entry.model ?? "qwen-image-2512",
+                negativePrompt: entry.negativePrompt,
+                hints: entry.prompt.slice(0, 200),
+                axis: paramAxis,
+                baseParams: entry.queueParams,
+                count: 4,
+              }).then(({ queued, labels }) =>
+                setRequeueStatus(
+                  `Param experiment queued ${queued} jobs · ${labels.join(", ")}`,
+                ),
+              );
+            }}
+            className="rounded-lg border border-violet-700/60 px-2 py-1 text-violet-200 hover:border-violet-500 disabled:opacity-40"
+          >
+            Param experiment
           </button>
           <button
             type="button"
@@ -750,6 +874,13 @@ export default function ComfyUiGalleryPanel({
             setFavorites([entry.id], true);
             setReviewRating(entry.id, 5);
             recordCatalogBiasFromPrompt(entry.prompt, 5);
+            if (entry.historyId) {
+              setLineageParent({
+                parentHistoryId: entry.historyId,
+                sourcePrompt: entry.prompt,
+                sourceTool: entry.tool,
+              });
+            }
             setCompareStatus(`Winner: ${entry.model ?? "unknown"} · seed ${entry.queueParams?.seed ?? "?"}`);
           }}
           onRate={(entryId, rating) => {
@@ -760,6 +891,13 @@ export default function ComfyUiGalleryPanel({
             }
             if (entry) {
               recordCatalogBiasFromPrompt(entry.prompt, rating);
+              if (rating) {
+                void runAutoImproveOnRating(entry, rating).then((message) => {
+                  if (message) {
+                    setCompareStatus(message);
+                  }
+                });
+              }
             }
           }}
           onFavorite={(entryId) => toggleFavorite(entryId)}
@@ -800,7 +938,17 @@ export default function ComfyUiGalleryPanel({
               previewUrl={primaryViewUrl(entry)}
               imageUrls={galleryEntryViewUrls(entry)}
               onRemove={() => removeEntry(entry.id)}
-              onToggleFavorite={() => toggleFavorite(entry.id)}
+              onToggleFavorite={() => {
+                const willFavorite = !entry.favorite;
+                toggleFavorite(entry.id);
+                if (willFavorite) {
+                  void runAutoImproveOnFavorite(entry, true).then((message) => {
+                    if (message) {
+                      setRequeueStatus(message);
+                    }
+                  });
+                }
+              }}
               onDownloadError={setDownloadError}
               onRequeue={(newSeed) => {
                 setRequeueStatus("Re-queueing…");
@@ -837,6 +985,13 @@ export default function ComfyUiGalleryPanel({
                   recordAvoidedTokensFromPrompt(entry.prompt);
                 }
                 recordCatalogBiasFromPrompt(entry.prompt, rating);
+                if (rating) {
+                  void runAutoImproveOnRating(entry, rating).then((message) => {
+                    if (message) {
+                      setRequeueStatus(message);
+                    }
+                  });
+                }
               }}
             />
           ))}

@@ -1,7 +1,7 @@
 import type { ComfyOutputImage } from "./comfyui-outputs";
 import { buildComfyViewPath } from "./comfyui-outputs";
 import type { WorkflowParamValues } from "./comfyui-config";
-import { filterBySemanticQuery } from "./semantic-search";
+import { filterBySemanticQuery, rankSimilarToCorpus } from "./semantic-search";
 
 export const COMFYUI_GALLERY_KEY = "comfyui-gallery-v1";
 export const COMFYUI_GALLERY_UPDATED_EVENT = "comfyui-gallery-updated";
@@ -14,6 +14,8 @@ export type ComfyGalleryFilter = {
   tool?: string;
   query?: string;
   semanticSearch?: boolean;
+  similarToEntryId?: string;
+  projectId?: string;
   reviewMode?: boolean;
   unreviewedOnly?: boolean;
 };
@@ -243,6 +245,9 @@ export function filterComfyGalleryEntries(
     if (filter.unreviewedOnly && entry.reviewRating) {
       return false;
     }
+    if (filter.projectId?.trim() && entry.projectId !== filter.projectId.trim()) {
+      return false;
+    }
     if (query && !filter.semanticSearch) {
       const needle = query.toLowerCase();
       const haystack = [
@@ -280,6 +285,18 @@ export function filterComfyGalleryEntries(
           .filter(Boolean)
           .join(" "),
     );
+  }
+
+  if (filter.similarToEntryId) {
+    const reference = entries.find((entry) => entry.id === filter.similarToEntryId);
+    if (reference) {
+      const ranked = rankSimilarToCorpus(
+        filtered.filter((entry) => entry.id !== reference.id),
+        reference.prompt,
+        (entry) => entry.prompt,
+      );
+      filtered = ranked.map((item) => item.item);
+    }
   }
 
   return filtered;

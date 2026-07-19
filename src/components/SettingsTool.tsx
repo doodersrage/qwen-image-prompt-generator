@@ -50,6 +50,21 @@ import {
   type WebhookSettings,
 } from "@/lib/webhook-settings";
 import {
+  AVOIDED_TOKENS_UPDATED_EVENT,
+  addAvoidedToken,
+  addAvoidedTokens,
+  clearAvoidedTokens,
+  exportAvoidedTokenList,
+  removeAvoidedToken,
+} from "@/lib/avoided-tokens";
+import {
+  WEBHOOK_LOG_UPDATED_EVENT,
+  clearWebhookLog,
+  loadWebhookLog,
+  retryWebhookLogEntry,
+  type WebhookLogEntry,
+} from "@/lib/webhook-log";
+import {
   isComfyNotificationSupported,
   requestComfyNotificationPermission,
 } from "@/lib/comfyui-notifications";
@@ -163,6 +178,9 @@ export default function SettingsTool() {
   const [scheduledBatch, setScheduledBatch] = useState<ScheduledBatchConfig>(
     DEFAULT_SCHEDULED_BATCH,
   );
+  const [avoidedTokens, setAvoidedTokens] = useState<string[]>([]);
+  const [avoidedTokenDraft, setAvoidedTokenDraft] = useState("");
+  const [webhookLog, setWebhookLog] = useState<WebhookLogEntry[]>([]);
 
   useEffect(() => {
     if (isComfyNotificationSupported()) {
@@ -179,6 +197,19 @@ export default function SettingsTool() {
     setSharedMounted(true);
     setWebhookSettings(loadWebhookSettings());
     setScheduledBatch(loadScheduledBatchConfig());
+    setAvoidedTokens(exportAvoidedTokenList());
+    setWebhookLog(loadWebhookLog());
+  }, []);
+
+  useEffect(() => {
+    const refreshAvoided = () => setAvoidedTokens(exportAvoidedTokenList());
+    const refreshWebhookLog = () => setWebhookLog(loadWebhookLog());
+    window.addEventListener(AVOIDED_TOKENS_UPDATED_EVENT, refreshAvoided);
+    window.addEventListener(WEBHOOK_LOG_UPDATED_EVENT, refreshWebhookLog);
+    return () => {
+      window.removeEventListener(AVOIDED_TOKENS_UPDATED_EVENT, refreshAvoided);
+      window.removeEventListener(WEBHOOK_LOG_UPDATED_EVENT, refreshWebhookLog);
+    };
   }, []);
 
   const updateSharedSettings = useCallback((patch: Partial<SharedToolSettings>) => {
@@ -952,6 +983,42 @@ export default function SettingsTool() {
         <label className="flex items-center gap-2 text-sm text-zinc-300">
           <input
             type="checkbox"
+            checked={settings.autoMutateOnHighRating ?? false}
+            onChange={(event) =>
+              updateSettings({ autoMutateOnHighRating: event.target.checked })
+            }
+            className="h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-violet-500"
+          />
+          Auto-queue mutations when a gallery output is rated 4–5★
+        </label>
+
+        <label className="flex items-center gap-2 text-sm text-zinc-300">
+          <input
+            type="checkbox"
+            checked={settings.autoSeedExperimentOnHighRating ?? false}
+            onChange={(event) =>
+              updateSettings({ autoSeedExperimentOnHighRating: event.target.checked })
+            }
+            className="h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-violet-500"
+          />
+          Auto-queue seed experiments when a gallery output is rated 4–5★
+        </label>
+
+        <label className="flex items-center gap-2 text-sm text-zinc-300">
+          <input
+            type="checkbox"
+            checked={settings.autoSeedExperimentOnFavorite ?? false}
+            onChange={(event) =>
+              updateSettings({ autoSeedExperimentOnFavorite: event.target.checked })
+            }
+            className="h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-violet-500"
+          />
+          Auto-queue seed experiments when an output is favorited
+        </label>
+
+        <label className="flex items-center gap-2 text-sm text-zinc-300">
+          <input
+            type="checkbox"
             checked={settings.autoNegativeOnQueue !== false}
             onChange={(event) =>
               updateSettings({ autoNegativeOnQueue: event.target.checked })
@@ -1118,6 +1185,109 @@ export default function SettingsTool() {
           }}
           className="ui-input w-full px-[var(--input-padding-x)] py-[var(--input-padding-y)] type-body"
         />
+      </ToolSection>
+
+      <ToolSection title="Avoided tokens">
+        <p className="text-sm text-zinc-400">
+          Motifs to steer generators away from. Low gallery ratings append tokens
+          automatically; manage the list here.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <input
+            value={avoidedTokenDraft}
+            onChange={(event) => setAvoidedTokenDraft(event.target.value)}
+            placeholder="Add token"
+            className="ui-input min-w-[180px] flex-1 px-[var(--input-padding-x)] py-[var(--input-padding-y)] type-body"
+          />
+          <Button
+            variant="secondary"
+            disabled={!avoidedTokenDraft.trim()}
+            onClick={() => {
+              addAvoidedToken(avoidedTokenDraft);
+              setAvoidedTokenDraft("");
+              setStatus(`Added “${avoidedTokenDraft.trim()}” to avoided tokens.`);
+            }}
+          >
+            Add
+          </Button>
+          <Button
+            variant="secondary"
+            disabled={avoidedTokens.length === 0}
+            onClick={() => {
+              clearAvoidedTokens();
+              setStatus("Cleared avoided tokens.");
+            }}
+          >
+            Clear all
+          </Button>
+        </div>
+        {avoidedTokens.length === 0 ? (
+          <p className="text-sm text-zinc-500">No avoided tokens yet.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {avoidedTokens.map((token) => (
+              <button
+                key={token}
+                type="button"
+                onClick={() => {
+                  removeAvoidedToken(token);
+                  setStatus(`Removed “${token}”.`);
+                }}
+                className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-300 hover:border-rose-500/60 hover:text-rose-200"
+                title="Click to remove"
+              >
+                {token} ×
+              </button>
+            ))}
+          </div>
+        )}
+      </ToolSection>
+
+      <ToolSection title="Webhook event log">
+        <p className="text-sm text-zinc-400">
+          Recent webhook dispatch attempts (newest first).
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="secondary"
+            disabled={webhookLog.length === 0}
+            onClick={() => {
+              clearWebhookLog();
+              setStatus("Cleared webhook log.");
+            }}
+          >
+            Clear log
+          </Button>
+        </div>
+        {webhookLog.length === 0 ? (
+          <p className="text-sm text-zinc-500">No webhook events logged yet.</p>
+        ) : (
+          <ol className="space-y-2">
+            {webhookLog.slice(0, 12).map((entry) => (
+              <li
+                key={entry.id}
+                className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-3 text-xs text-zinc-400"
+              >
+                <p className={entry.ok ? "text-emerald-300" : "text-rose-300"}>
+                  {entry.ok ? "OK" : "FAIL"} · {entry.event} ·{" "}
+                  {new Date(entry.timestamp).toLocaleString()}
+                </p>
+                <p>{entry.message ?? entry.url}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void retryWebhookLogEntry(entry).then((ok) =>
+                      setStatus(ok ? "Webhook retry succeeded." : "Webhook retry failed."),
+                    );
+                  }}
+                  className="mt-2 text-violet-300 hover:text-violet-200"
+                >
+                  Retry
+                </button>
+              </li>
+            ))}
+          </ol>
+        )}
       </ToolSection>
 
       <ToolSection title="Scheduled batch">

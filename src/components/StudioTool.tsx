@@ -100,8 +100,10 @@ import {
 } from "@/lib/model-portfolio";
 import { studioHistoryUrl } from "@/lib/prompt-lineage";
 import { startRefineFromHistoryEntry } from "@/lib/improve-output";
-import { analyzeGalleryRatingTokens } from "@/lib/rating-token-analytics";
+import { analyzeGalleryRatingTokens, negativeScoringTokens } from "@/lib/rating-token-analytics";
 import { loadComfyGallery } from "@/lib/comfyui-gallery";
+import { addAvoidedToken, addAvoidedTokens } from "@/lib/avoided-tokens";
+import { downloadIterationForestJson } from "@/lib/iteration-tree-export";
 import type { EnrichedToolGenerateResult } from "@/lib/specialized/types";
 import {
   ToolBadge,
@@ -865,6 +867,18 @@ export default function StudioTool() {
           <p className="text-sm text-zinc-400">
             Branches built from saved history entries linked by parent history ids.
           </p>
+          <div className="mb-4 flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              disabled={iterationForest.length === 0}
+              onClick={() => {
+                downloadIterationForestJson(entries);
+                setBackupStatus("Exported iteration tree JSON.");
+              }}
+            >
+              Export iteration tree JSON
+            </Button>
+          </div>
           {iterationForest.length === 0 ? (
             <EmptyState
               icon="diff"
@@ -892,6 +906,23 @@ export default function StudioTool() {
             Tokens that correlate with high (4–5★) or low (1–2★) gallery ratings. Rate
             outputs in Gallery review mode to grow this list.
           </p>
+          {ratingTokenStats.length > 0 ? (
+            <div className="mb-4 flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  const added = addAvoidedTokens(negativeScoringTokens(ratingTokenStats));
+                  setBackupStatus(
+                    added > 0
+                      ? `Added ${added} negative-scoring token(s) to avoided list.`
+                      : "No new negative-scoring tokens to add.",
+                  );
+                }}
+              >
+                Add negative tokens to avoidance
+              </Button>
+            </div>
+          ) : null}
           {ratingTokenStats.length === 0 ? (
             <EmptyState
               icon="diff"
@@ -908,6 +939,18 @@ export default function StudioTool() {
                       score {stat.score > 0 ? "+" : ""}
                       {stat.score} · {stat.highCount} high · {stat.lowCount} low
                     </p>
+                    {stat.score < 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          addAvoidedToken(stat.token);
+                          setBackupStatus(`Added “${stat.token}” to avoided tokens.`);
+                        }}
+                        className="type-caption text-rose-300 hover:text-rose-200"
+                      >
+                        Add to avoided
+                      </button>
+                    ) : null}
                   </ToolContentPanel>
                 ))}
               </div>

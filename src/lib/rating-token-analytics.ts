@@ -43,3 +43,7 @@ export function analyzeGalleryRatingTokens(
     .sort((a, b) => b.score - a.score || b.highCount - a.highCount)
     .slice(0, 24);
 }
+
+export function negativeScoringTokens(stats: RatedTokenStat[]): string[] {
+  return stats.filter((entry) => entry.score < 0).map((entry) => entry.token);
+}

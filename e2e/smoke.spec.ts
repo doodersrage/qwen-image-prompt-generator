@@ -5,7 +5,14 @@ test("home page loads", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /ComfyUI Image Prompt Generator/i })).toBeVisible();
 });
 
-test("studio page loads", async ({ page }) => {
+test("settings page loads", async ({ page }) => {
+  await page.goto("/settings");
+  await expect(page.getByRole("heading", { name: /Settings & Health/i })).toBeVisible();
+  await expect(page.getByText(/Avoided tokens/i)).toBeVisible();
+});
+
+test("studio analytics tab loads", async ({ page }) => {
   await page.goto("/studio");
-  await expect(page.getByRole("heading", { name: /Prompt Studio/i })).toBeVisible();
+  await page.getByRole("button", { name: /Analytics/i }).click();
+  await expect(page.getByRole("heading", { name: /Gallery rating analytics/i })).toBeVisible();
 });

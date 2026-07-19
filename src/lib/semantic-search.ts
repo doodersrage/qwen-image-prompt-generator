@@ -64,6 +64,24 @@ export function rankBySemanticQuery<T>(
     .sort((a, b) => b.score - a.score);
 }
 
+export function rankSimilarToCorpus<T>(
+  items: T[],
+  reference: string,
+  toCorpus: (item: T) => string,
+): Array<{ item: T; score: number }> {
+  const trimmed = reference.trim();
+  if (!trimmed) {
+    return items.map((item) => ({ item, score: 0 }));
+  }
+  return items
+    .map((item) => ({
+      item,
+      score: semanticRelevanceScore(trimmed, toCorpus(item)),
+    }))
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score);
+}
+
 export function filterBySemanticQuery<T>(
   items: T[],
   query: string,

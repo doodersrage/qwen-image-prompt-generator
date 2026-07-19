@@ -15,6 +15,8 @@ import {
   COMFY_WORKFLOW_FILES_KEY,
   saveComfyWorkflowFiles,
 } from "./comfyui-workflow-files";
+import { AVOIDED_TOKENS_KEY } from "./avoided-tokens";
+import { WEBHOOK_LOG_KEY } from "./webhook-log";
 import { COMFY_WORKFLOW_PRESETS_KEY } from "./comfyui-workflow-presets";
 import { USER_TEMPLATES_KEY } from "./user-templates";
 
@@ -43,4 +45,6 @@ export const LOCAL_DATA_KEYS = [
   COMFYUI_GALLERY_KEY,
   COMFY_WORKFLOW_FILES_KEY,
   COMFY_WORKFLOW_PRESETS_KEY,
+  AVOIDED_TOKENS_KEY,
+  WEBHOOK_LOG_KEY,
 ] as const;

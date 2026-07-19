@@ -1,49 +1,76 @@
 "use client";
 
 import type { ComfyImageModel } from "./comfy-models";
+import type { WorkflowParamValues } from "./comfyui-config";
 import { resolveRuntimeForModel } from "./comfyui-runtime-for-model";
 import { registerComfyGalleryJob } from "./comfyui-gallery-client";
 import { scheduleComfyGalleryPoll } from "./comfyui-gallery-poller";
-import { loadActiveProjectId } from "./prompt-projects";
 import { injectLoraTriggers } from "./lora-prompt-injection";
+import { loadActiveProjectId } from "./prompt-projects";
 import { resolveQueueNegativePrompt } from "./queue-negative";
 import { resolveQueueParams } from "./queue-params-settings";
 import { modelUsesNegativePrompt } from "./prompt-pair";
 
-export async function queueSeedExperiment(input: {
+export type ParamExperimentAxis = "seed" | "cfg" | "steps" | "width";
+
+export async function queueParamExperiment(input: {
   prompt: string;
   model: ComfyImageModel | string;
   negativePrompt?: string;
   hints?: string;
-  tool?: string;
+  baseParams?: WorkflowParamValues;
+  axis?: ParamExperimentAxis;
   count?: number;
-  sharedSeed?: string;
-}): Promise<{ queued: number; seeds: string[] }> {
+  values?: string[];
+}): Promise<{ queued: number; labels: string[] }> {
   const model = input.model as ComfyImageModel;
-  const count = Math.min(12, Math.max(2, input.count ?? 4));
+  const axis = input.axis ?? "cfg";
+  const count = Math.min(8, Math.max(2, input.count ?? 4));
   const runtime = resolveRuntimeForModel(model);
   const prompt = injectLoraTriggers(input.prompt.trim());
+  const base = input.baseParams ?? resolveQueueParams();
+  const projectId = loadActiveProjectId();
 
   let negativePrompt = input.negativePrompt?.trim();
   if (modelUsesNegativePrompt(model) && !negativePrompt) {
     negativePrompt = await resolveQueueNegativePrompt({
       model,
       hints: input.hints,
-      tool: input.tool ?? "seed-experiment",
+      tool: "param-experiment",
     });
   }
 
-  const seeds: string[] = [];
-  let queued = 0;
-  const projectId = loadActiveProjectId();
+  const defaultValues: Record<ParamExperimentAxis, string[]> = {
+    seed: Array.from({ length: count }, (_, index) =>
+      String(Math.floor(Math.random() * 2 ** 32) + index),
+    ),
+    cfg: ["5", "6", "7", "8", "9", "10", "11", "12"].slice(0, count),
+    steps: ["16", "20", "24", "28", "32", "36", "40", "44"].slice(0, count),
+    width: ["768", "896", "1024", "1152", "1280", "1408", "1536", "1664"].slice(
+      0,
+      count,
+    ),
+  };
 
-  for (let index = 0; index < count; index += 1) {
-    const seed =
-      input.sharedSeed && index === 0
-        ? input.sharedSeed
-        : String(Math.floor(Math.random() * 2 ** 32) + index);
-    seeds.push(seed);
-    const params = resolveQueueParams({ seed });
+  const values = (input.values?.length ? input.values : defaultValues[axis]).slice(
+    0,
+    count,
+  );
+  const labels: string[] = [];
+  let queued = 0;
+
+  for (const value of values) {
+    const params: WorkflowParamValues = {
+      ...base,
+      seed:
+        axis === "seed"
+          ? value
+          : base.seed ?? String(Math.floor(Math.random() * 2 ** 32)),
+      cfg: axis === "cfg" ? value : base.cfg,
+      steps: axis === "steps" ? value : base.steps,
+      width: axis === "width" ? value : base.width,
+    };
+    labels.push(`${axis}=${value}`);
 
     const response = await fetch("/api/comfyui", {
       method: "POST",
@@ -65,7 +92,7 @@ export async function queueSeedExperiment(input: {
       promptId: data.promptId,
       prompt,
       negativePrompt,
-      tool: "seed-experiment",
+      tool: "param-experiment",
       model,
       comfyUrl: data.comfyUrl ?? "http://127.0.0.1:8188",
       queueParams: params,
@@ -77,5 +104,5 @@ export async function queueSeedExperiment(input: {
     queued += 1;
   }
 
-  return { queued, seeds };
+  return { queued, labels };
 }

@@ -506,11 +506,14 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
         const runtime = resolveRuntimeForModel(config.model);
         const autoSaveEnabled = loadComfyUiSettings().autoSaveHistoryOnQueue !== false;
         const batchHistoryId =
-          autoSaveEnabled && !historySaved && prepared[0]
+          autoSaveEnabled && !historySaved && prepared.length > 0
             ? saveHistory({
-                prompt: prepared[0],
+                prompt: prepared.join("\n\n---\n\n"),
                 hints: config.hints,
-                metadata: { batchSize: prepared.length },
+                metadata: {
+                  batchSize: prepared.length,
+                  batchPrompts: prepared,
+                },
                 parentHistoryId: resolveParentHistoryId(),
               })
             : undefined;

@@ -147,7 +147,7 @@ class PromptToolsFormat(PromptToolsBase):
                 "mode": (PROMPT_MODES, {"default": "positive"}),
                 "smart_format": ("BOOLEAN", {"default": True}),
             },
-            "optional": cls.api_input(),
+            "optional": {**cls.api_input(), **cls.avoidance_inputs()},
         }
 
     FUNCTION = "format"
@@ -160,21 +160,24 @@ class PromptToolsFormat(PromptToolsBase):
         mode: str,
         smart_format: bool,
         api_base_url: str = "",
+        avoided_tokens: str = "",
     ):
         text = input.strip()
         if not text:
             raise RuntimeError("Input is required.")
 
+        payload = {
+            "input": text,
+            "model": model,
+            "detail": detail,
+            "mode": mode,
+            "smartFormat": smart_format,
+        }
+        self.apply_avoidance(payload, avoided_tokens)
         response = post_json(
             api_base_url,
             "/api/format",
-            {
-                "input": text,
-                "model": model,
-                "detail": detail,
-                "mode": mode,
-                "smartFormat": smart_format,
-            },
+            payload,
         )
         return (extract_prompt(response),)
 
@@ -572,7 +575,7 @@ class PromptToolsNegative(PromptToolsBase):
                 "preserve_subject": ("BOOLEAN", {"default": False}),
                 "extra": ("STRING", {"default": "", "multiline": True}),
             },
-            "optional": cls.api_input(),
+            "optional": {**cls.api_input(), **cls.avoidance_inputs()},
         }
 
     FUNCTION = "generate"
@@ -583,6 +586,7 @@ class PromptToolsNegative(PromptToolsBase):
         preserve_subject: bool,
         extra: str,
         api_base_url: str = "",
+        avoided_tokens: str = "",
     ):
         payload = {
             "sport": sport.strip(),
@@ -590,6 +594,7 @@ class PromptToolsNegative(PromptToolsBase):
         }
         if extra.strip():
             payload["extra"] = extra.strip()
+        self.apply_avoidance(payload, avoided_tokens)
 
         response = post_json(api_base_url, "/api/negative", payload)
         return (extract_prompt(response),)
@@ -743,6 +748,7 @@ class PromptToolsQueueComfyUi(PromptToolsBase):
             },
             "optional": {
                 **cls.api_input(),
+                **cls.avoidance_inputs(),
                 "negative_prompt": ("STRING", {"default": "", "multiline": True}),
             },
         }
@@ -754,6 +760,7 @@ class PromptToolsQueueComfyUi(PromptToolsBase):
         prompt: str,
         api_base_url: str = "",
         negative_prompt: str = "",
+        avoided_tokens: str = "",
     ):
         text = prompt.strip()
         if not text:
@@ -762,6 +769,7 @@ class PromptToolsQueueComfyUi(PromptToolsBase):
         payload = {"prompt": text}
         if negative_prompt.strip():
             payload["negativePrompt"] = negative_prompt.strip()
+        self.apply_avoidance(payload, avoided_tokens)
 
         response = post_json(api_base_url, "/api/comfyui", payload)
         parts = [

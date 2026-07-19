@@ -86,6 +86,18 @@ Legacy URLs `/duo`, `/compose`, and `/random-scene` redirect to the merged Chara
 - **Wardrobe avoided tokens** — low-rated motifs filter catalog wardrobe picks across generators
 - **Batch history auto-save** — batch ComfyUI queue saves one lineage history entry when auto-save is enabled
 - **ComfyUI avoided tokens** — optional `avoided_tokens` input on generator nodes passes motif avoidance to the API
+- **Avoided tokens settings** — view, add, remove, and clear the local avoidance list in Settings
+- **Studio analytics actions** — add negative-scoring tokens to avoidance from the Analytics tab
+- **Gallery project filter** — filter `/gallery` by the active Studio project
+- **Compare winner lineage** — pick winner sets lineage parent when the entry has history
+- **Param experiment queue** — sweep CFG, steps, width, or seed from a selected gallery output
+- **Gallery A/B export** — export compare selections as JSON or HTML side-by-side reports
+- **Webhook event log** — Settings shows recent webhook deliveries with retry
+- **Auto-improve loop** — optional auto-mutate or seed-experiment on high ratings / favorites
+- **Find similar outputs** — rank gallery entries by prompt similarity to a selection
+- **Iteration tree export** — download parent/child history branches as structured JSON
+- **Docker Compose** — `docker compose up` for app + Ollama (+ optional ComfyUI profile)
+- **GitHub Actions CI** — runs unit tests, build, and Playwright smoke on push/PR
 - **Preview workflow everywhere** — all ComfyUI-enabled result panels include a dry-run preview button
 - **Generate sport presets** — sport preset chips on Generate (positive mode) with shareable scene URLs
 - **Settings hub** — `/settings` for service health checks and local data backup/reset

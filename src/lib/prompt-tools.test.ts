@@ -1502,4 +1502,103 @@ describe("rating token analytics", () => {
     assert.equal(gravel?.highCount, 1);
     assert.equal(gravel?.lowCount, 1);
   });
+
+  it("extracts negative scoring tokens", async () => {
+    const { negativeScoringTokens } = await import("./rating-token-analytics");
+    const tokens = negativeScoringTokens([
+      { token: "gravel", highCount: 1, lowCount: 3, score: -2 },
+      { token: "neon", highCount: 4, lowCount: 0, score: 4 },
+    ]);
+    assert.deepEqual(tokens, ["gravel"]);
+  });
+});
+
+describe("avoided tokens management", () => {
+  it("adds and removes tokens", async () => {
+    const storage = new Map<string, string>();
+    const originalWindow = globalThis.window;
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        localStorage: {
+          getItem: (key: string) => storage.get(key) ?? null,
+          setItem: (key: string, value: string) => {
+            storage.set(key, value);
+          },
+          removeItem: (key: string) => {
+            storage.delete(key);
+          },
+        },
+        dispatchEvent: () => undefined,
+      },
+    });
+
+    try {
+      const {
+        addAvoidedToken,
+        removeAvoidedToken,
+        exportAvoidedTokenList,
+        clearAvoidedTokens,
+      } = await import("./avoided-tokens");
+      clearAvoidedTokens();
+      addAvoidedToken("velodrome");
+      assert.ok(exportAvoidedTokenList().includes("velodrome"));
+      removeAvoidedToken("velodrome");
+      assert.equal(exportAvoidedTokenList().includes("velodrome"), false);
+    } finally {
+      Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: originalWindow,
+      });
+    }
+  });
+});
+
+describe("gallery compare export", () => {
+  it("exports compare json manifest", async () => {
+    const { exportCompareJson } = await import("./gallery-compare-export");
+    const json = exportCompareJson([
+      {
+        id: "a",
+        promptId: "p1",
+        prompt: "test prompt",
+        status: "completed",
+        queuedAt: 1,
+        images: [],
+        tool: "character",
+        model: "qwen-image-2512",
+        comfyUrl: "http://127.0.0.1:8188",
+        reviewRating: 5,
+      },
+    ] as import("./comfyui-gallery").ComfyGalleryEntry[]);
+    assert.match(json, /test prompt/);
+    assert.match(json, /"count": 1/);
+  });
+});
+
+describe("iteration tree export", () => {
+  it("serializes parent child forest", async () => {
+    const { exportIterationForestJson } = await import("./iteration-tree-export");
+    const json = exportIterationForestJson([
+      {
+        id: "root",
+        tool: "character",
+        model: "qwen-image-2512",
+        prompt: "root prompt",
+        hints: "",
+        timestamp: 1,
+      },
+      {
+        id: "child",
+        tool: "refine",
+        model: "qwen-image-2512",
+        prompt: "child prompt",
+        hints: "",
+        timestamp: 2,
+        metadata: { parentHistoryId: "root" },
+      },
+    ] as import("@/hooks/usePromptHistory").PromptHistoryEntry[]);
+    assert.match(json, /child prompt/);
+    assert.match(json, /"parentId": "root"/);
+  });
 });
