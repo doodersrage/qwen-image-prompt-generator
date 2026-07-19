@@ -66,7 +66,7 @@ export type EnrichedToolGenerateResult = ToolGenerateResult & {
 };
 
 import type { BackgroundPresetOptions } from "../background-options";
-import type { FantasyPresetOptions } from "../fantasy-options";
+import type { FantasyPresetOptions, FantasyShotFraming } from "../fantasy-options";
 import type { PetPresetOptions } from "../pet-options";
 
 export type BackgroundOptions = SharedGenerationOptions & {
@@ -91,6 +91,7 @@ export type PetOptions = SharedGenerationOptions & {
 
 export type FantasyOptions = SharedGenerationOptions & {
   hints?: string;
+  portraitStyle?: FantasyShotFraming;
   wildness?: number;
   variationStrength?: number;
   presetOptions?: FantasyPresetOptions;

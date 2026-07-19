@@ -2,9 +2,11 @@ import {
   buildFantasyPresetBlock,
   buildFantasyPresetUserDirective,
   countFantasyPresetSelections,
+  getFantasyShotFramingLine,
   hasFantasyPresetOptions,
   normalizeFantasyPresetOptions,
   resolveFantasyFocus,
+  resolveFantasyShotFraming,
 } from "../fantasy-options";
 import {
   buildMandatoryLocationBlock,
@@ -27,6 +29,10 @@ import {
 import { runSpecializedPrompt } from "./runner";
 import type { FantasyOptions, ToolGenerateResult } from "./types";
 
+const FANTASY_ACTION_INSTRUCTIONS = `- Name a specific fantasy action (cast a spell, draw a blade, leap, dodge, channel magic, summon, strike, etc.) and show the body or creature mid-movement.
+- Describe weight shift, garment or armor motion, spell particles, and environmental reaction (kicked embers, splashing mist, drifting runes).
+- Prefer energetic camera language tied to the chosen framing.`;
+
 export async function generateFantasyPrompt(
   options: FantasyOptions,
 ): Promise<ToolGenerateResult> {
@@ -36,6 +42,7 @@ export async function generateFantasyPrompt(
   const wildness = Math.min(100, Math.max(0, options.wildness ?? 65));
   const effectiveHints = applyLockedLocation(options.hints, options.lockedLocation);
   const focus = resolveFantasyFocus(presetOptions, effectiveHints);
+  const shotFraming = resolveFantasyShotFraming(focus, options.portraitStyle);
   const includePeople = fantasyFocusIncludesPeople(focus);
   const settingHint = parseSettingHint(effectiveHints);
   const locationExclude = mergeLocationExclusions(
@@ -103,6 +110,8 @@ export async function generateFantasyPrompt(
     locationBlock,
     `Fantasy scene ingredients:\n${seed}`,
     clothingDirective,
+    `Framing: ${getFantasyShotFramingLine(shotFraming)}`,
+    shotFraming === "action" ? FANTASY_ACTION_INSTRUCTIONS : null,
     `Scene focus: ${focus}`,
     "Write one model-ready fantasy scene prompt.",
   ]
@@ -121,7 +130,13 @@ export async function generateFantasyPrompt(
     userMessage,
     temperature,
     templateFallback: () =>
-      buildFantasyTemplate(seed, focus, wardrobeAssignments, presetOptions),
+      buildFantasyTemplate(
+        seed,
+        focus,
+        shotFraming,
+        wardrobeAssignments,
+        presetOptions,
+      ),
     enforceMinimum: !hasPresets,
     postProcessPrompt:
       includePeople && wardrobeAssignments?.length
@@ -134,6 +149,7 @@ export async function generateFantasyPrompt(
       location: settingHint.location,
       sceneLocation,
       focus,
+      shotFraming,
       wildness,
       presetOptions,
       presetCount: hasPresets ? countFantasyPresetSelections(presetOptions) : 0,
@@ -145,6 +161,7 @@ export async function generateFantasyPrompt(
 function buildFantasyTemplate(
   seed: string,
   focus: ReturnType<typeof resolveFantasyFocus>,
+  shotFraming: ReturnType<typeof resolveFantasyShotFraming>,
   wardrobeAssignments: ReturnType<typeof buildGenerateWardrobeAssignments> | null,
   presetOptions: ReturnType<typeof normalizeFantasyPresetOptions>,
 ): string {
@@ -158,6 +175,22 @@ function buildFantasyTemplate(
     prompt += ". Exactly two or three fantasy figures interact in frame with readable identity and no crowd extras.";
   } else {
     prompt += ". One fantasy hero reads clearly with specific gear, expression, and magical context.";
+  }
+
+  prompt += ` ${getFantasyShotFramingLine(shotFraming).replace(/\.$/, "")}.`;
+
+  if (shotFraming === "action") {
+    prompt +=
+      " The body reads mid-motion with believable anatomy, spell energy, and garments or armor reacting to movement.";
+  } else if (shotFraming === "full-body") {
+    prompt +=
+      " Full proportions read clearly from head to toe with natural posture and readable gear.";
+  } else if (shotFraming === "portrait") {
+    prompt +=
+      " Facial detail, expression, and key gear textures are crisp in portrait framing.";
+  } else if (shotFraming === "wide") {
+    prompt +=
+      " The scene holds layered environmental depth with the subject anchored in mythic surroundings.";
   }
 
   if (presetOptions.magicElement) {

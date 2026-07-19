@@ -2,6 +2,7 @@ import { generateFantasyPrompt } from "@/lib/specialized/fantasy-generator";
 import {
   normalizeFantasyPresetOptions,
   type FantasyPresetOptions,
+  type FantasyShotFraming,
 } from "@/lib/fantasy-options";
 import {
   normalizeBlockedLocations,
@@ -17,6 +18,7 @@ type FantasyRequestBody = {
   model?: string;
   detail?: string;
   hints?: string;
+  portraitStyle?: FantasyShotFraming;
   wildness?: number;
   variationStrength?: number;
   presetOptions?: Partial<Record<keyof FantasyPresetOptions, string>>;
@@ -41,6 +43,7 @@ export async function POST(request: Request) {
     const result = await generateFantasyPrompt({
       ...shared,
       hints: body.hints?.trim(),
+      portraitStyle: body.portraitStyle,
       wildness: body.wildness,
       variationStrength: body.variationStrength,
       presetOptions: normalizeFantasyPresetOptions(body.presetOptions),

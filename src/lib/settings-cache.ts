@@ -59,7 +59,7 @@ export type BackgroundToolCache = {
   surfaceMaterials?: string;
 } & Partial<Omit<BackgroundPresetOptions, "surfaceMaterials">>;
 
-import type { FantasyPresetOptions } from "./fantasy-options";
+import type { FantasyPresetOptions, FantasyShotFraming } from "./fantasy-options";
 import type { PetPresetOptions } from "./pet-options";
 
 export type PetToolCache = {
@@ -72,6 +72,7 @@ export type PetToolCache = {
 
 export type FantasyToolCache = {
   hints?: string;
+  portraitStyle?: FantasyShotFraming;
   wildness?: number;
   variationStrength?: number;
   fantasyPresetId?: string;
@@ -212,6 +213,7 @@ export const DEFAULT_PET_TOOL_CACHE: PetToolCache = {
 
 export const DEFAULT_FANTASY_TOOL_CACHE: FantasyToolCache = {
   hints: "",
+  portraitStyle: "portrait",
   wildness: 65,
   variationStrength: 50,
 };

@@ -52,8 +52,10 @@ import { buildRandomPetSeed } from "./pet-scene-pools";
 import {
   buildFantasyPresetBlock,
   countFantasyPresetSelections,
+  getFantasyShotFramingLine,
   normalizeFantasyPresetOptions,
   resolveFantasyFocus,
+  resolveFantasyShotFraming,
 } from "./fantasy-options";
 import { getFantasyPreset, FANTASY_PRESETS } from "./fantasy-presets";
 import {
@@ -924,6 +926,13 @@ describe("comfyui gallery outputs", () => {
 
     const block = buildFantasyPresetBlock(options);
     assert.ok(block?.includes("FANTASY PRESET"));
+
+    assert.equal(resolveFantasyShotFraming("environment", "portrait"), "wide");
+    assert.equal(resolveFantasyShotFraming("character", "action"), "action");
+    assert.match(
+      getFantasyShotFramingLine("full-body"),
+      /full-body framing/i,
+    );
   });
 
   it("sorts gallery entries", () => {

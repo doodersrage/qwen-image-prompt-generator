@@ -1,3 +1,31 @@
+export type FantasyShotFraming = "portrait" | "full-body" | "action" | "wide";
+
+export const FANTASY_SHOT_FRAMING_LINES: Record<FantasyShotFraming, string> = {
+  portrait:
+    "tight portrait framing on face, gear, expression, and readable magical detail",
+  "full-body":
+    "full-body framing from head to toe with readable armor, robes, wings, or proportions",
+  action:
+    "dynamic action framing: mid-motion body with visible momentum, spell energy, and environment interaction—never a static standing pose",
+  wide:
+    "wide environmental framing with layered depth and the subject anchored in mythic surroundings",
+};
+
+export function resolveFantasyShotFraming(
+  focus: ReturnType<typeof resolveFantasyFocus>,
+  portraitStyle?: FantasyShotFraming,
+): FantasyShotFraming {
+  if (focus === "environment") {
+    return "wide";
+  }
+
+  return portraitStyle ?? "portrait";
+}
+
+export function getFantasyShotFramingLine(framing: FantasyShotFraming): string {
+  return FANTASY_SHOT_FRAMING_LINES[framing];
+}
+
 export type FantasyFocus =
   | ""
   | "character"

@@ -56,6 +56,17 @@ export default function FantasyTool() {
   );
   const focus = resolveFantasyFocus(presetOptions, toolSettings.hints);
   const includePeople = focus === "character" || focus === "ensemble";
+  const framingOptions =
+    focus === "environment"
+      ? ([{ label: "Wide", value: "wide" }] as const)
+      : ([
+          { label: "Portrait", value: "portrait" },
+          { label: "Full body", value: "full-body" },
+          { label: "Action", value: "action" },
+          { label: "Wide", value: "wide" },
+        ] as const);
+  const activeFraming =
+    focus === "environment" ? "wide" : (toolSettings.portraitStyle ?? "portrait");
 
   const actions = usePromptResultActions({
     tool: "fantasy",
@@ -97,6 +108,7 @@ export default function FantasyTool() {
           model: shared.model,
           detail: shared.detail,
           hints: toolSettings.hints,
+          portraitStyle: activeFraming,
           wildness: toolSettings.wildness,
           variationStrength: toolSettings.variationStrength,
           presetOptions,
@@ -141,6 +153,7 @@ export default function FantasyTool() {
     recordClothing,
     getBlocklist,
     actions,
+    activeFraming,
   ]);
 
   const copyOutput = useCallback(async () => {
@@ -245,6 +258,26 @@ export default function FantasyTool() {
           rows={3}
           className={accentFocusClass(ACCENT)}
         />
+
+        <FieldDivider />
+
+        <FieldLabel>Framing</FieldLabel>
+        <div className="flex flex-wrap gap-2">
+          {framingOptions.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => updateToolSettings({ portraitStyle: option.value })}
+              className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                activeFraming === option.value
+                  ? "border-violet-500 bg-violet-500/15 text-violet-200"
+                  : "border-zinc-700 text-zinc-400"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
 
         <FieldDivider />
 
