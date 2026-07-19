@@ -1,5 +1,5 @@
 import { generateBackgroundPrompt } from "@/lib/specialized/background-generator";
-import { normalizeSharedGenerationOptions, normalizeRecentLocations } from "@/lib/specialized/normalize";
+import { normalizeSharedGenerationOptions, normalizeRecentLocations, normalizeBlockedLocations } from "@/lib/specialized/normalize";
 import {
   normalizeBackgroundPresetOptions,
   type BackgroundPresetOptions,
@@ -19,6 +19,7 @@ type BackgroundRequestBody = {
     Record<keyof BackgroundPresetOptions, string | string[]>
   >;
   recentLocations?: string[];
+  blockedLocations?: string[];
 };
 
 export async function GET() {
@@ -37,6 +38,7 @@ export async function POST(request: Request) {
       mood: body.mood?.trim(),
       presetOptions: normalizeBackgroundPresetOptions(body.presetOptions),
       recentLocations: normalizeRecentLocations(body.recentLocations),
+      blockedLocations: normalizeBlockedLocations(body.blockedLocations),
     });
 
     return apiJson(result);

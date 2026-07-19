@@ -97,7 +97,7 @@ export const ATHLETIC_SPORT_PROFILES: readonly AthleticSportProfile[] = [
       /\b(?:soccer cleats|yoga pants|climbing shoes)\b/i,
     ],
     guardrail:
-      "Cycling activity—use a cycling jersey with bib shorts, or a one-piece cycling kit, plus cycling shoes or cleats. No track pants, sweatpants, generic mesh jerseys, climbing shoes, soccer cleats, running shoes, cold-weather layers stacked on kit, or a second outfit description.",
+      "Cycling activity—use a cycling jersey with bib shorts, or a one-piece cycling kit, plus cycling shoes or cleats, and a fastened cycling helmet on every rider. Hair may show at the temples or through helmet vents, but never bare heads. No track pants, sweatpants, generic mesh jerseys, climbing shoes, soccer cleats, running shoes, cold-weather layers stacked on kit, or a second outfit description.",
     outfitPickRate: 100,
   },
   {
@@ -326,6 +326,15 @@ export function summaryMatchesSportWardrobe(
     .filter(Boolean);
 
   return chunks.every((chunk) => {
+    if (
+      sport === "cycling" &&
+      /\b(?:cycling helmet|bike helmet|aero helmet|gravel helmet|mountain bike helmet|track cycling helmet|cyclocross helmet|helmet)\b/i.test(
+        chunk,
+      )
+    ) {
+      return true;
+    }
+
     if (labelMatchesExcludePatterns(chunk, profile.excludeLabels)) {
       return false;
     }

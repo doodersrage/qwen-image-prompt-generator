@@ -2,8 +2,15 @@ import {
   generatePrompt,
   type PromptMode,
 } from "@/lib/prompt-generator";
+import { applyLockedLocation } from "@/lib/locked-location";
+import { applyLockedVariationSeed } from "@/lib/locked-variation-seed";
 import { normalizeGenerationSettings } from "@/lib/generation-settings";
-import { normalizeRecentClothing } from "@/lib/specialized/normalize";
+import {
+  normalizeRecentClothing,
+  normalizeLockedWardrobeId,
+  normalizeLockedLocation,
+  normalizeVariationSeed,
+} from "@/lib/specialized/normalize";
 import {
   apiError,
   apiJson,
@@ -24,6 +31,9 @@ type GenerateRequestBody = {
   distinctPeople?: boolean;
   alwaysIncludeClothing?: boolean;
   recentClothing?: string[];
+  lockedWardrobeId?: string;
+  lockedLocation?: string;
+  variationSeed?: string;
   model?: string;
 };
 
@@ -34,7 +44,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as GenerateRequestBody;
-    const input = body.input?.trim();
+    const rawInput = body.input?.trim();
     const mode: PromptMode = body.mode === "negative" ? "negative" : "positive";
     const settings = normalizeGenerationSettings({
       variation: body.variation,
@@ -44,16 +54,24 @@ export async function POST(request: Request) {
       model: body.model,
     });
 
-    if (!input) {
+    if (!rawInput) {
       return apiError("Input is required.", 400);
     }
 
-    if (input.length > 4000) {
+    const lockedLocation = normalizeLockedLocation(body.lockedLocation);
+    const effectiveInput =
+      mode === "positive"
+        ? applyLockedLocation(rawInput, lockedLocation) ?? rawInput
+        : rawInput;
+
+    if (effectiveInput.length > 4000) {
       return apiError("Input must be 4000 characters or fewer.", 400);
     }
 
-    const result = await generatePrompt(input, mode, settings, {
+    const result = await generatePrompt(effectiveInput, mode, settings, {
       recentClothing: normalizeRecentClothing(body.recentClothing),
+      lockedWardrobeId: normalizeLockedWardrobeId(body.lockedWardrobeId),
+      variationSeed: normalizeVariationSeed(body.variationSeed),
     });
 
     return apiJson(result);

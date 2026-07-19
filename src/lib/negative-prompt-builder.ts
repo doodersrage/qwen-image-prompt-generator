@@ -1,0 +1,43 @@
+import type { AthleticSport } from "./athletic-sport-profiles";
+
+const BASE_NEGATIVE =
+  "blurry, low quality, watermark, text, logo, deformed, bad anatomy, extra limbs";
+
+const SPORT_NEGATIVE: Partial<Record<AthleticSport, string>> = {
+  cycling:
+    "bare head, no helmet, dress, street clothes, track pants, running shoes, javelin, wrong sport",
+  running: "cycling kit, bicycle, cleats on bike, dress shoes",
+  basketball: "cycling kit, soccer cleats, baseball uniform",
+  soccer: "cycling kit, basketball hoop indoors only, American football",
+  track_field: "bicycle, cycling kit, basketball, unrelated sport gear",
+};
+
+export function buildNegativePrompt(input: {
+  sport?: AthleticSport | null;
+  preserveSubject?: boolean;
+  extra?: string;
+}): string {
+  const parts = [BASE_NEGATIVE];
+
+  if (input.preserveSubject) {
+    parts.push(
+      "different face, identity change, age change, gender swap, duplicate person",
+    );
+  }
+
+  if (input.sport && SPORT_NEGATIVE[input.sport]) {
+    parts.push(SPORT_NEGATIVE[input.sport]!);
+  }
+
+  if (input.extra?.trim()) {
+    parts.push(input.extra.trim());
+  }
+
+  return parts.join(", ");
+}
+
+export type NegativePromptResult = {
+  prompt: string;
+  mode: "negative" | "preserve";
+  sport: AthleticSport | null;
+};

@@ -197,6 +197,150 @@ const SUBJECTS_MEN = [
   "a monk with a shaved head, deep brown robes, and ink-stained fingers",
 ];
 
+const MINIMAL_HAIR_PATTERN =
+  /\b(bald|balding|shaved|buzzed|monk|tonsure|hairless)\b/i;
+
+const IDENTITY_WOMEN = [
+  "a young Black woman with box braids, high cheekbones, warm brown eyes, and gold hoop earrings",
+  "a middle-aged Latina with gray-streaked hair, soft build, and laugh lines",
+  "a pale red-haired woman in her thirties, light freckles, and cropped copper hair",
+  "a slender elderly woman with white hair in a loose bun, reading glasses, and steady posture",
+  "an older South Asian woman with silver-streaked hair, gentle eyes, and henna on her palms",
+  "a lithe woman in her twenties with deep brown skin, locs tied back, and expressive hands",
+  "a woman in her late thirties with curly auburn hair, focused eyes, and strong cheekbones",
+  "a woman in her forties with sharp cheekbones, dark curls, and amber eyes",
+];
+
+const IDENTITY_MEN = [
+  "an elderly man with a creased face, silver stubble, and work-worn hands",
+  "a teenage East Asian man with messy hair, freckles, and a shy half-smile",
+  "a muscular Polynesian man with traditional arm tattoos and sun-darkened skin",
+  "a stocky Mediterranean man with olive skin, thick beard, and square jaw",
+  "a heavyset middle-aged man with a bald head, warm expression, and laugh lines",
+  "a grizzled man with rope-scarred fingers, salt-and-pepper beard, and squinting eyes",
+  "a retired boxer with a flattened nose, gray temples, and quiet stillness",
+  "a man in his thirties with close-cropped hair, sharp jawline, and steady gaze",
+];
+
+const ATHLETIC_IDENTITY_EXCLUDE =
+  /\b(?:pregnant|school-age|child|kid|toddler|infant|monk|nun|girl with|boy with|elderly|older|retired|teenage|teen\b|grizzled|reading glasses)\b/i;
+
+const ATHLETIC_COMPETITION_IDENTITY_WOMEN = [
+  "a young Black woman with box braids, high cheekbones, warm brown eyes, and an endurance-toned build",
+  "a Latina woman in her thirties with dark wavy hair, strong jaw, and sun-warmed skin",
+  "a pale red-haired woman in her thirties, light freckles, and cropped copper hair",
+  "an East Asian woman in her twenties with a sleek black ponytail, sharp cheekbones, and focused eyes",
+  "a South Asian woman in her late twenties with a long braid, warm brown eyes, and defined cheekbones",
+  "a white woman in her forties with sun-weathered skin, a blonde braid, and crow's-feet at the eyes",
+  "a mixed-race woman in her twenties with curly dark hair, amber eyes, and an athletic frame",
+  "an Indigenous woman in her thirties with thick black hair in twin braids and high cheekbones",
+  "a Middle Eastern woman in her twenties with olive skin, dark curls, and steady gaze",
+  "a Nordic woman in her thirties with fair skin, ice-blue eyes, and closely cropped sides",
+  "a Black woman in her forties with close-cropped natural hair, bold cheekbones, and a powerful jaw",
+  "a Southeast Asian woman in her late twenties with tan skin, a short dark bob, and bright eyes",
+  "a Mediterranean woman in her early thirties with chestnut waves, olive skin, and angular features",
+  "a woman in her late thirties with curly auburn hair, focused eyes, and strong cheekbones",
+];
+
+const ATHLETIC_COMPETITION_IDENTITY_MEN = [
+  "a Black man in his thirties with close-cropped hair, high cheekbones, and a lean endurance build",
+  "a Latino man in his late twenties with dark curls, square jaw, and sun-bronzed skin",
+  "a white man in his thirties with sandy blond stubble, gray-green eyes, and a rangy build",
+  "an East Asian man in his twenties with messy black hair, sharp jawline, and alert eyes",
+  "a South Asian man in his thirties with thick dark hair, warm brown skin, and steady gaze",
+  "a Polynesian man in his late twenties with traditional arm tattoos, broad shoulders, and sun-darkened skin",
+  "a Mediterranean man in his thirties with olive skin, thick beard, and a compact powerful frame",
+  "a mixed-race man in his twenties with tight curls, hazel eyes, and long-limbed posture",
+  "a Middle Eastern man in his early thirties with dark stubble, strong nose, and intent eyes",
+  "a Nordic man in his thirties with pale skin, cropped blond hair, and sharp cheekbones",
+  "a Southeast Asian man in his late twenties with tan skin, short black hair, and defined jaw",
+  "a man in his forties with salt-and-pepper temples, weathered smile lines, and a wiry racer's build",
+  "a stocky man in his thirties with a shaved head, brown eyes, and thick neck muscles",
+  "a lean man in his twenties with a sharp jawline, auburn buzz cut, and freckles across his nose",
+];
+
+export function pickDistinctIdentitySeeds(
+  count: number,
+  gender: SubjectGender = "any",
+  options: { allowMinimalHair?: boolean; athletic?: boolean } = {},
+): string[] {
+  if (gender === "mixed" && count >= 2) {
+    return pickDistinctFromPool(
+      count,
+      [...ATHLETIC_COMPETITION_IDENTITY_MEN, ...ATHLETIC_COMPETITION_IDENTITY_WOMEN],
+      options,
+    ).slice(0, 2);
+  }
+
+  const pool = options.athletic
+    ? gender === "women"
+      ? ATHLETIC_COMPETITION_IDENTITY_WOMEN
+      : gender === "men"
+        ? ATHLETIC_COMPETITION_IDENTITY_MEN
+        : [
+            ...ATHLETIC_COMPETITION_IDENTITY_WOMEN,
+            ...ATHLETIC_COMPETITION_IDENTITY_MEN,
+          ]
+    : gender === "women"
+      ? IDENTITY_WOMEN
+      : gender === "men"
+        ? IDENTITY_MEN
+        : [...IDENTITY_WOMEN, ...IDENTITY_MEN];
+
+  return pickDistinctFromPool(count, pool, options);
+}
+
+function pickDistinctFromPool(
+  count: number,
+  pool: readonly string[],
+  options: { allowMinimalHair?: boolean; athletic?: boolean },
+): string[] {
+  const filtered = filterIdentityPool(pool, options);
+  const shuffled = shuffle(filtered.length > 0 ? filtered : [...pool]);
+  const picked: string[] = [];
+
+  for (const entry of shuffled) {
+    if (picked.length >= count) {
+      break;
+    }
+    if (!picked.includes(entry)) {
+      picked.push(entry);
+    }
+  }
+
+  return picked;
+}
+
+function filterIdentityPool(
+  pool: readonly string[],
+  options: { allowMinimalHair?: boolean; athletic?: boolean },
+): string[] {
+  return pool.filter((entry) => {
+    if (options.athletic && ATHLETIC_IDENTITY_EXCLUDE.test(entry)) {
+      return false;
+    }
+    if (!options.allowMinimalHair && MINIMAL_HAIR_PATTERN.test(entry)) {
+      return false;
+    }
+    return true;
+  });
+}
+
+function pickFilteredIdentity(
+  gender: "women" | "men",
+  options: { allowMinimalHair?: boolean; athletic?: boolean },
+): string {
+  const pool = options.athletic
+    ? gender === "women"
+      ? ATHLETIC_COMPETITION_IDENTITY_WOMEN
+      : ATHLETIC_COMPETITION_IDENTITY_MEN
+    : gender === "women"
+      ? IDENTITY_WOMEN
+      : IDENTITY_MEN;
+  const filtered = filterIdentityPool(pool, options);
+  return pick(filtered.length > 0 ? filtered : [...pool]);
+}
+
 export function pickDistinctSubjects(
   count: number,
   gender: SubjectGender = "any",
@@ -214,9 +358,6 @@ export function pickDistinctSubjects(
 
   return shuffle(pool).slice(0, Math.min(count, pool.length));
 }
-
-const MINIMAL_HAIR_PATTERN =
-  /\b(bald|balding|shaved|buzzed|monk|tonsure|hairless)\b/i;
 
 function filterHairPreference(
   pool: readonly string[],

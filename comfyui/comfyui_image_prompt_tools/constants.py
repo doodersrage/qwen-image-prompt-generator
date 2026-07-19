@@ -6,6 +6,19 @@ PROMPT_MODES = ["positive", "negative"]
 PORTRAIT_STYLES = ["portrait", "full-body", "action"]
 IMAGE_FOCUS_OPTIONS = ["full", "subject", "background", "style"]
 
+SPORT_PRESET_IDS = [
+    "gravel-duo-race",
+    "gravel-solo",
+    "road-crit",
+    "mtb-descent",
+    "cx-race",
+    "track-sprint",
+    "basketball-duo",
+    "soccer-duo",
+    "running-duo",
+    "martial-spar",
+]
+
 MODEL_IDS = [
     "sd15",
     "sd20",

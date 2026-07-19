@@ -1,14 +1,18 @@
 "use client";
 
+import { promptResultPreviewProps } from "@/lib/prompt-result-preview-props";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ModelSelector from "@/components/ModelSelector";
+import EnhancedPromptResult from "@/components/EnhancedPromptResult";
 import { useCachedSettings } from "@/hooks/useCachedSettings";
+import { usePromptResultActions } from "@/hooks/usePromptResultActions";
 import type { DetailLevel } from "@/lib/detail-level";
 import { getDetailLimits } from "@/lib/detail-level";
 import {
   getComfyModelDefinition,
   type ComfyImageModel,
 } from "@/lib/comfy-models";
+import { getReformatTargetLabel, getReformatTargetModel } from "@/lib/reformat-target";
 import { DEFAULT_FORMAT_TOOL_CACHE } from "@/lib/settings-cache";
 
 type FormatMode = "positive" | "negative";
@@ -55,6 +59,16 @@ export default function PromptFormatter() {
   const targetModel = shared.model;
   const detail = shared.detail;
   const smartFormat = toolSettings.smartFormat ?? true;
+  const autoFixRules = shared.autoFixRules !== false;
+
+  const actions = usePromptResultActions({
+    tool: "format",
+    model: targetModel,
+    detail,
+    hints: input,
+    autoFixRules,
+    reformatTarget: getReformatTargetModel(targetModel),
+  });
 
   const setTargetModel = (model: ComfyImageModel) => updateShared({ model });
   const setDetail = (value: DetailLevel) => updateShared({ detail: value });
@@ -92,8 +106,13 @@ export default function PromptFormatter() {
     setLoading(true);
     setError(null);
     setCopied(false);
+    actions.resetStatuses();
 
     try {
+      if (mode === "positive") {
+        await actions.runPreLint(input);
+      }
+
       const response = await fetch("/api/format", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -114,7 +133,11 @@ export default function PromptFormatter() {
         throw new Error(data.error ?? "Formatting failed.");
       }
 
-      setOutput(data.prompt);
+      const prompt =
+        mode === "positive"
+          ? await actions.finalizePrompt(data.prompt, input)
+          : data.prompt;
+      setOutput(prompt);
       setProvider(data.provider);
       setResultMeta({
         mode: data.mode,
@@ -132,7 +155,7 @@ export default function PromptFormatter() {
     } finally {
       setLoading(false);
     }
-  }, [input, mode, detail, targetModel, smartFormat]);
+  }, [input, mode, detail, targetModel, smartFormat, actions]);
 
   const copyOutput = useCallback(async () => {
     if (!output) return;
@@ -265,6 +288,25 @@ export default function PromptFormatter() {
           </p>
         </div>
 
+        {mode === "positive" && (
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+            <input
+              type="checkbox"
+              checked={autoFixRules}
+              onChange={(e) => updateShared({ autoFixRules: e.target.checked })}
+              className="mt-0.5 h-4 w-4 rounded border-zinc-600 bg-zinc-900 text-emerald-600"
+            />
+            <span>
+              <span className="block text-sm font-medium text-zinc-200">
+                Auto-fix lint errors
+              </span>
+              <span className="mt-1 block text-xs leading-relaxed text-zinc-500">
+                After formatting, apply rule-based fixes when lint reports errors.
+              </span>
+            </span>
+          </label>
+        )}
+
         <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
           <input
             type="checkbox"
@@ -299,23 +341,57 @@ export default function PromptFormatter() {
         )}
       </section>
 
-      {output && (
+      {output && mode === "positive" && (
+        <EnhancedPromptResult
+          output={output}
+          provider={provider}
+          comfyNode={resultMeta?.comfyNode ?? selectedModel.comfyNode}
+          limits={resultMeta?.limits}
+          copied={copied}
+          onCopy={() => void copyOutput()}
+          extraMeta={
+            resultMeta
+              ? `${resultMeta.inputChars} → ${resultMeta.outputChars} chars`
+              : undefined
+          }
+          diagnostics={actions.diagnostics}
+          preDiagnostics={actions.preDiagnostics}
+          onSaveHistory={() =>
+            actions.saveHistory({ prompt: output, hints: input })
+          }
+          onSendComfyUi={() => void actions.sendComfyUi(output)}
+          {...promptResultPreviewProps(actions, output)}
+          onFixPrompt={() => void actions.fixPrompt(output, setOutput, input)}
+          onCopyPair={() => void actions.copyPromptPair(output)}
+          onCompact={() => void actions.compactPrompt(output, setOutput)}
+          onReformat={() => void actions.reformatForModel(output, setOutput)}
+          reformatTargetLabel={getReformatTargetLabel(targetModel)}
+          onRunPipeline={() =>
+            void actions.runExportPipeline(output, setOutput, {
+              maxChars: resultMeta?.limits.maxChars,
+              queueComfyUi: true,
+            })
+          }
+          onExportSidecar={() =>
+            void actions.exportSidecar(output, {
+              comfyNode: resultMeta?.comfyNode ?? selectedModel.comfyNode,
+            })
+          }
+          fixStatus={actions.fixStatus}
+          compactStatus={actions.compactStatus}
+          reformatStatus={actions.reformatStatus}
+          pipelineStatus={actions.pipelineStatus}
+          comfyUiStatus={actions.comfyUiStatus}
+          comfyUiPreviewUrl={actions.comfyUiPreviewUrl}
+          historySaved={actions.historySaved}
+          pairCopied={actions.pairCopied}
+        />
+      )}
+
+      {output && mode === "negative" && (
         <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-xl shadow-black/20">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-medium text-zinc-200">
-                Formatted prompt
-              </h2>
-              {provider && resultMeta && (
-                <p className="mt-1 text-xs text-zinc-500">
-                  via {provider === "llm" ? "LLM rewrite" : "rules only"} ·{" "}
-                  {resultMeta.inputChars} → {resultMeta.outputChars} chars
-                  {resultMeta.limits.minChars
-                    ? ` · limit ${resultMeta.limits.minChars}–${resultMeta.limits.maxChars}`
-                    : ` · limit ${resultMeta.limits.maxChars}`}
-                </p>
-              )}
-            </div>
+            <h2 className="text-sm font-medium text-zinc-200">Formatted preserve prompt</h2>
             <button
               type="button"
               onClick={() => void copyOutput()}
@@ -324,18 +400,9 @@ export default function PromptFormatter() {
               {copied ? "Copied!" : "Copy for ComfyUI"}
             </button>
           </div>
-
           <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl border border-zinc-800 bg-zinc-950 p-4 font-mono text-sm leading-relaxed text-emerald-300">
             {output}
           </pre>
-
-          <p className="text-xs text-zinc-500">
-            Paste into{" "}
-            <code className="rounded bg-zinc-800 px-1 text-emerald-300">
-              {resultMeta?.comfyNode ?? selectedModel.comfyNode}
-            </code>
-            . Press Ctrl+Enter to reformat.
-          </p>
         </section>
       )}
     </div>

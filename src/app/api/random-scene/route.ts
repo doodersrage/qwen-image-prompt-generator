@@ -1,5 +1,5 @@
 import { generateRandomScene } from "@/lib/specialized/random-scene";
-import { normalizeSharedGenerationOptions, normalizeRecentLocations, normalizeRecentClothing } from "@/lib/specialized/normalize";
+import { normalizeSharedGenerationOptions, normalizeRecentLocations, normalizeRecentClothing, normalizeBlockedLocations, normalizeLockedWardrobeId, normalizeLockedLocation, normalizeVariationSeed } from "@/lib/specialized/normalize";
 import { apiError, apiJson, apiMethodNotAllowed } from "@/lib/api/response";
 import { NextResponse } from "next/server";
 
@@ -14,6 +14,10 @@ type RandomSceneRequestBody = {
   recentLocations?: string[];
   recentClothing?: string[];
   alwaysIncludeClothing?: boolean;
+  blockedLocations?: string[];
+  lockedWardrobeId?: string;
+  lockedLocation?: string;
+  variationSeed?: string;
 };
 
 export async function GET() {
@@ -39,6 +43,10 @@ export async function POST(request: Request) {
       recentLocations: normalizeRecentLocations(body.recentLocations),
       recentClothing: normalizeRecentClothing(body.recentClothing),
       alwaysIncludeClothing,
+      blockedLocations: normalizeBlockedLocations(body.blockedLocations),
+      lockedWardrobeId: normalizeLockedWardrobeId(body.lockedWardrobeId),
+      lockedLocation: normalizeLockedLocation(body.lockedLocation),
+      variationSeed: normalizeVariationSeed(body.variationSeed),
     });
 
     return apiJson(result);

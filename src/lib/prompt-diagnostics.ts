@@ -1,0 +1,142 @@
+import {
+  inferCyclingDiscipline,
+  type CyclingDiscipline,
+} from "./athletic-sport-actions";
+import {
+  inferAthleticSport,
+  type AthleticSport,
+} from "./athletic-sport-profiles";
+import { parsePeopleConstraint } from "./distinct-people";
+import { hintsDescribeAthleticDuoCompetition } from "./generate-wardrobe";
+
+export type DiagnosticSeverity = "error" | "warn" | "info";
+
+export type PromptDiagnosticIssue = {
+  severity: DiagnosticSeverity;
+  code: string;
+  message: string;
+};
+
+export type PromptDiagnosticsInferred = {
+  sport: AthleticSport | null;
+  cyclingDiscipline: CyclingDiscipline | null;
+  duoMode: boolean;
+  peopleCount: number | null;
+  athleticCompetition: boolean;
+  gender: ReturnType<typeof parsePeopleConstraint>["gender"];
+};
+
+export type PromptDiagnostics = {
+  inferred: PromptDiagnosticsInferred;
+  issues: PromptDiagnosticIssue[];
+  suggestions: string[];
+};
+
+const STREET_CLOTHING_ON_ATHLETE =
+  /\b(?:linen dress|evening gown|bright sari|paint-stained apron|bomber jacket|wearing (?:a )?(?:linen )?dress)\b/i;
+
+const BARE_HEAD_CYCLIST =
+  /\b(?:cyclist|cyclists|cycling kit|on (?:a |the )?bike)\b/i;
+
+const HELMET_PRESENT =
+  /\b(?:cycling helmet|bike helmet|aero helmet|gravel helmet|mountain bike helmet|track cycling helmet|helmet)\b/i;
+
+const ELDERLY_ATHLETE =
+  /\b(?:elderly|retired|reading glasses)\b/i;
+
+const VELODROME =
+  /\b(?:velodrome|banking turn|indoor track)\b/i;
+
+const GRAVEL_CONTEXT =
+  /\b(?:gravel(?:\s+(?:bike|bicycle|cyclist|cyclists|ride|racing))?|bikepacking|fire road|doubletrack)\b/i;
+
+export function analyzePromptDiagnostics(
+  corpus: string,
+  prompt?: string,
+): PromptDiagnostics {
+  const text = [corpus, prompt].filter(Boolean).join(" ");
+  const sport = inferAthleticSport(text);
+  const cyclingDiscipline =
+    sport === "cycling" ? inferCyclingDiscipline(text) : null;
+  const people = parsePeopleConstraint(text);
+  const peopleCount = people.count ?? (/\b(?:duo|couple|pair|two)\b/i.test(text) ? 2 : null);
+  const duoMode = (peopleCount ?? 0) >= 2;
+  const athleticCompetition = hintsDescribeAthleticDuoCompetition(text);
+  const issues: PromptDiagnosticIssue[] = [];
+  const suggestions: string[] = [];
+
+  if (sport === "cycling" && prompt) {
+    if (STREET_CLOTHING_ON_ATHLETE.test(prompt)) {
+      issues.push({
+        severity: "error",
+        code: "cycling.street_clothes",
+        message: "Prompt describes street clothes on a cyclist—use cycling kit only.",
+      });
+    }
+    if (BARE_HEAD_CYCLIST.test(prompt) && !HELMET_PRESENT.test(prompt)) {
+      issues.push({
+        severity: "error",
+        code: "cycling.missing_helmet",
+        message: "Cyclists should wear a fastened helmet.",
+      });
+      suggestions.push("Add a gravel/road/aero cycling helmet for each rider.");
+    }
+    if (
+      cyclingDiscipline === "gravel" &&
+      VELODROME.test(prompt)
+    ) {
+      issues.push({
+        severity: "error",
+        code: "cycling.gravel_velodrome",
+        message: "Gravel scene mentions velodrome/indoor track—use fire roads or doubletrack.",
+      });
+    }
+    if (duoMode && ELDERLY_ATHLETE.test(prompt)) {
+      issues.push({
+        severity: "warn",
+        code: "duo.elderly_athlete",
+        message: "Competition duo uses elderly descriptors—prefer twenties to forties.",
+      });
+    }
+  }
+
+  if (duoMode && prompt && !/\bon the (?:left|right)\b/i.test(prompt)) {
+    issues.push({
+      severity: "warn",
+      code: "duo.missing_placement",
+      message: "Multi-person prompt lacks left/right placement—harder for the model to separate subjects.",
+    });
+  }
+
+  if (GRAVEL_CONTEXT.test(text) && sport !== "cycling") {
+    issues.push({
+      severity: "info",
+      code: "sport.gravel_hint",
+      message: "Gravel cues detected—confirm cycling sport is intended.",
+    });
+  }
+
+  if (issues.length === 0 && sport === "cycling" && duoMode) {
+    suggestions.push("Use action framing + competition hints for best duo cycling results.");
+  }
+
+  return {
+    inferred: {
+      sport,
+      cyclingDiscipline,
+      duoMode,
+      peopleCount,
+      athleticCompetition,
+      gender: people.gender,
+    },
+    issues,
+    suggestions,
+  };
+}
+
+export function lintPrompt(input: {
+  hints?: string;
+  prompt?: string;
+}): PromptDiagnostics {
+  return analyzePromptDiagnostics(input.hints ?? "", input.prompt);
+}

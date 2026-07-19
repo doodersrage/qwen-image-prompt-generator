@@ -1,12 +1,15 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import PromptResultPanel from "@/components/PromptResultPanel";
+import EnhancedPromptResult from "@/components/EnhancedPromptResult";
+import { promptResultPreviewProps } from "@/lib/prompt-result-preview-props";
 import SharedToolControls from "@/components/SharedToolControls";
 import { useCachedSettings } from "@/hooks/useCachedSettings";
+import { usePromptResultActions } from "@/hooks/usePromptResultActions";
 import { getComfyModelDefinition } from "@/lib/comfy-models";
+import { getReformatTargetLabel, getReformatTargetModel } from "@/lib/reformat-target";
 import { DEFAULT_IMAGE_PROMPT_TOOL_CACHE } from "@/lib/settings-cache";
-import type { ImagePromptFocus, ToolGenerateResult } from "@/lib/specialized/types";
+import type { EnrichedToolGenerateResult, ImagePromptFocus, ToolGenerateResult } from "@/lib/specialized/types";
 
 export default function ImagePromptTool() {
   const { mounted, shared, toolSettings, updateShared, updateToolSettings } =
@@ -14,17 +17,25 @@ export default function ImagePromptTool() {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [output, setOutput] = useState("");
-  const [provider, setProvider] = useState<ToolGenerateResult["provider"] | null>(
-    null,
-  );
-  const [meta, setMeta] = useState<
-    Pick<ToolGenerateResult, "comfyNode" | "limits"> & { qualityWarning?: string | null }
-  | null>(null);
+  const [result, setResult] = useState<
+    (ToolGenerateResult & { diagnostics?: EnrichedToolGenerateResult["diagnostics"] }) | null
+  >(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [refineIntent, setRefineIntent] = useState("");
+
+  const actions = usePromptResultActions({
+    tool: "imagePrompt",
+    model: shared.model,
+    detail: shared.detail,
+    hints: toolSettings.extraHints,
+    autoFixRules: shared.autoFixRules !== false,
+    reformatTarget: getReformatTargetModel(shared.model),
+  });
 
   const selectedModel = getComfyModelDefinition(shared.model);
+  const inferredSport = result?.diagnostics?.inferred.sport ?? null;
 
   const onFileChange = useCallback((nextFile: File | null) => {
     setFile(nextFile);
@@ -43,6 +54,7 @@ export default function ImagePromptTool() {
     setLoading(true);
     setError(null);
     setCopied(false);
+    actions.resetStatuses();
 
     try {
       const formData = new FormData();
@@ -67,25 +79,17 @@ export default function ImagePromptTool() {
         throw new Error(data.error ?? "Generation failed.");
       }
 
-      setOutput(data.prompt);
-      setProvider(data.provider);
-      setMeta({
-        comfyNode: data.comfyNode,
-        limits: data.limits,
-        qualityWarning:
-          typeof data.metadata?.qualityWarning === "string"
-            ? data.metadata.qualityWarning
-            : null,
-      });
+      const prompt = await actions.finalizePrompt(data.prompt, toolSettings.extraHints);
+      setOutput(prompt);
+      setResult({ ...data, prompt });
     } catch (err) {
       setOutput("");
-      setProvider(null);
-      setMeta(null);
+      setResult(null);
       setError(err instanceof Error ? err.message : "Generation failed.");
     } finally {
       setLoading(false);
     }
-  }, [file, shared, toolSettings]);
+  }, [file, shared, toolSettings, actions]);
 
   const copyOutput = useCallback(async () => {
     if (!output) return;
@@ -97,6 +101,47 @@ export default function ImagePromptTool() {
       setError("Could not copy to clipboard.");
     }
   }, [output]);
+
+  const refine = useCallback(async () => {
+    if (!file || !refineIntent.trim()) {
+      setError("Upload an image and describe what you wanted.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    actions.resetStatuses();
+
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+      formData.append("model", shared.model);
+      formData.append("detail", shared.detail);
+      formData.append("currentPrompt", output);
+      formData.append("intentHints", refineIntent.trim());
+
+      const response = await fetch("/api/refine", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = (await response.json()) as EnrichedToolGenerateResult & {
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Refine failed.");
+      }
+
+      const prompt = await actions.finalizePrompt(data.prompt, refineIntent);
+      setOutput(prompt);
+      setResult({ ...data, prompt, diagnostics: data.diagnostics ?? actions.diagnostics ?? undefined });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Refine failed.");
+    } finally {
+      setLoading(false);
+    }
+  }, [file, refineIntent, output, shared, actions]);
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8 sm:px-6">
@@ -118,6 +163,8 @@ export default function ImagePromptTool() {
           shared={shared}
           onModelChange={(model) => updateShared({ model })}
           onDetailChange={(detail) => updateShared({ detail })}
+          autoFixRules={shared.autoFixRules !== false}
+          onAutoFixRulesChange={(value) => updateShared({ autoFixRules: value })}
         />
 
         <div className="space-y-3 border-t border-zinc-800 pt-4">
@@ -196,18 +243,76 @@ export default function ImagePromptTool() {
         )}
       </section>
 
-      <PromptResultPanel
+      {output && (
+        <section className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+          <h2 className="text-sm font-medium text-zinc-200">Refine against intent</h2>
+          <textarea
+            rows={2}
+            value={refineIntent}
+            onChange={(event) => setRefineIntent(event.target.value)}
+            placeholder="What you wanted: two gravel cyclists with helmets, not street clothes…"
+            className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-zinc-100"
+          />
+          <button
+            type="button"
+            onClick={() => void refine()}
+            disabled={loading || !file}
+            className="rounded-xl border border-fuchsia-700/60 px-4 py-2 text-sm font-medium text-fuchsia-200 hover:bg-fuchsia-500/10 disabled:opacity-50"
+          >
+            {loading ? "Refining…" : "Refine prompt from image"}
+          </button>
+        </section>
+      )}
+
+      <EnhancedPromptResult
         output={output}
-        provider={provider}
-        comfyNode={meta?.comfyNode}
-        limits={meta?.limits}
+        provider={result?.provider ?? null}
+        comfyNode={result?.comfyNode}
+        limits={result?.limits}
         copied={copied}
         onCopy={() => void copyOutput()}
         extraMeta={
-          meta?.qualityWarning
-            ? `shorter than ideal: ${meta.qualityWarning}`
+          typeof result?.metadata?.qualityWarning === "string"
+            ? `shorter than ideal: ${result.metadata.qualityWarning}`
             : undefined
         }
+        diagnostics={actions.diagnostics ?? result?.diagnostics ?? null}
+        onSaveHistory={() =>
+          actions.saveHistory({
+            prompt: output,
+            hints: toolSettings.extraHints,
+            metadata: result?.metadata,
+          })
+        }
+        onSendComfyUi={() => void actions.sendComfyUi(output, inferredSport)}
+        {...promptResultPreviewProps(actions, output, inferredSport)}
+        onFixPrompt={() =>
+          void actions.fixPrompt(output, setOutput, toolSettings.extraHints)
+        }
+        onCopyPair={() => void actions.copyPromptPair(output, inferredSport)}
+        onCompact={() => void actions.compactPrompt(output, setOutput)}
+        onReformat={() => void actions.reformatForModel(output, setOutput)}
+        reformatTargetLabel={getReformatTargetLabel(shared.model)}
+        onRunPipeline={() =>
+          void actions.runExportPipeline(output, setOutput, {
+            maxChars: result?.limits?.maxChars,
+            queueComfyUi: true,
+          })
+        }
+        onExportSidecar={() =>
+          void actions.exportSidecar(output, {
+            comfyNode: result?.comfyNode ?? selectedModel.comfyNode,
+            metadata: result?.metadata,
+          })
+        }
+        fixStatus={actions.fixStatus}
+        compactStatus={actions.compactStatus}
+        reformatStatus={actions.reformatStatus}
+        pipelineStatus={actions.pipelineStatus}
+        comfyUiStatus={actions.comfyUiStatus}
+        comfyUiPreviewUrl={actions.comfyUiPreviewUrl}
+        historySaved={actions.historySaved}
+        pairCopied={actions.pairCopied}
       />
     </div>
   );

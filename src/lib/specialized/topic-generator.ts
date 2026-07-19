@@ -9,6 +9,7 @@ import {
 } from "../llm-client";
 import { stripPromptArtifacts } from "../prompt-cleanup";
 import { buildTemplateTopicList } from "./scene-pools";
+import { mergeLocationExclusions } from "../location-exclusions";
 import type { TopicGenerateResult, TopicOptions } from "./types";
 
 function clamp(value: number, min: number, max: number): number {
@@ -118,7 +119,10 @@ export async function generateTopics(
   const topics = buildTemplateTopicList({
     seedTopic: seedTopic ?? undefined,
     count,
-    recentLocations: options.recentLocations,
+    recentLocations: mergeLocationExclusions(
+      options.recentLocations,
+      options.blockedLocations,
+    ),
   });
 
   return {

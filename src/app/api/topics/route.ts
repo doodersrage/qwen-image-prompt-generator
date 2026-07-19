@@ -1,4 +1,4 @@
-import { normalizeRecentLocations } from "@/lib/specialized/normalize";
+import { normalizeRecentLocations, normalizeBlockedLocations } from "@/lib/specialized/normalize";
 import { generateTopics } from "@/lib/specialized/topic-generator";
 import { apiError, apiJson, apiMethodNotAllowed } from "@/lib/api/response";
 import { NextResponse } from "next/server";
@@ -10,6 +10,7 @@ type TopicsRequestBody = {
   count?: number;
   variety?: number;
   recentLocations?: string[];
+  blockedLocations?: string[];
 };
 
 export async function GET() {
@@ -38,6 +39,7 @@ export async function POST(request: Request) {
           ? Math.min(100, Math.max(0, body.variety))
           : 50,
       recentLocations: normalizeRecentLocations(body.recentLocations),
+      blockedLocations: normalizeBlockedLocations(body.blockedLocations),
     });
 
     return apiJson(result);

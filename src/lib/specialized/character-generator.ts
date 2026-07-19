@@ -13,8 +13,10 @@ import {
 } from "../character-options";
 import {
   buildCharacterMandatoryBlock,
+  buildDuoIdentityUserDirective,
   parseCharacterHints,
   pickCharacterIdentitySeed,
+  pickDuoCharacterIdentitySeeds,
 } from "../character-hints";
 import {
   buildMandatoryLocationBlock,
@@ -28,6 +30,7 @@ import {
   buildDistinctPeopleUserDirective,
   ensureDistinctPeoplePrompt,
   parsePeopleConstraint,
+  stripStreetClothingFromAthleticPeoplePrompt,
 } from "../distinct-people";
 import {
   buildClothingCoherenceUserDirective,
@@ -44,6 +47,7 @@ import {
   formatSportActionInstructions,
   getSportActionInstructions,
   stripIncompatibleSportActionsFromPrompt,
+  ensureCyclingHelmetInPrompt,
 } from "../athletic-sport-actions";
 import { DEFAULT_GENERATION_SETTINGS } from "../generation-settings";
 import {
@@ -51,6 +55,9 @@ import {
   shouldPickRandomCharacterOutfit,
 } from "../clothing-catalog";
 import { getDetailLimits } from "../detail-level";
+import { mergeLocationExclusions } from "../location-exclusions";
+import { applyLockedLocation } from "../locked-location";
+import { applyLockedVariationSeed } from "../locked-variation-seed";
 import { buildRandomCharacterSeed } from "./scene-pools";
 import { runSpecializedPrompt } from "./runner";
 import type { CharacterOptions, ToolGenerateResult } from "./types";
@@ -75,19 +82,25 @@ export async function generateCharacterPrompt(
 ): Promise<ToolGenerateResult> {
   const detail = options.detail === "concise" ? "balanced" : options.detail;
   const portraitStyle = options.portraitStyle ?? "portrait";
-  const parsed = parseCharacterHints(options.hints);
+  const effectiveHints = applyLockedLocation(options.hints, options.lockedLocation);
+  const parsed = parseCharacterHints(effectiveHints);
   const presetOptions = normalizeCharacterPresetOptions(options.presetOptions, {
     clothingGender: subjectGenderToClothingGender(parsed.gender),
   });
-  const peopleConstraint = parsePeopleConstraint(options.hints ?? "");
+  const peopleConstraint = parsePeopleConstraint(effectiveHints ?? "");
   const duoFromHints = (peopleConstraint.count ?? 0) >= 2;
   const duoMode = isDuoHeadcount(presetOptions) || duoFromHints;
-  const settingHint = parseSettingHint(options.hints);
-  const { seed, location: sceneLocation } = buildRandomCharacterSeed(
-    options.hints,
-    portraitStyle,
+  const settingHint = parseSettingHint(effectiveHints);
+  const locationExclude = mergeLocationExclusions(
     options.recentLocations,
+    options.blockedLocations,
   );
+  const { seed: rolledSeed, location: sceneLocation } = buildRandomCharacterSeed(
+    effectiveHints,
+    portraitStyle,
+    locationExclude,
+  );
+  const seed = applyLockedVariationSeed(rolledSeed, options.variationSeed);
   const alwaysIncludeClothing = options.alwaysIncludeClothing !== false;
   const clothingFilters = buildClothingPickFilters({
     gender: parsed.gender,
@@ -120,6 +133,8 @@ export async function generateCharacterPrompt(
               : "mixed"
             : undefined,
           recentClothing: options.recentClothing,
+          teamKit: options.teamKit,
+          lockedWardrobeId: options.lockedWardrobeId,
         },
       )
     : null;
@@ -139,7 +154,38 @@ export async function generateCharacterPrompt(
         : seed;
   const intentCorpus = [options.hints, seed, environmentSeed].filter(Boolean).join(", ");
   const intentSport = inferAthleticSport(intentCorpus);
-  const identitySeed = pickCharacterIdentitySeed(parsed);
+  const athleticDuoContext =
+    duoMode &&
+    (intentSport !== null ||
+      Boolean(
+        wardrobeAssignments?.some(
+          (assignment) =>
+            assignment.filters.athleticActivity || assignment.filters.athleticSport,
+        ),
+      ));
+  const cyclingHelmetRequired =
+    intentSport === "cycling" ||
+    Boolean(wardrobeAssignments?.some((a) => a.filters.athleticSport === "cycling"));
+  const identitySeed = duoMode ? null : pickCharacterIdentitySeed(parsed);
+  const duoIdentitySeeds = duoMode
+    ? pickDuoCharacterIdentitySeeds(
+        peopleConstraint.gender === "women" ||
+          peopleConstraint.gender === "men" ||
+          peopleConstraint.gender === "mixed"
+          ? peopleConstraint.gender
+          : parsed.gender,
+        parsed.wantsMinimalHair,
+        athleticDuoContext,
+      )
+    : null;
+  const duoIdentityDirective = duoIdentitySeeds
+    ? buildDuoIdentityUserDirective(
+        duoIdentitySeeds[0],
+        duoIdentitySeeds[1],
+        athleticDuoContext,
+        cyclingHelmetRequired,
+      )
+    : null;
   const mandatoryBlock = buildCharacterMandatoryBlock(parsed);
   const locationBlock = buildMandatoryLocationBlock(settingHint.location);
   const presetBlock = buildCharacterPresetBlock(presetOptions);
@@ -164,7 +210,8 @@ export async function generateCharacterPrompt(
 
   const soloRules = duoMode
     ? `- Describe EXACTLY TWO people interacting—balanced visual weight, readable gestures, and clear spatial relationship. No crowd, no extras with faces.
-- Both subjects need distinct identity, clothing, and pose detail.`
+- Both subjects need clearly contrasting visual identity: different face shape, hair style/color, skin tone, and age read—not two interchangeable generic figures.
+- For athletic competition, both wear the same race kit cut; rivals differ only in accent color or bib number—not unrelated outfit types.`
     : `- Describe EXACTLY ONE person—never a couple, group, crowd, or background extras with faces.
 - No second person, no silhouettes, no reflections with another face, no bystanders, no staff, no audience.
 ${buildSinglePersonSystemAddendum()}`;
@@ -189,7 +236,9 @@ ${soloRules}
           wardrobeAssignments[0]!.filters,
           wardrobeAssignments[0]!.summary,
         )
-      : buildGenerateWardrobeUserDirective(wardrobeAssignments)
+      : buildGenerateWardrobeUserDirective(wardrobeAssignments, {
+          teamKit: options.teamKit,
+        })
     : presetWardrobeSummary
       ? buildClothingCoherenceUserDirective(
           clothingFilters,
@@ -211,6 +260,9 @@ ${soloRules}
         ...DEFAULT_GENERATION_SETTINGS,
         distinctPeople: true,
       });
+      if (athleticDuoContext) {
+        result = stripStreetClothingFromAthleticPeoplePrompt(result);
+      }
     }
     if (wardrobeAssignments?.length) {
       result = mergeGenerateWardrobeIntoPrompt(
@@ -245,6 +297,9 @@ ${soloRules}
         intentCorpus,
       );
     }
+    if (cyclingHelmetRequired) {
+      result = ensureCyclingHelmetInPrompt(result, intentCorpus);
+    }
     return result;
   };
 
@@ -259,6 +314,7 @@ ${soloRules}
     poseAnchorDirective,
     mandatoryBlock,
     locationBlock || null,
+    duoIdentityDirective,
     mandatoryBlock
       ? null
       : identitySeed
@@ -344,6 +400,7 @@ ${soloRules}
       parsedHints: parsed,
       presetOptions,
       duoMode,
+      teamKit: options.teamKit ?? false,
       presetCount: hasPresets
         ? countCharacterPresetSelections(presetOptions)
         : 0,

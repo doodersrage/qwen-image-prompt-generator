@@ -649,6 +649,7 @@ export type ClothingPickFilters = {
   workProfession?: WorkProfession | null;
   swimwearOnly?: boolean;
   explicitCostume?: boolean;
+  hintCorpus?: string;
 };
 
 export function buildClothingPickFilters(input: {
@@ -690,6 +691,7 @@ export function buildClothingPickFilters(input: {
     lockPrimaryGarment:
       hintsLockPrimaryGarment(input.hints) &&
       !hintsSkipWardrobeRolls(input.hints),
+    hintCorpus: hintCorpus || undefined,
   };
 }
 

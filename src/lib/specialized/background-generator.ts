@@ -12,6 +12,7 @@ import {
   parseSettingHint,
 } from "../hint-location";
 import { buildRandomBackgroundSeed } from "./scene-pools";
+import { mergeLocationExclusions } from "../location-exclusions";
 import { runSpecializedPrompt } from "./runner";
 import type { BackgroundOptions, ToolGenerateResult } from "./types";
 
@@ -25,7 +26,10 @@ export async function generateBackgroundPrompt(
     settingType: options.settingType,
     timeOfDay: options.timeOfDay,
     mood: options.mood,
-    recentLocations: options.recentLocations,
+    recentLocations: mergeLocationExclusions(
+      options.recentLocations,
+      options.blockedLocations,
+    ),
   });
   const locationBlock = buildMandatoryLocationBlock(settingHint.location);
   const presetBlock = buildBackgroundPresetBlock(presetOptions);

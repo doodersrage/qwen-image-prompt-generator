@@ -1,0 +1,44 @@
+import {
+  PROMPT_HISTORY_KEY,
+  LOCATION_BLOCKLIST_KEY,
+  saveLocationBlocklist,
+} from "@/hooks/usePromptHistory";
+import { SCENE_PRESETS_KEY } from "./scene-presets";
+import {
+  DEFAULT_SHARED_SETTINGS,
+  SETTINGS_CACHE_KEY,
+  saveSettingsCache,
+} from "./settings-cache";
+import { COMFYUI_SETTINGS_KEY, resetComfyUiSettings } from "./comfyui-settings";
+import { clearComfyGallery, COMFYUI_GALLERY_KEY } from "./comfyui-gallery";
+import {
+  COMFY_WORKFLOW_PRESETS_KEY,
+  saveComfyWorkflowPresets,
+} from "./comfyui-workflow-presets";
+import { USER_TEMPLATES_KEY } from "./user-templates";
+
+export function clearAllLocalPromptData(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(PROMPT_HISTORY_KEY);
+  window.localStorage.removeItem(SCENE_PRESETS_KEY);
+  window.localStorage.removeItem(USER_TEMPLATES_KEY);
+  saveLocationBlocklist([]);
+  saveSettingsCache({ shared: DEFAULT_SHARED_SETTINGS, tools: {} });
+  resetComfyUiSettings();
+  clearComfyGallery();
+  saveComfyWorkflowPresets([]);
+}
+
+export const LOCAL_DATA_KEYS = [
+  PROMPT_HISTORY_KEY,
+  SETTINGS_CACHE_KEY,
+  SCENE_PRESETS_KEY,
+  USER_TEMPLATES_KEY,
+  LOCATION_BLOCKLIST_KEY,
+  COMFYUI_SETTINGS_KEY,
+  COMFYUI_GALLERY_KEY,
+  COMFY_WORKFLOW_PRESETS_KEY,
+] as const;

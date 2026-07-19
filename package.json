@@ -14,7 +14,8 @@
     "clothing:dedupe": "node scripts/dedupe-clothing.mjs",
     "clothing:generate": "node scripts/generate-clothing.mjs --add 500",
     "clothing:generate:dry": "node scripts/generate-clothing.mjs --add 500 --dry-run",
-    "test": "node --import tsx --test src/lib/clothing-wardrobe.test.ts"
+    "prompt:cli": "node scripts/qwen-prompt.mjs",
+    "test": "node --import tsx --test src/lib/clothing-wardrobe.test.ts src/lib/prompt-tools.test.ts"
   },
   "dependencies": {
     "next": "16.2.10",

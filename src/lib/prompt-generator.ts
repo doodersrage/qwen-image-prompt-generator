@@ -37,7 +37,9 @@ import {
   paintDistinctPeopleScene,
   paintGroupedPeopleScene,
   parsePeopleConstraint,
+  stripStreetClothingFromAthleticPeoplePrompt,
 } from "./distinct-people";
+import { inferAthleticSport } from "./athletic-sport-profiles";
 import {
   DEFAULT_GENERATION_SETTINGS,
   type GenerationSettings,
@@ -81,6 +83,9 @@ export type GenerateResult = {
 
 export type GeneratePromptOptions = {
   recentClothing?: string[];
+  lockedWardrobeId?: string;
+  /** Pin environment/variation seed for reproducible Generate rolls. */
+  variationSeed?: string;
 };
 
 type ChatMessage = {
@@ -140,6 +145,7 @@ function buildUserMessage(
   mode: PromptMode,
   settings: GenerationSettings,
   wardrobeAssignments?: GenerateWardrobeAssignment[] | null,
+  variationSeed?: string,
 ): string {
   const trimmed = input.trim();
   if (mode === "negative" || shouldPreserveSubject(trimmed)) {
@@ -179,6 +185,12 @@ function buildUserMessage(
     extras.push(wardrobeDirective);
   }
 
+  if (variationSeed?.trim() && settings.variation.enabled) {
+    extras.push(
+      `Environment variation seed (honor closely): ${variationSeed.trim()}`,
+    );
+  }
+
   return `${trimmed}\n\n${extras.join("\n\n")}`;
 }
 
@@ -215,7 +227,18 @@ function getLlmSamplingParams(
   };
 }
 
-function getLlmSeed(): number {
+function hashSeedString(value: string): number {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+  return hash % 2_147_483_647 || 1;
+}
+
+function getLlmSeed(variationSeed?: string): number {
+  if (variationSeed?.trim()) {
+    return hashSeedString(variationSeed.trim());
+  }
   const array = new Uint32Array(1);
   crypto.getRandomValues(array);
   return array[0]! % 2_147_483_647;
@@ -229,10 +252,17 @@ function finalizePrompt(
   wardrobeAssignments?: GenerateWardrobeAssignment[] | null,
 ): string {
   const cleaned = sanitizePrompt(raw);
-  const withDistinctPeople =
+  let withDistinctPeople =
     mode === "positive"
       ? ensureDistinctPeoplePrompt(cleaned, input, settings)
       : cleaned;
+  if (
+    mode === "positive" &&
+    settings.distinctPeople &&
+    inferAthleticSport(input) !== null
+  ) {
+    withDistinctPeople = stripStreetClothingFromAthleticPeoplePrompt(withDistinctPeople);
+  }
   const sanitized = sanitizeQwenPrompt(
     withDistinctPeople,
     settings.detail,
@@ -263,6 +293,7 @@ export async function generateWithLlm(
   mode: PromptMode,
   settings: GenerationSettings = DEFAULT_GENERATION_SETTINGS,
   wardrobeAssignments?: GenerateWardrobeAssignment[] | null,
+  variationSeed?: string,
 ): Promise<string> {
   let systemPrompt = buildModelSystemPrompt(settings.model, mode);
 
@@ -283,7 +314,7 @@ export async function generateWithLlm(
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },
     ...buildFewShotMessages(mode, settings, input),
-    { role: "user", content: buildUserMessage(input, mode, settings, wardrobeAssignments) },
+    { role: "user", content: buildUserMessage(input, mode, settings, wardrobeAssignments, variationSeed) },
   ];
 
   const extraBody: Record<string, unknown> = {
@@ -291,7 +322,7 @@ export async function generateWithLlm(
   };
 
   if (settings.variation.enabled) {
-    extraBody.seed = getLlmSeed();
+    extraBody.seed = getLlmSeed(variationSeed);
   }
 
   const content = await chatCompletion({
@@ -582,6 +613,7 @@ export async function generatePrompt(
     mode === "positive"
       ? buildGenerateWardrobeAssignments(trimmed, settings, {
           recentClothing: options?.recentClothing,
+          lockedWardrobeId: options?.lockedWardrobeId,
         })
       : null;
 
@@ -592,6 +624,7 @@ export async function generatePrompt(
         mode,
         settings,
         wardrobeAssignments,
+        options?.variationSeed,
       );
       return buildGenerateResult(prompt, mode, "llm", settings, wardrobeAssignments);
     } catch (error) {

@@ -1,0 +1,158 @@
+import {
+  loadLocationBlocklist,
+  PROMPT_HISTORY_KEY,
+  saveLocationBlocklist,
+  type PromptHistoryEntry,
+} from "@/hooks/usePromptHistory";
+import {
+  loadSettingsCache,
+  saveSettingsCache,
+  SETTINGS_CACHE_KEY,
+  type SettingsCache,
+} from "@/lib/settings-cache";
+import {
+  loadScenePresets,
+  saveScenePresets,
+  type ScenePreset,
+} from "@/lib/scene-presets";
+import {
+  loadUserTemplates,
+  saveUserTemplates,
+  type UserPromptTemplate,
+} from "@/lib/user-templates";
+import {
+  loadComfyGallery,
+  saveComfyGallery,
+  type ComfyGalleryEntry,
+} from "@/lib/comfyui-gallery";
+import {
+  loadComfyUiSettings,
+  saveComfyUiSettings,
+  type ComfyUiSettings,
+} from "@/lib/comfyui-settings";
+import {
+  loadComfyWorkflowPresets,
+  saveComfyWorkflowPresets,
+  type ComfyWorkflowPreset,
+} from "@/lib/comfyui-workflow-presets";
+
+export type StudioBackupV1 = {
+  version: 1;
+  exportedAt: string;
+  history: PromptHistoryEntry[];
+  locationBlocklist: string[];
+  settings: SettingsCache;
+  scenePresets?: ScenePreset[];
+  userTemplates?: UserPromptTemplate[];
+};
+
+export type StudioBackupV2 = Omit<StudioBackupV1, "version"> & {
+  version: 2;
+  comfyUiSettings?: ComfyUiSettings;
+  comfyGallery?: ComfyGalleryEntry[];
+  comfyWorkflowPresets?: ComfyWorkflowPreset[];
+};
+
+export type StudioBackup = StudioBackupV1 | StudioBackupV2;
+
+export function exportStudioBackup(): StudioBackupV2 {
+  return {
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    history: loadHistoryFromStorage(),
+    locationBlocklist: loadLocationBlocklist(),
+    settings: loadSettingsCache(),
+    scenePresets: loadScenePresets(),
+    userTemplates: loadUserTemplates(),
+    comfyUiSettings: loadComfyUiSettings(),
+    comfyGallery: loadComfyGallery(),
+    comfyWorkflowPresets: loadComfyWorkflowPresets(),
+  };
+}
+
+export function importStudioBackup(backup: StudioBackup): void {
+  if (backup.version !== 1 && backup.version !== 2) {
+    throw new Error("Unsupported backup version.");
+  }
+
+  window.localStorage.setItem(
+    PROMPT_HISTORY_KEY,
+    JSON.stringify(backup.history.slice(0, 100)),
+  );
+  saveLocationBlocklist(backup.locationBlocklist);
+  saveSettingsCache(backup.settings);
+  if (backup.scenePresets) {
+    saveScenePresets(backup.scenePresets);
+  }
+  if (backup.userTemplates) {
+    saveUserTemplates(backup.userTemplates);
+  }
+
+  if (backup.version === 2) {
+    if (backup.comfyUiSettings) {
+      saveComfyUiSettings(backup.comfyUiSettings);
+    }
+    if (backup.comfyGallery) {
+      saveComfyGallery(backup.comfyGallery);
+    }
+    if (backup.comfyWorkflowPresets) {
+      saveComfyWorkflowPresets(backup.comfyWorkflowPresets);
+    }
+  }
+}
+
+export function downloadStudioBackup(): void {
+  const payload = JSON.stringify(exportStudioBackup(), null, 2);
+  const blob = new Blob([payload], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `prompt-studio-backup-${Date.now()}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function loadHistoryFromStorage(): PromptHistoryEntry[] {
+  try {
+    const raw = window.localStorage.getItem(PROMPT_HISTORY_KEY);
+    if (!raw) {
+      return [];
+    }
+    return JSON.parse(raw) as PromptHistoryEntry[];
+  } catch {
+    return [];
+  }
+}
+
+export function parseStudioBackupFile(raw: string): StudioBackup {
+  const parsed = JSON.parse(raw) as StudioBackup;
+  if (
+    !parsed ||
+    (parsed.version !== 1 && parsed.version !== 2) ||
+    !Array.isArray(parsed.history)
+  ) {
+    throw new Error("Invalid studio backup file.");
+  }
+  return parsed;
+}
+
+export function downloadHistoryExport(entries: PromptHistoryEntry[]): void {
+  const payload = JSON.stringify(
+    {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      entries,
+    },
+    null,
+    2,
+  );
+  const blob = new Blob([payload], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `prompt-history-${Date.now()}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+export { SETTINGS_CACHE_KEY };

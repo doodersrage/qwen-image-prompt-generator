@@ -1,5 +1,6 @@
 import { generateCharacterPrompt } from "@/lib/specialized/character-generator";
-import { normalizeSharedGenerationOptions, normalizeRecentLocations, normalizeRecentClothing } from "@/lib/specialized/normalize";
+import { enrichGenerateResult } from "@/lib/generation-diagnostics";
+import { normalizeSharedGenerationOptions, normalizeRecentLocations, normalizeRecentClothing, normalizeBlockedLocations, normalizeLockedWardrobeId, normalizeLockedLocation, normalizeVariationSeed } from "@/lib/specialized/normalize";
 import {
   normalizeCharacterPresetOptions,
   type CharacterPresetOptions,
@@ -19,6 +20,11 @@ type CharacterRequestBody = {
   recentLocations?: string[];
   recentClothing?: string[];
   alwaysIncludeClothing?: boolean;
+  teamKit?: boolean;
+  blockedLocations?: string[];
+  lockedWardrobeId?: string;
+  lockedLocation?: string;
+  variationSeed?: string;
 };
 
 export async function GET() {
@@ -51,9 +57,18 @@ export async function POST(request: Request) {
       recentLocations: normalizeRecentLocations(body.recentLocations),
       recentClothing: normalizeRecentClothing(body.recentClothing),
       alwaysIncludeClothing,
+      teamKit: body.teamKit === true,
+      blockedLocations: normalizeBlockedLocations(body.blockedLocations),
+      lockedWardrobeId: normalizeLockedWardrobeId(body.lockedWardrobeId),
+      lockedLocation: normalizeLockedLocation(body.lockedLocation),
+      variationSeed: normalizeVariationSeed(body.variationSeed),
     });
 
-    return apiJson(result);
+    return apiJson(
+      enrichGenerateResult(result, body.hints?.trim(), {
+        teamKit: body.teamKit === true,
+      }),
+    );
   } catch (error) {
     return apiError(
       error instanceof Error ? error.message : "Character generation failed.",

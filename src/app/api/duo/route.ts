@@ -1,0 +1,100 @@
+import { generateCharacterPrompt } from "@/lib/specialized/character-generator";
+import { enrichGenerateResult } from "@/lib/generation-diagnostics";
+import {
+  normalizeCharacterPresetOptions,
+  type CharacterPresetOptions,
+} from "@/lib/character-options";
+import { normalizeSharedGenerationOptions, normalizeRecentLocations, normalizeRecentClothing, normalizeBlockedLocations, normalizeLockedWardrobeId, normalizeLockedLocation, normalizeVariationSeed } from "@/lib/specialized/normalize";
+import { getSportPreset } from "@/lib/sport-presets";
+import { apiError, apiJson, apiMethodNotAllowed } from "@/lib/api/response";
+import { NextResponse } from "next/server";
+
+export const runtime = "nodejs";
+
+type DuoRequestBody = {
+  model?: string;
+  detail?: string;
+  hints?: string;
+  portraitStyle?: "portrait" | "full-body" | "action";
+  variationStrength?: number;
+  presetOptions?: Partial<Record<keyof CharacterPresetOptions, string>>;
+  recentLocations?: string[];
+  recentClothing?: string[];
+  alwaysIncludeClothing?: boolean;
+  teamKit?: boolean;
+  sportPresetId?: string;
+  blockedLocations?: string[];
+  lockedWardrobeId?: string;
+  lockedLocation?: string;
+  variationSeed?: string;
+};
+
+export async function GET() {
+  return apiMethodNotAllowed(["POST"], "/api/duo");
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = (await request.json()) as DuoRequestBody;
+    const shared = normalizeSharedGenerationOptions(body);
+    const preset = body.sportPresetId ? getSportPreset(body.sportPresetId) : undefined;
+
+    const hints = (body.hints?.trim() || preset?.hints || "").trim();
+    if (!hints) {
+      return apiError("Hints or sportPresetId is required.", 400);
+    }
+
+    const portraitStyle =
+      body.portraitStyle === "full-body" ||
+      body.portraitStyle === "action" ||
+      body.portraitStyle === "portrait"
+        ? body.portraitStyle
+        : preset?.portraitStyle ?? "action";
+
+    const presetOptions = normalizeCharacterPresetOptions({
+      ...body.presetOptions,
+      headcount: "duo",
+    });
+
+    const result = await generateCharacterPrompt({
+      ...shared,
+      hints,
+      portraitStyle,
+      variationStrength:
+        typeof body.variationStrength === "number"
+          ? Math.min(100, Math.max(0, body.variationStrength))
+          : 50,
+      presetOptions,
+      recentLocations: normalizeRecentLocations(body.recentLocations),
+      recentClothing: normalizeRecentClothing(body.recentClothing),
+      alwaysIncludeClothing: body.alwaysIncludeClothing !== false,
+      teamKit: body.teamKit ?? preset?.teamKit ?? false,
+      blockedLocations: normalizeBlockedLocations(body.blockedLocations),
+      lockedWardrobeId: normalizeLockedWardrobeId(body.lockedWardrobeId),
+      lockedLocation: normalizeLockedLocation(body.lockedLocation),
+      variationSeed: normalizeVariationSeed(body.variationSeed),
+    });
+
+    return apiJson(
+      enrichGenerateResult(result, hints, {
+        teamKit: body.teamKit ?? preset?.teamKit ?? false,
+      }),
+    );
+  } catch (error) {
+    return apiError(
+      error instanceof Error ? error.message : "Duo generation failed.",
+      500,
+    );
+  }
+}
+
+export function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
+  });
+}

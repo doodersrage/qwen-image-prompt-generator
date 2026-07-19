@@ -1,0 +1,181 @@
+#!/usr/bin/env node
+/**
+ * CLI wrapper for the prompt tools HTTP API.
+ *
+ * Usage:
+ *   node scripts/qwen-prompt.mjs duo --hints "two gravel cyclists racing"
+ *   node scripts/qwen-prompt.mjs lint --hints "gravel" --prompt "..."
+ *   node scripts/qwen-prompt.mjs negative --sport cycling
+ *   node scripts/qwen-prompt.mjs batch --hints "..." --count 5
+ *   node scripts/qwen-prompt.mjs generate --input "neon alley, rain"
+ *   node scripts/qwen-prompt.mjs format --input "draft prompt text"
+ *   node scripts/qwen-prompt.mjs fix --hints "gravel" --prompt "..."
+ *   node scripts/qwen-prompt.mjs compact --prompt "..." --model qwen-image-2512
+ *   node scripts/qwen-prompt.mjs comfyui --prompt "..." [--negative "..."]
+ */
+
+const BASE_URL = process.env.PROMPT_API_URL ?? "http://127.0.0.1:47832";
+
+function parseArgs(argv) {
+  const args = { _: [] };
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index];
+    if (token.startsWith("--")) {
+      const key = token.slice(2);
+      const next = argv[index + 1];
+      if (next && !next.startsWith("--")) {
+        args[key] = next;
+        index += 1;
+      } else {
+        args[key] = true;
+      }
+    } else {
+      args._.push(token);
+    }
+  }
+  return args;
+}
+
+async function main() {
+  const args = parseArgs(process.argv.slice(2));
+  const tool = args._[0];
+
+  if (!tool || tool === "help" || args.help) {
+    console.log(`Usage: node scripts/qwen-prompt.mjs <tool> [options]
+
+Tools: duo, character, batch, lint, negative, catalog, compose, generate, format, fix, compact, comfyui, topics-batch
+Env: PROMPT_API_URL (default ${BASE_URL})`);
+    process.exit(0);
+  }
+
+  const routes = {
+    duo: "/api/duo",
+    character: "/api/character",
+    batch: "/api/batch",
+    lint: "/api/lint",
+    negative: "/api/negative",
+    catalog: "/api/catalog",
+    compose: "/api/compose",
+    generate: "/api/generate",
+    format: "/api/format",
+    fix: "/api/fix",
+    compact: "/api/compact",
+    comfyui: "/api/comfyui",
+    "topics-batch": "/api/topics/batch",
+  };
+
+  const path = routes[tool];
+  if (!path) {
+    console.error(`Unknown tool: ${tool}`);
+    process.exit(1);
+  }
+
+  if (tool === "catalog") {
+    const query = args.q ? `?q=${encodeURIComponent(String(args.q))}` : "";
+    const response = await fetch(`${BASE_URL}${path}${query}`);
+    console.log(JSON.stringify(await response.json(), null, 2));
+    return;
+  }
+
+  const body = {
+    hints: args.hints,
+    prompt: args.prompt,
+    input: args.input,
+    topics: args.topics
+      ? String(args.topics).split("|").map((entry) => entry.trim()).filter(Boolean)
+      : undefined,
+    target: args.target,
+    model: args.model,
+    detail: args.detail,
+    teamKit: args["team-kit"] === true || args.teamKit === "true",
+    count: args.count ? Number(args.count) : undefined,
+    sport: args.sport,
+    preserveSubject: args.preserve === true || args.preserve === "true",
+    extra: args.extra,
+    sportPresetId: args.preset,
+    mode: args.mode,
+    smartFormat: args.smart !== false && args.smart !== "false",
+    negativePrompt: args.negative,
+    prompts: args.prompts
+      ? String(args.prompts).split("|").map((entry) => entry.trim()).filter(Boolean)
+      : undefined,
+    backgroundPrompt: args.background,
+    subjectPrompt: args.subject,
+    style: args.style,
+  };
+
+  const response = await fetch(`${BASE_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    console.error(data.error ?? "Request failed");
+    process.exit(1);
+  }
+
+  if (tool === "batch" && Array.isArray(data.results)) {
+    for (const [index, entry] of data.results.entries()) {
+      console.log(`--- variation ${index + 1} ---`);
+      console.log(entry.prompt);
+      console.log("");
+    }
+    return;
+  }
+
+  if (tool === "topics-batch" && Array.isArray(data.results)) {
+    for (const [index, entry] of data.results.entries()) {
+      console.log(`--- topic ${index + 1}: ${entry.topic} ---`);
+      console.log(entry.prompt);
+      console.log("");
+    }
+    return;
+  }
+
+  if (tool === "lint" && !args.prompt) {
+    console.log(JSON.stringify(data, null, 2));
+    return;
+  }
+
+  if (tool === "fix" && Array.isArray(data.changes)) {
+    console.log(data.prompt ?? "");
+    if (data.changes.length > 0) {
+      console.error(
+        `Applied: ${data.changes.map((change) => change.description).join("; ")}`,
+      );
+    }
+    return;
+  }
+
+  if (tool === "compact") {
+    console.log(data.prompt ?? "");
+    if (data.beforeChars != null && data.afterChars != null) {
+      console.error(
+        `Compacted ${data.beforeChars} → ${data.afterChars} chars (max ${data.maxChars})`,
+      );
+    }
+    return;
+  }
+
+  if (tool === "comfyui") {
+    console.log(
+      [
+        data.promptId ? `prompt_id ${data.promptId}` : "queued",
+        data.comfyUrl,
+        data.queued != null ? `queued ${data.queued}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    );
+    return;
+  }
+
+  console.log(data.prompt ?? JSON.stringify(data, null, 2));
+}
+
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : error);
+  process.exit(1);
+});

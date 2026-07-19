@@ -1,18 +1,22 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import PromptResultPanel from "@/components/PromptResultPanel";
+import { promptResultPreviewProps } from "@/lib/prompt-result-preview-props";
+import { useCallback, useEffect, useState } from "react";
+import EnhancedPromptResult from "@/components/EnhancedPromptResult";
 import SharedToolControls from "@/components/SharedToolControls";
 import { useCachedSettings } from "@/hooks/useCachedSettings";
+import { usePromptResultActions } from "@/hooks/usePromptResultActions";
 import { useRecentLocations } from "@/hooks/useRecentLocations";
 import { useRecentClothing } from "@/hooks/useRecentClothing";
+import { useLocationBlocklist } from "@/hooks/useLocationBlocklist";
+import { getClothingLabel } from "@/lib/clothing-catalog";
 import { readSceneLocationFromMetadata } from "@/lib/recent-locations";
 import { readClothingIdsFromMetadata } from "@/lib/recent-clothing";
 import { getComfyModelDefinition } from "@/lib/comfy-models";
-import {
-  DEFAULT_RANDOM_SCENE_TOOL_CACHE,
-} from "@/lib/settings-cache";
-import type { ToolGenerateResult } from "@/lib/specialized/types";
+import { getReformatTargetLabel, getReformatTargetModel } from "@/lib/reformat-target";
+import { DEFAULT_RANDOM_SCENE_TOOL_CACHE } from "@/lib/settings-cache";
+import type { EnrichedToolGenerateResult } from "@/lib/specialized/types";
+import { readVariationSeedFromResult } from "@/lib/variation-seed-metadata";
 import { variationStrengthLabel } from "@/lib/variation-settings";
 
 export default function RandomSceneTool() {
@@ -20,24 +24,41 @@ export default function RandomSceneTool() {
     useCachedSettings("randomScene", DEFAULT_RANDOM_SCENE_TOOL_CACHE);
   const { getRecent, record } = useRecentLocations();
   const { getRecent: getRecentClothing, record: recordClothing } = useRecentClothing();
+  const { getBlocklist } = useLocationBlocklist();
   const [output, setOutput] = useState("");
-  const [provider, setProvider] = useState<ToolGenerateResult["provider"] | null>(
-    null,
-  );
+  const [result, setResult] = useState<EnrichedToolGenerateResult | null>(null);
   const [seed, setSeed] = useState<string | null>(null);
-  const [meta, setMeta] = useState<Pick<ToolGenerateResult, "comfyNode" | "limits"> | null>(
-    null,
-  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  const actions = usePromptResultActions({
+    tool: "randomScene",
+    model: shared.model,
+    detail: shared.detail,
+    hints: toolSettings.genre,
+    autoFixRules: shared.autoFixRules !== false,
+    reformatTarget: getReformatTargetModel(shared.model),
+  });
+
   const selectedModel = getComfyModelDefinition(shared.model);
+  const variationSeed = readVariationSeedFromResult({ seed: result?.seed ?? undefined, metadata: result?.metadata });
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const seed = new URLSearchParams(window.location.search).get("seed");
+    if (seed?.trim()) {
+      updateShared({ lockedVariationSeed: seed.trim() });
+    }
+  }, [updateShared]);
 
   const generate = useCallback(async () => {
     setLoading(true);
     setError(null);
     setCopied(false);
+    actions.resetStatuses();
 
     try {
       const response = await fetch("/api/random-scene", {
@@ -51,11 +72,15 @@ export default function RandomSceneTool() {
           wildness: toolSettings.wildness,
           recentLocations: getRecent(),
           recentClothing: getRecentClothing(),
+          blockedLocations: getBlocklist(),
+          lockedWardrobeId: shared.lockedWardrobeId,
+          lockedLocation: shared.lockedLocation,
+          variationSeed: shared.lockedVariationSeed,
           alwaysIncludeClothing: shared.alwaysIncludeClothing !== false,
         }),
       });
 
-      const data = (await response.json()) as ToolGenerateResult & {
+      const data = (await response.json()) as EnrichedToolGenerateResult & {
         error?: string;
       };
 
@@ -66,20 +91,19 @@ export default function RandomSceneTool() {
       record(readSceneLocationFromMetadata(data.metadata));
       recordClothing(readClothingIdsFromMetadata(data.metadata));
 
-      setOutput(data.prompt);
-      setProvider(data.provider);
+      const prompt = await actions.finalizePrompt(data.prompt, toolSettings.genre);
+      setOutput(prompt);
+      setResult({ ...data, prompt });
       setSeed(data.seed ?? null);
-      setMeta({ comfyNode: data.comfyNode, limits: data.limits });
     } catch (err) {
       setOutput("");
-      setProvider(null);
+      setResult(null);
       setSeed(null);
-      setMeta(null);
       setError(err instanceof Error ? err.message : "Generation failed.");
     } finally {
       setLoading(false);
     }
-  }, [shared, toolSettings, getRecent, record, getRecentClothing, recordClothing]);
+  }, [shared, toolSettings, getRecent, record, getRecentClothing, recordClothing, getBlocklist, actions]);
 
   const copyOutput = useCallback(async () => {
     if (!output) return;
@@ -118,6 +142,21 @@ export default function RandomSceneTool() {
             updateShared({ alwaysIncludeClothing: value })
           }
           wardrobeHelp="When random ingredients include people, rolls catalog outfits and appends assigned clothing if the model omits it. Shared with Generate and Character."
+          lockedWardrobeId={shared.lockedWardrobeId}
+          lockedWardrobeLabel={
+            shared.lockedWardrobeId
+              ? getClothingLabel(shared.lockedWardrobeId) ?? shared.lockedWardrobeId
+              : undefined
+          }
+          onClearLockedWardrobe={() => updateShared({ lockedWardrobeId: undefined })}
+          lockedLocation={shared.lockedLocation}
+          onClearLockedLocation={() => updateShared({ lockedLocation: undefined })}
+          lockedVariationSeed={shared.lockedVariationSeed}
+          onClearLockedVariationSeed={() =>
+            updateShared({ lockedVariationSeed: undefined })
+          }
+          autoFixRules={shared.autoFixRules !== false}
+          onAutoFixRulesChange={(value) => updateShared({ autoFixRules: value })}
         />
 
         <div className="space-y-3 border-t border-zinc-800 pt-4">
@@ -184,14 +223,64 @@ export default function RandomSceneTool() {
         )}
       </section>
 
-      <PromptResultPanel
+      <EnhancedPromptResult
         output={output}
-        provider={provider}
-        comfyNode={meta?.comfyNode}
-        limits={meta?.limits}
+        provider={result?.provider ?? null}
+        comfyNode={result?.comfyNode}
+        limits={result?.limits}
         copied={copied}
         onCopy={() => void copyOutput()}
         extraMeta={seed ? `seed: ${seed}` : undefined}
+        diagnostics={actions.diagnostics ?? result?.diagnostics ?? null}
+        onSaveHistory={() =>
+          actions.saveHistory({
+            prompt: output,
+            hints: toolSettings.genre,
+            metadata: result?.metadata,
+          })
+        }
+        onSendComfyUi={() => void actions.sendComfyUi(output)}
+        {...promptResultPreviewProps(actions, output)}
+        onFixPrompt={() =>
+          void actions.fixPrompt(output, setOutput, toolSettings.genre)
+        }
+        onCopyPair={() => void actions.copyPromptPair(output)}
+        onCompact={() => void actions.compactPrompt(output, setOutput)}
+        onReformat={() => void actions.reformatForModel(output, setOutput)}
+        reformatTargetLabel={getReformatTargetLabel(shared.model)}
+        onRunPipeline={() =>
+          void actions.runExportPipeline(output, setOutput, {
+            maxChars: result?.limits?.maxChars,
+            queueComfyUi: true,
+          })
+        }
+        onExportSidecar={() =>
+          void actions.exportSidecar(output, {
+            comfyNode: result?.comfyNode ?? selectedModel.comfyNode,
+            variationSeed: variationSeed ?? shared.lockedVariationSeed,
+            metadata: result?.metadata,
+          })
+        }
+        onLockSeed={() => {
+          if (variationSeed) {
+            updateShared({ lockedVariationSeed: variationSeed });
+          }
+        }}
+        variationSeed={variationSeed}
+        seedLocked={
+          Boolean(
+            variationSeed &&
+              shared.lockedVariationSeed?.trim() === variationSeed.trim(),
+          )
+        }
+        fixStatus={actions.fixStatus}
+        compactStatus={actions.compactStatus}
+        reformatStatus={actions.reformatStatus}
+        pipelineStatus={actions.pipelineStatus}
+        comfyUiStatus={actions.comfyUiStatus}
+        comfyUiPreviewUrl={actions.comfyUiPreviewUrl}
+        historySaved={actions.historySaved}
+        pairCopied={actions.pairCopied}
       />
     </div>
   );

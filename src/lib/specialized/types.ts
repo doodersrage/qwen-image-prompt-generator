@@ -29,6 +29,11 @@ export type RandomSceneOptions = SharedGenerationOptions & {
   wildness?: number;
   recentLocations?: string[];
   recentClothing?: string[];
+  blockedLocations?: string[];
+  lockedWardrobeId?: string;
+  lockedLocation?: string;
+  /** When set, reuse this environment/variation seed instead of rolling random. */
+  variationSeed?: string;
   alwaysIncludeClothing?: boolean;
 };
 
@@ -41,8 +46,23 @@ export type CharacterOptions = SharedGenerationOptions & {
   presetOptions?: CharacterPresetOptions;
   recentLocations?: string[];
   recentClothing?: string[];
+  blockedLocations?: string[];
+  /** Pin a catalog wardrobe entry instead of rolling random outfit. */
+  lockedWardrobeId?: string;
+  /** Pin scene location via location: hint. */
+  lockedLocation?: string;
+  /** Reuse a pinned variation/environment seed. */
+  variationSeed?: string;
   /** When true (default), roll catalog wardrobe unless presets specify clothing. */
   alwaysIncludeClothing?: boolean;
+  /** Force identical kits for athletic duos (teammates vs rival accents). */
+  teamKit?: boolean;
+};
+
+import type { GenerationDiagnostics } from "../generation-diagnostics";
+
+export type EnrichedToolGenerateResult = ToolGenerateResult & {
+  diagnostics?: GenerationDiagnostics;
 };
 
 import type { BackgroundPresetOptions } from "../background-options";
@@ -53,6 +73,7 @@ export type BackgroundOptions = SharedGenerationOptions & {
   mood?: string;
   presetOptions?: BackgroundPresetOptions;
   recentLocations?: string[];
+  blockedLocations?: string[];
 };
 
 export type ImagePromptFocus = "full" | "subject" | "background" | "style";
@@ -69,6 +90,7 @@ export type TopicOptions = {
   count?: number;
   variety?: number;
   recentLocations?: string[];
+  blockedLocations?: string[];
 };
 
 export type TopicGenerateResult = {

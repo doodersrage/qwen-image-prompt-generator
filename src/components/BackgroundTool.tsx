@@ -1,31 +1,42 @@
 "use client";
 
+import { promptResultPreviewProps } from "@/lib/prompt-result-preview-props";
 import { useCallback, useState } from "react";
 import BackgroundPresetControls from "@/components/BackgroundPresetControls";
-import PromptResultPanel from "@/components/PromptResultPanel";
+import EnhancedPromptResult from "@/components/EnhancedPromptResult";
 import SharedToolControls from "@/components/SharedToolControls";
 import { useCachedSettings } from "@/hooks/useCachedSettings";
+import { usePromptResultActions } from "@/hooks/usePromptResultActions";
 import { useRecentLocations } from "@/hooks/useRecentLocations";
+import { useLocationBlocklist } from "@/hooks/useLocationBlocklist";
 import { presetOptionsFromBackgroundCache } from "@/lib/background-options";
 import { readSceneLocationFromMetadata } from "@/lib/recent-locations";
 import { getComfyModelDefinition } from "@/lib/comfy-models";
+import { getReformatTargetLabel, getReformatTargetModel } from "@/lib/reformat-target";
 import { DEFAULT_BACKGROUND_TOOL_CACHE } from "@/lib/settings-cache";
-import type { ToolGenerateResult } from "@/lib/specialized/types";
+import type { EnrichedToolGenerateResult } from "@/lib/specialized/types";
 
 export default function BackgroundTool() {
   const { mounted, shared, toolSettings, updateShared, updateToolSettings } =
     useCachedSettings("background", DEFAULT_BACKGROUND_TOOL_CACHE);
   const { getRecent, record } = useRecentLocations();
+  const { getBlocklist } = useLocationBlocklist();
   const [output, setOutput] = useState("");
-  const [provider, setProvider] = useState<ToolGenerateResult["provider"] | null>(
-    null,
-  );
-  const [meta, setMeta] = useState<Pick<ToolGenerateResult, "comfyNode" | "limits"> | null>(
-    null,
-  );
+  const [result, setResult] = useState<EnrichedToolGenerateResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const actions = usePromptResultActions({
+    tool: "background",
+    model: shared.model,
+    detail: shared.detail,
+    hints: [toolSettings.settingType, toolSettings.timeOfDay, toolSettings.mood]
+      .filter(Boolean)
+      .join(", "),
+    autoFixRules: shared.autoFixRules !== false,
+    reformatTarget: getReformatTargetModel(shared.model),
+  });
 
   const selectedModel = getComfyModelDefinition(shared.model);
 
@@ -33,6 +44,7 @@ export default function BackgroundTool() {
     setLoading(true);
     setError(null);
     setCopied(false);
+    actions.resetStatuses();
 
     try {
       const response = await fetch("/api/background", {
@@ -46,10 +58,11 @@ export default function BackgroundTool() {
           mood: toolSettings.mood,
           presetOptions: presetOptionsFromBackgroundCache(toolSettings),
           recentLocations: getRecent(),
+          blockedLocations: getBlocklist(),
         }),
       });
 
-      const data = (await response.json()) as ToolGenerateResult & {
+      const data = (await response.json()) as EnrichedToolGenerateResult & {
         error?: string;
       };
 
@@ -59,18 +72,17 @@ export default function BackgroundTool() {
 
       record(readSceneLocationFromMetadata(data.metadata));
 
-      setOutput(data.prompt);
-      setProvider(data.provider);
-      setMeta({ comfyNode: data.comfyNode, limits: data.limits });
+      const prompt = await actions.finalizePrompt(data.prompt);
+      setOutput(prompt);
+      setResult({ ...data, prompt });
     } catch (err) {
       setOutput("");
-      setProvider(null);
-      setMeta(null);
+      setResult(null);
       setError(err instanceof Error ? err.message : "Generation failed.");
     } finally {
       setLoading(false);
     }
-  }, [shared, toolSettings, getRecent, record]);
+  }, [shared, toolSettings, getRecent, record, getBlocklist, actions]);
 
   const copyOutput = useCallback(async () => {
     if (!output) return;
@@ -105,6 +117,10 @@ export default function BackgroundTool() {
           shared={shared}
           onModelChange={(model) => updateShared({ model })}
           onDetailChange={(detail) => updateShared({ detail })}
+          lockedLocation={shared.lockedLocation}
+          onClearLockedLocation={() => updateShared({ lockedLocation: undefined })}
+          autoFixRules={shared.autoFixRules !== false}
+          onAutoFixRulesChange={(value) => updateShared({ autoFixRules: value })}
         />
 
         <div className="grid gap-3 border-t border-zinc-800 pt-4 sm:grid-cols-3">
@@ -150,13 +166,50 @@ export default function BackgroundTool() {
         )}
       </section>
 
-      <PromptResultPanel
+      <EnhancedPromptResult
         output={output}
-        provider={provider}
-        comfyNode={meta?.comfyNode}
-        limits={meta?.limits}
+        provider={result?.provider ?? null}
+        comfyNode={result?.comfyNode}
+        limits={result?.limits}
         copied={copied}
         onCopy={() => void copyOutput()}
+        diagnostics={actions.diagnostics ?? result?.diagnostics ?? null}
+        onSaveHistory={() =>
+          actions.saveHistory({
+            prompt: output,
+            hints: [toolSettings.settingType, toolSettings.mood]
+              .filter(Boolean)
+              .join(", "),
+            metadata: result?.metadata,
+          })
+        }
+        onSendComfyUi={() => void actions.sendComfyUi(output)}
+        {...promptResultPreviewProps(actions, output)}
+        onFixPrompt={() => void actions.fixPrompt(output, setOutput)}
+        onCopyPair={() => void actions.copyPromptPair(output)}
+        onCompact={() => void actions.compactPrompt(output, setOutput)}
+        onReformat={() => void actions.reformatForModel(output, setOutput)}
+        reformatTargetLabel={getReformatTargetLabel(shared.model)}
+        onRunPipeline={() =>
+          void actions.runExportPipeline(output, setOutput, {
+            maxChars: result?.limits?.maxChars,
+            queueComfyUi: true,
+          })
+        }
+        onExportSidecar={() =>
+          void actions.exportSidecar(output, {
+            comfyNode: result?.comfyNode ?? selectedModel.comfyNode,
+            metadata: result?.metadata,
+          })
+        }
+        fixStatus={actions.fixStatus}
+        compactStatus={actions.compactStatus}
+        reformatStatus={actions.reformatStatus}
+        pipelineStatus={actions.pipelineStatus}
+        comfyUiStatus={actions.comfyUiStatus}
+        comfyUiPreviewUrl={actions.comfyUiPreviewUrl}
+        historySaved={actions.historySaved}
+        pairCopied={actions.pairCopied}
       />
     </div>
   );

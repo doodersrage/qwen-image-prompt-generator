@@ -1,8 +1,12 @@
 "use client";
 
+import { promptResultPreviewProps } from "@/lib/prompt-result-preview-props";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ModelSelector from "@/components/ModelSelector";
+import EnhancedPromptResult from "@/components/EnhancedPromptResult";
+import SportPresetChips from "@/components/SportPresetChips";
 import { useCachedSettings } from "@/hooks/useCachedSettings";
+import { usePromptResultActions } from "@/hooks/usePromptResultActions";
 import { useRecentClothing } from "@/hooks/useRecentClothing";
 import { readClothingIdsFromMetadata } from "@/lib/recent-clothing";
 import type { DetailLevel } from "@/lib/detail-level";
@@ -14,6 +18,13 @@ import {
 import {
   DEFAULT_GENERATE_TOOL_CACHE,
 } from "@/lib/settings-cache";
+import { applyLockedLocation } from "@/lib/locked-location";
+import { getReformatTargetLabel, getReformatTargetModel } from "@/lib/reformat-target";
+import {
+  applyShareableSceneParams,
+  parseScenePresetFromSearch,
+} from "@/lib/scene-preset-url";
+import { getSportPreset } from "@/lib/sport-presets";
 import { variationStrengthLabel } from "@/lib/variation-settings";
 
 type PromptMode = "positive" | "negative";
@@ -70,6 +81,16 @@ export default function PromptGenerator() {
   const variationStrength = toolSettings.variationStrength ?? 65;
   const distinctPeople = toolSettings.distinctPeople ?? true;
   const alwaysIncludeClothing = shared.alwaysIncludeClothing !== false;
+  const autoFixRules = shared.autoFixRules !== false;
+
+  const actions = usePromptResultActions({
+    tool: "generate",
+    model: qwenModel,
+    detail,
+    hints: input,
+    autoFixRules,
+    reformatTarget: getReformatTargetModel(qwenModel),
+  });
 
   const setQwenModel = (model: ComfyImageModel) => updateShared({ model });
   const setDetail = (value: DetailLevel) => updateShared({ detail: value });
@@ -100,6 +121,39 @@ export default function PromptGenerator() {
     }
   }, [toolSettings.mode]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const prefilled = params.get("input") ?? params.get("hints");
+    if (prefilled?.trim()) {
+      setInput(prefilled.trim());
+    }
+
+    const scene = parseScenePresetFromSearch(window.location.search);
+    if (!scene) {
+      return;
+    }
+
+    const applied = applyShareableSceneParams(scene);
+    if (applied.hints?.trim()) {
+      setInput(applied.hints.trim());
+    }
+    updateShared({
+      lockedWardrobeId: applied.lockedWardrobeId,
+      lockedLocation: applied.lockedLocation,
+      lockedVariationSeed: applied.lockedVariationSeed,
+    });
+    if (applied.sportPresetId) {
+      updateToolSettings({ sportPresetId: applied.sportPresetId });
+      const preset = getSportPreset(applied.sportPresetId);
+      if (preset) {
+        setInput(preset.hints);
+      }
+    }
+  }, [updateShared, updateToolSettings]);
+
   const submitDisabled = loading || !input.trim();
   const submitDisabledReason = !input.trim()
     ? "Enter scene keywords above to enable generation."
@@ -116,13 +170,21 @@ export default function PromptGenerator() {
     setLoading(true);
     setError(null);
     setCopied(false);
+    actions.resetStatuses();
+
+    const effectiveInput =
+      applyLockedLocation(input, shared.lockedLocation) ?? input.trim();
 
     try {
+      if (mode === "positive" && effectiveInput.trim()) {
+        await actions.runPreLint(effectiveInput);
+      }
+
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          input,
+          input: effectiveInput,
           mode,
           variation: {
             enabled: mode === "positive" && variationEnabled,
@@ -134,6 +196,9 @@ export default function PromptGenerator() {
           recentClothing: getRecentClothing(),
           detail: mode === "positive" ? detail : "balanced",
           model: qwenModel,
+          lockedWardrobeId: shared.lockedWardrobeId,
+          lockedLocation: shared.lockedLocation,
+          variationSeed: shared.lockedVariationSeed,
         }),
       });
 
@@ -147,7 +212,11 @@ export default function PromptGenerator() {
 
       recordClothing(readClothingIdsFromMetadata(data.metadata));
 
-      setOutput(data.prompt);
+      const prompt =
+        mode === "positive"
+          ? await actions.finalizePrompt(data.prompt, effectiveInput)
+          : data.prompt;
+      setOutput(prompt);
       setProvider(data.provider);
       setResultMeta({
         model: data.model,
@@ -162,7 +231,7 @@ export default function PromptGenerator() {
     } finally {
       setLoading(false);
     }
-  }, [input, mode, variationEnabled, variationStrength, distinctPeople, alwaysIncludeClothing, detail, qwenModel, getRecentClothing, recordClothing]);
+  }, [input, mode, variationEnabled, variationStrength, distinctPeople, alwaysIncludeClothing, detail, qwenModel, getRecentClothing, recordClothing, actions, shared.lockedLocation, shared.lockedWardrobeId, shared.lockedVariationSeed]);
 
   const copyOutput = useCallback(async () => {
     if (!output) return;
@@ -229,6 +298,68 @@ export default function PromptGenerator() {
                 </span>
               </span>
             </label>
+          </div>
+        )}
+
+        {mode === "positive" && (
+          <div className="space-y-3 border-t border-zinc-800 pt-4">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={autoFixRules}
+                onChange={(e) => updateShared({ autoFixRules: e.target.checked })}
+                className="mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-violet-500"
+              />
+              <span className="space-y-1">
+                <span className="text-sm font-medium text-zinc-200">
+                  Auto-fix lint errors
+                </span>
+                <span className="block text-xs leading-relaxed text-zinc-500">
+                  After generation, apply rule-based fixes when lint reports errors.
+                </span>
+              </span>
+            </label>
+          </div>
+        )}
+
+        {(shared.lockedLocation ||
+          shared.lockedWardrobeId ||
+          shared.lockedVariationSeed) && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-zinc-800 pt-4 text-xs">
+            {shared.lockedLocation && (
+              <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-amber-200">
+                Locked location: {shared.lockedLocation}
+              </span>
+            )}
+            {shared.lockedWardrobeId && (
+              <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-1 text-sky-200">
+                Locked kit: {shared.lockedWardrobeId}
+              </span>
+            )}
+            {shared.lockedVariationSeed && (
+              <span
+                className="max-w-full truncate rounded-full border border-violet-500/40 bg-violet-500/10 px-2 py-1 text-violet-200"
+                title={shared.lockedVariationSeed}
+              >
+                Locked seed:{" "}
+                {shared.lockedVariationSeed.length > 48
+                  ? `${shared.lockedVariationSeed.slice(0, 48)}…`
+                  : shared.lockedVariationSeed}
+              </span>
+            )}
+          </div>
+        )}
+
+        {mode === "positive" && (
+          <div className="space-y-3 border-t border-zinc-800 pt-4">
+            <SportPresetChips
+              mode="all"
+              selectedId={toolSettings.sportPresetId}
+              onSelect={(preset) => {
+                updateToolSettings({ sportPresetId: preset.id });
+                setInput(preset.hints);
+              }}
+            />
           </div>
         )}
 
@@ -475,23 +606,64 @@ export default function PromptGenerator() {
         )}
       </section>
 
-      {output && (
+      {output && mode === "positive" && (
+        <EnhancedPromptResult
+          output={output}
+          provider={provider}
+          comfyNode={resultMeta?.comfyNode ?? selectedModel.comfyNode}
+          limits={resultMeta?.limits}
+          copied={copied}
+          onCopy={() => void copyOutput()}
+          extraMeta={
+            resultMeta
+              ? `${resultMeta.limits.minChars ? `${resultMeta.limits.minChars}–` : ""}${resultMeta.limits.maxChars} char limit · ${output.length} chars`
+              : undefined
+          }
+          diagnostics={actions.diagnostics}
+          preDiagnostics={actions.preDiagnostics}
+          onSaveHistory={() =>
+            actions.saveHistory({ prompt: output, hints: input })
+          }
+          onSendComfyUi={() => void actions.sendComfyUi(output)}
+          {...promptResultPreviewProps(actions, output)}
+          onFixPrompt={() => void actions.fixPrompt(output, setOutput, input)}
+          onCopyPair={() => void actions.copyPromptPair(output)}
+          onCompact={() => void actions.compactPrompt(output, setOutput)}
+          onReformat={() => void actions.reformatForModel(output, setOutput)}
+          reformatTargetLabel={getReformatTargetLabel(qwenModel)}
+          onRunPipeline={() =>
+            void actions.runExportPipeline(output, setOutput, {
+              maxChars: resultMeta?.limits.maxChars,
+              queueComfyUi: true,
+            })
+          }
+          onExportSidecar={() =>
+            void actions.exportSidecar(output, {
+              comfyNode: resultMeta?.comfyNode ?? selectedModel.comfyNode,
+              variationSeed: shared.lockedVariationSeed,
+            })
+          }
+          fixStatus={actions.fixStatus}
+          compactStatus={actions.compactStatus}
+          reformatStatus={actions.reformatStatus}
+          pipelineStatus={actions.pipelineStatus}
+          comfyUiStatus={actions.comfyUiStatus}
+        comfyUiPreviewUrl={actions.comfyUiPreviewUrl}
+          historySaved={actions.historySaved}
+          pairCopied={actions.pairCopied}
+        />
+      )}
+
+      {output && mode === "negative" && (
         <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-xl shadow-black/20">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-medium text-zinc-200">
-                Generated scene prompt
+                Generated preserve / negative prompt
               </h2>
               {provider && (
                 <p className="mt-1 text-xs text-zinc-500">
                   via {provider === "llm" ? "LLM" : "template fallback"}
-                  {resultMeta && (
-                    <>
-                      {" "}
-                      · {resultMeta.limits.minChars ? `${resultMeta.limits.minChars}–` : ""}
-                      {resultMeta.limits.maxChars} char limit · {output.length} chars
-                    </>
-                  )}
                 </p>
               )}
             </div>
@@ -507,15 +679,17 @@ export default function PromptGenerator() {
           <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl border border-zinc-800 bg-zinc-950 p-4 font-mono text-sm leading-relaxed text-emerald-300">
             {output}
           </pre>
-
-          <p className="text-xs text-zinc-500">
-            Paste into{" "}
-            <code className="rounded bg-zinc-800 px-1 text-violet-300">
-              {resultMeta?.comfyNode ?? selectedModel.comfyNode}
-            </code>
-            . Press Ctrl+Enter to regenerate.
-          </p>
         </section>
+      )}
+
+      {output && mode === "positive" && (
+        <p className="-mt-4 text-xs text-zinc-500">
+          Paste into{" "}
+          <code className="rounded bg-zinc-800 px-1 text-violet-300">
+            {resultMeta?.comfyNode ?? selectedModel.comfyNode}
+          </code>
+          . Press Ctrl+Enter to regenerate.
+        </p>
       )}
 
       <section className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-5 text-sm text-zinc-500">

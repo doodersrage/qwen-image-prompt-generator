@@ -12,11 +12,14 @@ import {
 import {
   resolveAthleticSportForWardrobe,
   stripIncompatibleSportActionsFromPrompt,
+  ensureCyclingHelmetInPrompt,
+  appendCyclingHelmetToSummary,
 } from "./athletic-sport-actions";
 import {
   mergeWardrobeAssignmentsIntoPrompt,
   mergeWardrobeRespectingLimits,
   pickRandomCharacterOutfit,
+  buildOutfitFromLockedWardrobeId,
   type RandomCharacterOutfit,
 } from "./clothing-catalog";
 import { hintsMentionClothing } from "./clothing-tags";
@@ -123,6 +126,22 @@ function collectOutfitIds(outfit: RandomCharacterOutfit): string[] {
   ].filter((id): id is string => Boolean(id));
 }
 
+const ATHLETIC_DUO_COMPETITION_HINT =
+  /\b(?:competition|competing|race|racing|fierce|rival(?:ry|s)?|versus|vs\.?|sprint finish|wheel-to-wheel|head-to-head)\b/i;
+
+export function hintsDescribeAthleticDuoCompetition(input: string): boolean {
+  const trimmed = input.trim();
+  if (!trimmed || !isMultiPersonInput(trimmed)) {
+    return false;
+  }
+
+  if (!ATHLETIC_DUO_COMPETITION_HINT.test(trimmed)) {
+    return false;
+  }
+
+  return inferAthleticSport(trimmed) !== null;
+}
+
 export function buildGenerateWardrobeAssignments(
   input: string,
   settings: GenerationSettings,
@@ -132,6 +151,8 @@ export function buildGenerateWardrobeAssignments(
     forcedCount?: number;
     forcedDistinctPeople?: boolean;
     forcedGender?: SubjectGender;
+    teamKit?: boolean;
+    lockedWardrobeId?: string;
   },
 ): GenerateWardrobeAssignment[] | null {
   if (
@@ -154,8 +175,18 @@ export function buildGenerateWardrobeAssignments(
     assignmentCount(trimmed, { ...settings, distinctPeople });
   const excludeIds: string[] = [...(options?.recentClothing ?? [])];
   const assignments: GenerateWardrobeAssignment[] = [];
+  const sharedCompetitionKit =
+    options?.teamKit === true || hintsDescribeAthleticDuoCompetition(trimmed);
 
   for (let index = 0; index < count; index += 1) {
+    if (index > 0 && sharedCompetitionKit && assignments[0]) {
+      assignments.push({
+        ...assignments[0],
+        label: assignmentLabel(index, count, distinctPeople),
+      });
+      continue;
+    }
+
     const filters = buildClothingPickFilters({
       gender: assignmentGenderForSlot(index, resolvedGender),
       sceneLocation: location,
@@ -163,15 +194,35 @@ export function buildGenerateWardrobeAssignments(
       hints: trimmed,
       excludeIds,
     });
-    const outfit = pickRandomCharacterOutfit(filters);
+    const outfit =
+      options?.lockedWardrobeId && index === 0
+        ? buildOutfitFromLockedWardrobeId(options.lockedWardrobeId, filters) ??
+          pickRandomCharacterOutfit(filters)
+        : options?.lockedWardrobeId && sharedCompetitionKit && assignments[0]
+          ? ({
+              summary: assignments[0].summary,
+              wardrobeId: assignments[0].wardrobeId ?? null,
+              bottomId: assignments[0].bottomId ?? null,
+              footwearId: assignments[0].footwearId ?? null,
+              accessoriesId: assignments[0].accessoriesId ?? null,
+              wardrobe: null,
+              footwear: null,
+              accessories: null,
+              filters: assignments[0].filters,
+            } satisfies RandomCharacterOutfit)
+          : pickRandomCharacterOutfit(filters);
     if (!outfit.summary.trim()) {
       continue;
     }
 
     excludeIds.push(...collectOutfitIds(outfit));
+    const summary =
+      filters.athleticSport === "cycling"
+        ? appendCyclingHelmetToSummary(outfit.summary, trimmed)
+        : outfit.summary;
     assignments.push({
       label: assignmentLabel(index, count, distinctPeople),
-      summary: outfit.summary,
+      summary,
       filters: outfit.filters,
       wardrobeId: outfit.wardrobeId,
       bottomId: outfit.bottomId,
@@ -185,6 +236,7 @@ export function buildGenerateWardrobeAssignments(
 
 export function buildGenerateWardrobeUserDirective(
   assignments: GenerateWardrobeAssignment[],
+  options?: { teamKit?: boolean },
 ): string | null {
   if (assignments.length === 0) {
     return null;
@@ -214,10 +266,23 @@ export function buildGenerateWardrobeUserDirective(
     })
     .filter(Boolean);
 
+  const sharedCompetitionKit =
+    assignments.length >= 2 &&
+    assignments.every(
+      (assignment) => assignment.summary === assignments[0]?.summary,
+    ) &&
+    assignments.some((assignment) => assignment.filters.athleticSport);
+
+  const teamKit = options?.teamKit === true;
+
   return [
     "WARDROBE COHERENCE (mandatory):",
     "Weave each assigned outfit into that person's sentence—do not add a separate wardrobe paragraph before the scene.",
-    "Each person gets their own scene-appropriate outfit.",
+    sharedCompetitionKit && teamKit
+      ? "Both wear identical race kits—same colors and garment types; only bib numbers may differ."
+      : sharedCompetitionKit
+        ? "Both competitors wear the same race kit cut and garment types—rivals may differ only in accent color, bib number, or shoe color, not different outfit categories or silhouettes."
+        : "Each person gets their own scene-appropriate outfit.",
     ...lines.map((line) => `- ${line}`),
     ...(guardrailBlocks.length > 0
       ? ["Per-person scene rules:", ...guardrailBlocks.map((line) => `- ${line}`)]
@@ -280,7 +345,10 @@ export function refreshSportWardrobeAssignmentForPrompt(
 
   return {
     ...assignment,
-    summary: outfit.summary,
+    summary:
+      sport === "cycling"
+        ? appendCyclingHelmetToSummary(outfit.summary, intentHints)
+        : outfit.summary,
     filters: outfit.filters,
     wardrobeId: outfit.wardrobeId,
     bottomId: outfit.bottomId,
@@ -306,5 +374,8 @@ export function mergeGenerateWardrobeIntoPrompt(
   const refreshed = assignments.map((assignment) =>
     refreshSportWardrobeAssignmentForPrompt(working, assignment, intentHints),
   );
-  return mergeWardrobeAssignmentsIntoPrompt(working, refreshed, maxChars);
+  const merged = mergeWardrobeAssignmentsIntoPrompt(working, refreshed, maxChars);
+  return sport === "cycling"
+    ? ensureCyclingHelmetInPrompt(merged, intentHints ?? "")
+    : merged;
 }

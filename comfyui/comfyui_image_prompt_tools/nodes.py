@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from .api_client import extract_prompt, post_json, resolve_api_base
 from .constants import (
     DEFAULT_MODEL,
@@ -8,6 +10,7 @@ from .constants import (
     MODEL_IDS,
     PORTRAIT_STYLES,
     PROMPT_MODES,
+    SPORT_PRESET_IDS,
 )
 from .image_utils import tensor_to_data_url
 
@@ -17,6 +20,11 @@ class PromptToolsBase:
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("prompt",)
     OUTPUT_NODE = False
+
+    @staticmethod
+    def metadata_json(response: dict) -> str:
+        payload = {key: value for key, value in response.items() if key != "prompt"}
+        return json.dumps(payload, ensure_ascii=False)
 
     @classmethod
     def api_input(cls):
@@ -182,6 +190,9 @@ class PromptToolsRandomScene(PromptToolsBase):
 
 
 class PromptToolsCharacter(PromptToolsBase):
+    RETURN_TYPES = ("STRING", "STRING")
+    RETURN_NAMES = ("prompt", "metadata_json")
+
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -218,7 +229,7 @@ class PromptToolsCharacter(PromptToolsBase):
             payload["hints"] = hints.strip()
 
         response = post_json(api_base_url, "/api/character", payload)
-        return (extract_prompt(response),)
+        return (extract_prompt(response), self.metadata_json(response))
 
 
 class PromptToolsBackground(PromptToolsBase):
@@ -299,6 +310,336 @@ class PromptToolsImageToPrompt(PromptToolsBase):
         return (extract_prompt(response),)
 
 
+class PromptToolsDuo(PromptToolsBase):
+    RETURN_TYPES = ("STRING", "STRING")
+    RETURN_NAMES = ("prompt", "metadata_json")
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                **cls.model_detail_inputs(),
+                "hints": ("STRING", {"default": "", "multiline": True}),
+                "sport_preset": (SPORT_PRESET_IDS, {"default": "gravel-duo-race"}),
+                "team_kit": ("BOOLEAN", {"default": False}),
+                "variation_strength": (
+                    "INT",
+                    {"default": 50, "min": 0, "max": 100, "step": 1},
+                ),
+            },
+            "optional": cls.api_input(),
+        }
+
+    FUNCTION = "generate"
+
+    def generate(
+        self,
+        model: str,
+        detail: str,
+        hints: str,
+        sport_preset: str,
+        team_kit: bool,
+        variation_strength: int,
+        api_base_url: str = "",
+    ):
+        payload = {
+            "model": model,
+            "detail": detail,
+            "portraitStyle": "action",
+            "variationStrength": variation_strength,
+            "teamKit": team_kit,
+            "sportPresetId": sport_preset,
+        }
+        if hints.strip():
+            payload["hints"] = hints.strip()
+
+        response = post_json(api_base_url, "/api/duo", payload)
+        return (extract_prompt(response), self.metadata_json(response))
+
+
+class PromptToolsBatch(PromptToolsBase):
+    RETURN_TYPES = ("STRING", "STRING")
+    RETURN_NAMES = ("prompt", "metadata_json")
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                **cls.model_detail_inputs(),
+                "hints": ("STRING", {"default": "", "multiline": True}),
+                "count": ("INT", {"default": 3, "min": 1, "max": 12, "step": 1}),
+                "team_kit": ("BOOLEAN", {"default": False}),
+            },
+            "optional": cls.api_input(),
+        }
+
+    FUNCTION = "generate"
+
+    def generate(
+        self,
+        model: str,
+        detail: str,
+        hints: str,
+        count: int,
+        team_kit: bool,
+        api_base_url: str = "",
+    ):
+        payload = {
+            "model": model,
+            "detail": detail,
+            "portraitStyle": "action",
+            "count": count,
+            "teamKit": team_kit,
+            "presetOptions": {"headcount": "duo"},
+        }
+        if hints.strip():
+            payload["hints"] = hints.strip()
+
+        response = post_json(api_base_url, "/api/batch", payload)
+        results = response.get("results")
+        if isinstance(results, list) and results:
+            prompts = [
+                entry.get("prompt", "").strip()
+                for entry in results
+                if isinstance(entry, dict) and entry.get("prompt")
+            ]
+            if prompts:
+                return ("\n---\n".join(prompts), self.metadata_json(response))
+        return (extract_prompt(response), self.metadata_json(response))
+
+
+class PromptToolsLint(PromptToolsBase):
+    RETURN_NAMES = ("diagnostics_json",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "hints": ("STRING", {"default": "", "multiline": True}),
+                "prompt": ("STRING", {"default": "", "multiline": True}),
+            },
+            "optional": cls.api_input(),
+        }
+
+    FUNCTION = "lint"
+
+    def lint(self, hints: str, prompt: str, api_base_url: str = ""):
+        response = post_json(
+            api_base_url,
+            "/api/lint",
+            {"hints": hints.strip(), "prompt": prompt.strip()},
+        )
+        return (json.dumps(response, ensure_ascii=False),)
+
+
+class PromptToolsNegative(PromptToolsBase):
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "sport": ("STRING", {"default": "cycling", "multiline": False}),
+                "preserve_subject": ("BOOLEAN", {"default": False}),
+                "extra": ("STRING", {"default": "", "multiline": True}),
+            },
+            "optional": cls.api_input(),
+        }
+
+    FUNCTION = "generate"
+
+    def generate(
+        self,
+        sport: str,
+        preserve_subject: bool,
+        extra: str,
+        api_base_url: str = "",
+    ):
+        payload = {
+            "sport": sport.strip(),
+            "preserveSubject": preserve_subject,
+        }
+        if extra.strip():
+            payload["extra"] = extra.strip()
+
+        response = post_json(api_base_url, "/api/negative", payload)
+        return (extract_prompt(response),)
+
+
+class PromptToolsFix(PromptToolsBase):
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "prompt": ("STRING", {"default": "", "multiline": True}),
+                "hints": ("STRING", {"default": "", "multiline": True}),
+            },
+            "optional": cls.api_input(),
+        }
+
+    FUNCTION = "fix"
+
+    def fix(self, prompt: str, hints: str, api_base_url: str = ""):
+        text = prompt.strip()
+        if not text:
+            raise RuntimeError("Prompt is required.")
+
+        response = post_json(
+            api_base_url,
+            "/api/fix",
+            {"prompt": text, "hints": hints.strip()},
+        )
+        fixed = response.get("prompt")
+        if not isinstance(fixed, str) or not fixed.strip():
+            raise RuntimeError("Fix API did not return a prompt string.")
+        return (fixed,)
+
+
+class PromptToolsCompose(PromptToolsBase):
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                **cls.model_detail_inputs(),
+                "background_prompt": ("STRING", {"default": "", "multiline": True}),
+                "subject_prompt": ("STRING", {"default": "", "multiline": True}),
+                "compose_style": (["layered", "inline"], {"default": "layered"}),
+            },
+            "optional": cls.api_input(),
+        }
+
+    FUNCTION = "compose"
+
+    def compose(
+        self,
+        model: str,
+        detail: str,
+        background_prompt: str,
+        subject_prompt: str,
+        compose_style: str,
+        api_base_url: str = "",
+    ):
+        payload = {
+            "model": model,
+            "detail": detail,
+            "composeStyle": compose_style,
+            "background": {"settingType": background_prompt.strip()},
+            "hints": subject_prompt.strip(),
+            "subjectMode": "duo",
+        }
+        response = post_json(api_base_url, "/api/compose", payload)
+        return (extract_prompt(response),)
+
+
+class PromptToolsCompact(PromptToolsBase):
+    RETURN_TYPES = ("STRING", "STRING")
+    RETURN_NAMES = ("prompt", "metadata_json")
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "prompt": ("STRING", {"default": "", "multiline": True}),
+                **cls.model_detail_inputs(),
+            },
+            "optional": cls.api_input(),
+        }
+
+    FUNCTION = "compact"
+
+    def compact(self, prompt: str, model: str, detail: str, api_base_url: str = ""):
+        text = prompt.strip()
+        if not text:
+            raise RuntimeError("Prompt is required.")
+
+        response = post_json(
+            api_base_url,
+            "/api/compact",
+            {"prompt": text, "model": model, "detail": detail},
+        )
+        return (extract_prompt(response), self.metadata_json(response))
+
+
+class PromptToolsRefine(PromptToolsBase):
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                **cls.model_detail_inputs(),
+                "current_prompt": ("STRING", {"default": "", "multiline": True}),
+                "intent_hints": ("STRING", {"default": "", "multiline": True}),
+            },
+            "optional": cls.api_input(),
+        }
+
+    FUNCTION = "refine"
+
+    def refine(
+        self,
+        image,
+        model: str,
+        detail: str,
+        current_prompt: str,
+        intent_hints: str,
+        api_base_url: str = "",
+    ):
+        image_data_url, mime_type = tensor_to_data_url(image)
+        payload = {
+            "image": image_data_url,
+            "mimeType": mime_type,
+            "model": model,
+            "detail": detail,
+        }
+        if current_prompt.strip():
+            payload["currentPrompt"] = current_prompt.strip()
+        if intent_hints.strip():
+            payload["intentHints"] = intent_hints.strip()
+
+        response = post_json(api_base_url, "/api/refine", payload)
+        return (extract_prompt(response),)
+
+
+class PromptToolsQueueComfyUi(PromptToolsBase):
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("status",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "prompt": ("STRING", {"default": "", "multiline": True}),
+            },
+            "optional": {
+                **cls.api_input(),
+                "negative_prompt": ("STRING", {"default": "", "multiline": True}),
+            },
+        }
+
+    FUNCTION = "queue"
+
+    def queue(
+        self,
+        prompt: str,
+        api_base_url: str = "",
+        negative_prompt: str = "",
+    ):
+        text = prompt.strip()
+        if not text:
+            raise RuntimeError("Prompt is required.")
+
+        payload = {"prompt": text}
+        if negative_prompt.strip():
+            payload["negativePrompt"] = negative_prompt.strip()
+
+        response = post_json(api_base_url, "/api/comfyui", payload)
+        parts = [
+            response.get("promptId") and f"prompt_id {response['promptId']}",
+            response.get("comfyUrl"),
+            response.get("workflowSource") and f"workflow: {response['workflowSource']}",
+        ]
+        status = " · ".join(part for part in parts if part) or "queued"
+        return (status,)
+
+
 NODE_CLASS_MAPPINGS = {
     "PromptToolsGenerate": PromptToolsGenerate,
     "PromptToolsFormat": PromptToolsFormat,
@@ -306,6 +647,15 @@ NODE_CLASS_MAPPINGS = {
     "PromptToolsCharacter": PromptToolsCharacter,
     "PromptToolsBackground": PromptToolsBackground,
     "PromptToolsImageToPrompt": PromptToolsImageToPrompt,
+    "PromptToolsDuo": PromptToolsDuo,
+    "PromptToolsBatch": PromptToolsBatch,
+    "PromptToolsLint": PromptToolsLint,
+    "PromptToolsNegative": PromptToolsNegative,
+    "PromptToolsFix": PromptToolsFix,
+    "PromptToolsCompose": PromptToolsCompose,
+    "PromptToolsCompact": PromptToolsCompact,
+    "PromptToolsRefine": PromptToolsRefine,
+    "PromptToolsQueueComfyUi": PromptToolsQueueComfyUi,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -315,4 +665,13 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "PromptToolsCharacter": "Prompt Tools · Character",
     "PromptToolsBackground": "Prompt Tools · Background",
     "PromptToolsImageToPrompt": "Prompt Tools · Image → Prompt",
+    "PromptToolsDuo": "Prompt Tools · Duo / Sport",
+    "PromptToolsBatch": "Prompt Tools · Batch Roll",
+    "PromptToolsLint": "Prompt Tools · Lint",
+    "PromptToolsNegative": "Prompt Tools · Negative",
+    "PromptToolsFix": "Prompt Tools · Fix Prompt",
+    "PromptToolsCompose": "Prompt Tools · Compose Scene",
+    "PromptToolsCompact": "Prompt Tools · Compact Prompt",
+    "PromptToolsRefine": "Prompt Tools · Refine Prompt",
+    "PromptToolsQueueComfyUi": "Prompt Tools · Queue ComfyUI",
 }

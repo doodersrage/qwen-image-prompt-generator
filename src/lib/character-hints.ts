@@ -1,5 +1,6 @@
 import {
   pickCharacterSubject,
+  pickDistinctIdentitySeeds,
   type SubjectGender,
 } from "./variation-seed";
 
@@ -104,4 +105,73 @@ export function pickCharacterIdentitySeed(
   }
 
   return pickCharacterSubject(parsed.gender, parsed.wantsMinimalHair);
+}
+
+export function pickDuoCharacterIdentitySeeds(
+  gender: SubjectGender = "any",
+  allowMinimalHair = false,
+  athletic = false,
+): [string, string] {
+  const resolvedGender =
+    gender === "any" || gender === "mixed" ? "women" : gender;
+  const pool = pickDistinctIdentitySeeds(2, resolvedGender, {
+    allowMinimalHair,
+    athletic,
+  });
+
+  if (pool.length >= 2) {
+    return [pool[0]!, pool[1]!];
+  }
+
+  const fallbackOne = pickFilteredIdentityFromPool(resolvedGender, {
+    allowMinimalHair,
+    athletic,
+  });
+  let fallbackTwo = pickFilteredIdentityFromPool(resolvedGender, {
+    allowMinimalHair,
+    athletic,
+  });
+  if (fallbackTwo === fallbackOne) {
+    const extra = pickDistinctIdentitySeeds(2, resolvedGender, {
+      allowMinimalHair,
+      athletic,
+    });
+    fallbackTwo = extra[1] ?? fallbackTwo;
+  }
+
+  return [fallbackOne, fallbackTwo];
+}
+
+function pickFilteredIdentityFromPool(
+  gender: SubjectGender,
+  options: { allowMinimalHair?: boolean; athletic?: boolean },
+): string {
+  const [seed] = pickDistinctIdentitySeeds(1, gender, options);
+  return seed ?? pickCharacterSubject(gender, options.allowMinimalHair);
+}
+
+export function buildDuoIdentityUserDirective(
+  leftSeed: string,
+  rightSeed: string,
+  athletic = false,
+  cyclingHelmets = false,
+): string {
+  return [
+    "MANDATORY DISTINCT IDENTITIES (each person must look like a different individual—not two interchangeable generic models):",
+    `Person on the left: ${leftSeed}`,
+    `Person on the right: ${rightSeed}`,
+    "Weave face shape, hair, skin tone, and age read into each person's sentence.",
+    "Do not describe both people with the same vague traits only (e.g. both simply 'determined' with no distinguishing features).",
+    ...(athletic
+      ? [
+          "Competition-age athletes only—generally twenties to forties, fit and race-ready. No elderly, retired, teen, or child descriptors.",
+          "Identity only—do NOT describe dresses, street clothes, uniforms from other professions, or non-sport garments; the assigned athletic kit is what both people wear.",
+        ]
+      : []),
+    ...(cyclingHelmets
+      ? [
+          "Every cyclist wears a fastened cycling helmet; hair may show at the temples or through rear vents, but never bare heads.",
+        ]
+      : []),
+  ].join("\n");
 }

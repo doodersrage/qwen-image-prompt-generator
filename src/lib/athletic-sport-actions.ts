@@ -63,7 +63,7 @@ const SPORT_ACTION_BUNDLES: Record<AthleticSport, SportActionBundle> = {
   },
   cycling: {
     instructions:
-      "Show cycling race action: pedaling hard, out-of-saddle sprinting, leaning through a corner, or drafting wheel-to-wheel. Every subject stays on a racing bicycle. No javelin, spear, dock dives, backflips, or unrelated stunts.",
+      "Show cycling race action: pedaling hard, out-of-saddle sprinting, leaning through a corner, or drafting wheel-to-wheel. Every subject stays on a racing bicycle with a fastened cycling helmet—hair may show at the temples or through rear vents, but never bare heads. No javelin, spear, dock dives, backflips, or unrelated stunts.",
     rewriteDefault: "sprinting on a racing bicycle",
     poses: [
       "sprinting out of the saddle on a road bike with aerodynamic forward lean",
@@ -327,7 +327,7 @@ type CyclingDisciplineOverlay = {
 const CYCLING_DISCIPLINE_OVERLAYS: Record<CyclingDiscipline, CyclingDisciplineOverlay> = {
   road: {
     instructions:
-      "Show road cycling race action: pedaling hard, out-of-saddle sprinting, leaning through a corner, or drafting wheel-to-wheel on paved roads. Every subject stays on a road racing bicycle—no singletrack, gravel sectors, or velodrome unless explicitly requested.",
+      "Show road cycling race action: pedaling hard, out-of-saddle sprinting, leaning through a corner, or drafting wheel-to-wheel on paved roads. Every subject stays on a road racing bicycle with a fastened aero cycling helmet—hair may show at the temples, but never bare heads. No singletrack, gravel sectors, or velodrome unless explicitly requested.",
     rewriteDefault: "sprinting on a road racing bicycle",
     poses: SPORT_ACTION_BUNDLES.cycling.poses,
     settings: SPORT_ACTION_BUNDLES.cycling.settings,
@@ -344,7 +344,7 @@ const CYCLING_DISCIPLINE_OVERLAYS: Record<CyclingDiscipline, CyclingDisciplineOv
   },
   gravel: {
     instructions:
-      "Show gravel cycling action on unpaved roads, fire roads, rail-trails, or wide dirt sectors with a gravel or adventure bike. Loose surface, kicked-up dust or stones—never a velodrome, indoor track, or banked oval.",
+      "Show gravel cycling action on unpaved roads, fire roads, rail-trails, or wide dirt sectors with a gravel or adventure bike. Every rider wears a fastened gravel cycling helmet—hair may show at the temples or through vents, but never bare heads. Loose surface, kicked-up dust or stones—never a velodrome, indoor track, or banked oval.",
     rewriteDefault: "powering through a loose gravel sector on a fire road",
     poses: [
       "powering through a loose gravel sector with stones kicking up from knob tires",
@@ -369,7 +369,7 @@ const CYCLING_DISCIPLINE_OVERLAYS: Record<CyclingDiscipline, CyclingDisciplineOv
   },
   mountain: {
     instructions:
-      "Show mountain biking action on singletrack, trail, or technical terrain with a mountain bike. Roots, rocks, and body English—never a velodrome or road race circuit.",
+      "Show mountain biking action on singletrack, trail, or technical terrain with a mountain bike. Every rider wears a fastened mountain bike helmet—hair may show at the temples or through vents, but never bare heads. Roots, rocks, and body English—never a velodrome or road race circuit.",
     rewriteDefault: "carving through a rooty singletrack descent",
     poses: [
       "carving through a rooty singletrack descent with the bike leaned into a berm",
@@ -393,7 +393,7 @@ const CYCLING_DISCIPLINE_OVERLAYS: Record<CyclingDiscipline, CyclingDisciplineOv
   },
   cyclocross: {
     instructions:
-      "Show cyclocross action: running barriers, shouldering the bike, or sprinting through mud in a cross race. Grass, mud, and barriers—never a velodrome.",
+      "Show cyclocross action: running barriers, shouldering the bike, or sprinting through mud in a cross race. Every rider wears a fastened cyclocross helmet—hair may show at the temples, but never bare heads. Grass, mud, and barriers—never a velodrome.",
     rewriteDefault: "shouldering the bike over a muddy cyclocross barrier",
     poses: [
       "shouldering the bike over a wooden barrier with mud on the calves",
@@ -409,7 +409,7 @@ const CYCLING_DISCIPLINE_OVERLAYS: Record<CyclingDiscipline, CyclingDisciplineOv
   },
   track: {
     instructions:
-      "Show track cycling action on a velodrome or indoor banked oval: high-speed pedaling, sprint lines, or pursuit pace. Stay on the track—no gravel roads or trail terrain.",
+      "Show track cycling action on a velodrome or indoor banked oval: high-speed pedaling, sprint lines, or pursuit pace. Every rider wears a fastened track cycling helmet—never bare heads. Stay on the track—no gravel roads or trail terrain.",
     rewriteDefault: "charging through a velodrome banking turn at full speed",
     poses: [
       "charging through a velodrome banking turn at full speed",
@@ -452,6 +452,79 @@ export function inferCyclingDiscipline(hints?: string): CyclingDiscipline {
     }
   }
   return "road";
+}
+
+const CYCLING_HELMET_IN_TEXT =
+  /\b(?:cycling helmet|bike helmet|aero helmet|gravel helmet|mountain bike helmet|track cycling helmet|helmet visor|fastened helmet)\b/i;
+
+export function cyclingHelmetLabel(hints?: string): string {
+  switch (inferCyclingDiscipline(hints)) {
+    case "gravel":
+      return "gravel cycling helmet";
+    case "mountain":
+      return "mountain bike helmet";
+    case "track":
+      return "track cycling helmet";
+    case "cyclocross":
+      return "cyclocross helmet";
+    case "road":
+    default:
+      return "aero cycling helmet";
+  }
+}
+
+export function summaryIncludesCyclingHelmet(summary: string): boolean {
+  return CYCLING_HELMET_IN_TEXT.test(summary) || /\bhelmet\b/i.test(summary);
+}
+
+export function appendCyclingHelmetToSummary(
+  summary: string,
+  hints?: string,
+): string {
+  const trimmed = summary.trim();
+  if (!trimmed || summaryIncludesCyclingHelmet(trimmed)) {
+    return trimmed;
+  }
+
+  return `${trimmed}, ${cyclingHelmetLabel(hints)}`;
+}
+
+export function ensureCyclingHelmetInPrompt(
+  prompt: string,
+  hints?: string,
+): string {
+  if (CYCLING_HELMET_IN_TEXT.test(prompt)) {
+    return prompt;
+  }
+
+  const helmet = cyclingHelmetLabel(hints);
+  const sentences = prompt.split(/(?<=[.!?])\s+/);
+  let changed = false;
+
+  const updated = sentences.map((sentence) => {
+    const mentionsCyclist =
+      /\b(?:cyclist|cyclists|cycling kit|cycling shoes|bib shorts|cycling jersey|handlebars|pedaling|on (?:a |the )?(?:bike|bicycle))\b/i.test(
+        sentence,
+      ) || /\bon the (?:left|right)\b/i.test(sentence);
+
+    if (!mentionsCyclist || /\bhelmet\b/i.test(sentence)) {
+      return sentence;
+    }
+
+    changed = true;
+    if (/\bwearing\b/i.test(sentence)) {
+      return sentence.replace(/\bwearing\b/i, `wearing a ${helmet} and`);
+    }
+
+    const trimmed = sentence.trim().replace(/\.$/, "");
+    return `${trimmed}, wearing a ${helmet}.`;
+  });
+
+  if (changed) {
+    return updated.join(" ").replace(/\s{2,}/g, " ").trim();
+  }
+
+  return `${prompt.replace(/\.$/, "")}, each wearing a ${helmet}.`;
 }
 
 function cyclingDisciplineOverlay(hints?: string): CyclingDisciplineOverlay {

@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   buildGenerateWardrobeAssignments,
   buildGenerateWardrobeUserDirective,
+  hintsDescribeAthleticDuoCompetition,
   mergeGenerateWardrobeIntoPrompt,
   refreshSportWardrobeAssignmentForPrompt,
 } from "./generate-wardrobe";
@@ -24,12 +25,16 @@ import {
 } from "./clothing-tags";
 import { summaryMatchesSportWardrobe } from "./athletic-sport-profiles";
 import {
+  appendCyclingHelmetToSummary,
+  ensureCyclingHelmetInPrompt,
   inferCyclingDiscipline,
   resolveAthleticSportForWardrobe,
   stripForeignSportActionsFromPrompt,
   stripIncompatibleCyclingVenuesFromPrompt,
 } from "./athletic-sport-actions";
 import { buildRandomCharacterSeed } from "./specialized/scene-pools";
+import { pickDistinctIdentitySeeds } from "./variation-seed";
+import { paintDistinctPeopleScene, stripStreetClothingFromAthleticPeoplePrompt } from "./distinct-people";
 import { pickRandomCharacterOutfit } from "./clothing-catalog";
 import { DEFAULT_GENERATION_SETTINGS } from "./generation-settings";
 
@@ -71,6 +76,26 @@ describe("multi-person wardrobe assignments", () => {
     assert.ok(assignments && assignments.length === 2);
     assert.notEqual(assignments[0]?.summary, assignments[1]?.summary);
     assert.match(buildGenerateWardrobeUserDirective(assignments) ?? "", /Per-person scene rules/);
+  });
+
+  it("uses matching race kits for athletic duo competition scenes", () => {
+    const hint =
+      "A fierce competition unfolds as two female gravel cyclists push themselves to the limit";
+    assert.equal(hintsDescribeAthleticDuoCompetition(hint), true);
+
+    const assignments = buildGenerateWardrobeAssignments(
+      hint,
+      { ...DEFAULT_GENERATION_SETTINGS, distinctPeople: true },
+      { assumePeople: true, forcedCount: 2, forcedDistinctPeople: true },
+    );
+
+    assert.ok(assignments && assignments.length === 2);
+    assert.equal(assignments[0]?.summary, assignments[1]?.summary);
+    assert.match(assignments[0]?.summary ?? "", /helmet/i);
+    assert.match(
+      buildGenerateWardrobeUserDirective(assignments) ?? "",
+      /same race kit cut/i,
+    );
   });
 
   it("tracks bottom layer ids in outfit collection", () => {
@@ -364,6 +389,68 @@ describe("character action seeds", () => {
     );
     assert.doesNotMatch(merged, /javelin/i);
     assert.match(merged, /cycling kit/i);
+  });
+});
+
+describe("athletic duo identity", () => {
+  it("uses clothing-free identity seeds for athletic scenes", () => {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const seeds = pickDistinctIdentitySeeds(2, "women", { athletic: true });
+      assert.equal(seeds.length, 2);
+      assert.notEqual(seeds[0], seeds[1]);
+      for (const seed of seeds) {
+        assert.doesNotMatch(
+          seed,
+          /linen dress|bright sari|robes|apron|sneakers|pregnant|school-age|elderly|older|retired|teenage|reading glasses/i,
+        );
+        assert.match(
+          seed,
+          /\b(?:twenties|thirties|forties|late twenties|early thirties|late thirties|young)\b/i,
+        );
+      }
+    }
+  });
+
+  it("paints athletic duo fallback scenes without street clothes", () => {
+    const painted = paintDistinctPeopleScene(
+      "two female gravel cyclists in a fierce competition",
+      DEFAULT_GENERATION_SETTINGS,
+    );
+    assert.ok(painted);
+    assert.doesNotMatch(painted!, /linen dress|bright sari|robes|apron/i);
+    assert.match(painted!, /on the left/i);
+    assert.match(painted!, /on the right/i);
+  });
+
+  it("strips street clothing from athletic duo prompts", () => {
+    const polluted =
+      "Gravel cyclist in a fierce competition. On the left, a pregnant woman in her late thirties, curly auburn hair, linen dress, and calm focus; on the right, a pale red-haired woman in her thirties, light freckles, and cropped copper hair, wearing tailored white cycling kit.";
+    const cleaned = stripStreetClothingFromAthleticPeoplePrompt(polluted);
+    assert.doesNotMatch(cleaned, /linen dress|pregnant/i);
+    assert.match(cleaned, /cycling kit/i);
+  });
+
+  it("adds gravel cycling helmets to duo competition prompts", () => {
+    const prompt =
+      "Gravel cyclist in a fierce competition. On the left, a woman in her late thirties with curly auburn hair; on the right, a pale red-haired woman with light freckles, wearing tailored white cycling kit and chocolate cycling shoes.";
+    const cleaned = ensureCyclingHelmetInPrompt(
+      prompt,
+      "two female gravel cyclists in a fierce competition",
+    );
+    assert.match(cleaned, /gravel cycling helmet/i);
+    assert.match(cleaned, /on the left/i);
+    assert.match(cleaned, /on the right/i);
+  });
+
+  it("picks discipline-specific helmet labels", () => {
+    assert.match(
+      appendCyclingHelmetToSummary("white cycling kit", "gravel cyclist"),
+      /gravel cycling helmet/i,
+    );
+    assert.match(
+      appendCyclingHelmetToSummary("white cycling kit", "mountain biker"),
+      /mountain bike helmet/i,
+    );
   });
 });
 

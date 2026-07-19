@@ -1,7 +1,9 @@
 import {
+  pickDistinctIdentitySeeds,
   pickDistinctSubjects,
   type SubjectGender,
 } from "./variation-seed";
+import { inferAthleticSport } from "./athletic-sport-profiles";
 import type { DetailLevel } from "./detail-level";
 import type { GenerationSettings } from "./generation-settings";
 import { findDistinctPeopleSentenceIndexes } from "./prompt-shape";
@@ -245,7 +247,8 @@ export function buildDistinctPeopleUserDirective(input: string): string {
   if (count === 2) {
     return [
       "PEOPLE (mandatory): Two separate individuals—one sentence for the person on the left, then one for the person on the right.",
-      "Keep each person sentence compact: face, pose, and brief clothing only—do not spend the whole prompt on one woman.",
+      "Keep each person sentence compact: distinct face, hair, skin tone, age read, pose, and brief clothing—do not spend the whole prompt on one woman.",
+      "The two people must look like clearly different individuals, not two generic models with only different shirt colors.",
       genderRule,
       "Do not merge them into one couple blob or a single shared description.",
     ]
@@ -344,7 +347,8 @@ export function buildDistinctPeopleSystemAddendum(input: string): string {
   if (constraint.count === 2 || /\b(couple|pair|duo)\b/i.test(input)) {
     return [
       "Two separate people only: one compact sentence each, left then right.",
-      "Each person gets face, pose, and brief clothing in a single sentence—finish both people within the character limit.",
+      "Each person gets a distinct face, hair, skin tone, age read, pose, and brief clothing in a single sentence—finish both people within the character limit.",
+      "Make the two people visually contrasting—not interchangeable generic figures.",
       genderRule,
       "Do not merge them into one couple blob or shared description.",
     ]
@@ -400,14 +404,17 @@ export function paintDistinctPeopleScene(
   if (constraint.count === 2 || /\b(couple|pair|duo)\b/i.test(input)) {
     const gender =
       constraint.gender === "mixed" ? "mixed" : constraint.gender;
-    const [personOne, personTwo] = pickDistinctSubjects(2, gender);
+    const athletic = inferAthleticSport(input) !== null;
+    const [personOne, personTwo] = athletic
+      ? pickDistinctIdentitySeeds(2, gender, { athletic: true })
+      : pickDistinctSubjects(2, gender);
 
     if (detail === "concise") {
       return `${capitalize(settingPhrase)}. On the left, ${personOne}; on the right, ${personTwo}.`;
     }
 
     if (detail === "rich") {
-      return `${capitalize(settingPhrase)}, warm light falling across the frame. On the left, ${personOne}, posture and clothing distinct in the light; on the right, ${personTwo}, clearly separate from the first. The background holds one environmental beat that ties both figures to the same moment.`;
+      return `${capitalize(settingPhrase)}, warm light falling across the frame. On the left, ${personOne}, posture distinct in the light; on the right, ${personTwo}, clearly separate from the first. The background holds one environmental beat that ties both figures to the same moment.`;
     }
 
     return `${capitalize(settingPhrase)}. On the left, ${personOne}; on the right, ${personTwo}, each with distinct posture in the same light.`;
@@ -464,4 +471,18 @@ export function paintGroupedPeopleScene(
   }
 
   return `${capitalize(settingPhrase)}. ${label} share the frame as one unified subject in warm, simple light.`;
+}
+
+const STREET_CLOTHING_IN_ATHLETIC_PROMPT =
+  /\b(?:,\s*)?(?:linen dress|evening gown|floor-length gown|bright sari|deep brown robes|brown robes|paint-stained apron|stained apron|bomber jacket|leather jacket|worn leather jacket|rolled shirtsleeves|scuffed sneakers|in a dress|wearing (?:a )?(?:linen )?dress)\b/gi;
+
+export function stripStreetClothingFromAthleticPeoplePrompt(prompt: string): string {
+  return prompt
+    .replace(STREET_CLOTHING_IN_ATHLETIC_PROMPT, "")
+    .replace(/\bpregnant woman\b/gi, "woman")
+    .replace(/\bpregnant\b/gi, "")
+    .replace(/,\s*,/g, ",")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+,/g, ",")
+    .trim();
 }

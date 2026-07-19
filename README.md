@@ -29,8 +29,17 @@ Video, audio, and 3D-only architectures (WAN, Hunyuan Video, Stable Audio, etc.)
 | **Format** | `/format` | Adapt an existing prompt draft for a selected model |
 | **Random Scene** | `/random-scene` | Roll random ingredients into a cohesive scene |
 | **Character** | `/character` | Highly detailed single-person prompt |
+| **Duo** | `/duo` | Two-person sport/action scenes with presets |
 | **Background** | `/background` | Environment-only prompt with no people |
 | **Image → Prompt** | `/image-prompt` | Upload an image; vision LLM writes the prompt |
+| **Negative** | `/negative` | Sport-aware negative/preserve prompts for SD models |
+| **Studio** | `/studio` | History, model compare, catalog browser, templates |
+| **Compose** | `/compose` | Background + subject merged into one scene prompt |
+| **Lint** | `/lint` | Paste prompts for diagnostics, fix, compact, reformat |
+| **Refine** | `/refine` | Refine an existing prompt with image + intent hints |
+| **Settings** | `/settings` | LLM/ComfyUI health, backup import/export, reset local data |
+| **Gallery** | `/gallery` | ComfyUI queue history and completed outputs |
+| **Variations** | `/variations` | Roll N prompt variations and batch-queue to ComfyUI |
 
 ## Features
 
@@ -43,6 +52,38 @@ Video, audio, and 3D-only architectures (WAN, Hunyuan Video, Stable Audio, etc.)
 - One-click copy for ComfyUI paste
 - LLM-powered generation/formatting with rules fallback
 - **Settings cache** — target model, detail level, and per-tool options persist in `localStorage` across reloads and pages
+- **Prompt diagnostics** — lint sport/duo/helmet conflicts before or after generation
+- **Duo generator** — sport presets, team kit toggle, batch roll, ComfyUI queue
+- **Studio** — prompt history with ratings, model compare, catalog browser, templates
+- **Location blocklist** — block locations in Studio catalog; all generators respect the list
+- **Locked wardrobe** — pin a catalog outfit from Studio; Character/Duo/Batch reuse it
+- **Locked location & variation seed** — pin scene place and environment seed for reproducible rolls
+- **Scene composer** — `/compose` merges background + character/duo prompts
+- **Lint playground** — `/lint` for paste-and-fix without generating a new scene
+- **Compact & cross-model reformat** — trim to model limits or reformat for the alternate model from any result panel
+- **Studio presets & diff** — named scene lock bundles, history search/filters/tags, word-level prompt diff, custom templates, shareable `?scene=` preset URLs
+- **Topics batch build** — turn a topic list into full Generate or Duo prompts via `/api/topics/batch`; queue the whole batch to ComfyUI
+- **Export pipeline** — “Prepare for ComfyUI” runs lint → fix → compact → copy pair → optional ComfyUI queue from any result panel
+- **Prompt sidecar** — download JSON sidecar (prompt, model, diagnostics, seed) from result panels or Studio history
+- **ComfyUI job status** — polls ComfyUI history after queue and shows pending/running/completed in the UI
+- **ComfyUI gallery** — `/gallery` stores queued jobs locally and displays output images when ComfyUI finishes; previews appear inline on result panels
+- **ComfyUI workflow params** — `{{SEED}}`, `{{WIDTH}}`, `{{HEIGHT}}`, `{{CFG}}`, `{{STEPS}}` placeholders plus queue defaults in Settings; named workflow presets for quick recall
+- **Gallery tools** — favorites, status/tool filters, image download, and sidecar JSON export per entry
+- **Variation grid** — `/variations` rolls N prompt variations and batch-queues them with unique ComfyUI seeds
+- **Completion notifications** — optional browser notifications when ComfyUI jobs finish (Settings)
+- **Backup v2** — export/import includes ComfyUI settings, gallery entries, and workflow presets
+- **Re-queue** — gallery entries and Studio history can be sent to ComfyUI again (same params or new seed)
+- **Sidecar import** — load sidecar JSON on Gallery, Lint, and Variations to restore prompts or re-queue
+- **Workflow dry-run** — preview injected workflow JSON in Settings (and from Lint result panels) before queueing
+- **Custom workflow tokens** — user-defined placeholders like `{{CHECKPOINT}}` and `{{LORA}}` with values in Settings and workflow presets
+- **Gallery bulk actions** — multi-select on `/gallery` for favorite, delete, re-queue, sidecar bundle export, and sequential image download
+- **Preview workflow everywhere** — all ComfyUI-enabled result panels include a dry-run preview button
+- **Generate sport presets** — sport preset chips on Generate (positive mode) with shareable scene URLs
+- **Settings hub** — `/settings` for service health checks and local data backup/reset
+- **Batch ComfyUI queue** — queue all duo batch rolls to ComfyUI with shared negative
+- **Pre-lint + rule fix** — Duo shows hint lint before generate; **Fix prompt (rules)** applies helmets, sport strips, etc.
+- **ComfyUI workflow** — optional `COMFYUI_WORKFLOW_PATH` with `{{POSITIVE}}` / `{{NEGATIVE}}` placeholders, or configure URL + workflow JSON in **Settings → ComfyUI queue settings** (stored in this browser)
+- **CLI** — `npm run prompt:cli -- duo --hints "..."` over the HTTP API (includes `topics-batch`, `compact`, `comfyui`)
 
 ## Prompt size limits (selected models)
 

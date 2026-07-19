@@ -6,7 +6,10 @@ import {
   promptContainsSportWardrobeConflict,
   type AthleticSport,
 } from "./athletic-sport-profiles";
-import { sentenceContainsExcludedWardrobe } from "./athletic-sport-actions";
+import {
+  appendCyclingHelmetToSummary,
+  sentenceContainsExcludedWardrobe,
+} from "./athletic-sport-actions";
 import { hasDistinctPeopleStructure } from "./distinct-people";
 import { splitSentences } from "./prompt-shape";
 import {
@@ -1223,6 +1226,10 @@ export function pickRandomCharacterOutfit(
   }
 
   const labels = layers.map((entry) => entry.label);
+  const summary =
+    filters.athleticSport === "cycling"
+      ? appendCyclingHelmetToSummary(labels.join(", "), filters.hintCorpus)
+      : labels.join(", ");
 
   return {
     wardrobeId: deduped.wardrobe?.id ?? null,
@@ -1232,9 +1239,53 @@ export function pickRandomCharacterOutfit(
     wardrobe: deduped.wardrobe?.script ?? null,
     footwear: deduped.footwear?.script ?? null,
     accessories: accent?.script ?? null,
-    summary: labels.join(", "),
+    summary,
     filters,
   };
+}
+
+export function buildOutfitFromLockedWardrobeId(
+  wardrobeId: string,
+  filters: ClothingPickFilters = { gender: "any", contexts: ["casual"] },
+): RandomCharacterOutfit | null {
+  const entry = getClothingEntry(wardrobeId.trim());
+  if (!entry) {
+    return null;
+  }
+
+  const summary =
+    filters.athleticSport === "cycling"
+      ? appendCyclingHelmetToSummary(entry.label, filters.hintCorpus)
+      : entry.label;
+
+  const result: RandomCharacterOutfit = {
+    wardrobeId: null,
+    bottomId: null,
+    footwearId: null,
+    accessoriesId: null,
+    wardrobe: null,
+    footwear: null,
+    accessories: null,
+    summary,
+    filters,
+  };
+
+  switch (entry.category) {
+    case "footwear":
+      result.footwearId = entry.id;
+      result.footwear = entry.script;
+      break;
+    case "bottom":
+      result.bottomId = entry.id;
+      result.wardrobe = entry.script;
+      break;
+    default:
+      result.wardrobeId = entry.id;
+      result.wardrobe = entry.script;
+      break;
+  }
+
+  return result;
 }
 
 export function wardrobeBudgetForPrompt(maxChars: number, peopleCount = 1): number {
