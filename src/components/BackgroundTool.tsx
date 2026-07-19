@@ -13,6 +13,7 @@ import { presetOptionsFromBackgroundCache } from "@/lib/background-options";
 import { readSceneLocationFromMetadata } from "@/lib/recent-locations";
 import { getComfyModelDefinition } from "@/lib/comfy-models";
 import { getReformatTargetLabel, getReformatTargetModel } from "@/lib/reformat-target";
+import { avoidedTokensRequestBody } from "@/lib/avoided-tokens";
 import { DEFAULT_BACKGROUND_TOOL_CACHE } from "@/lib/settings-cache";
 import type { EnrichedToolGenerateResult } from "@/lib/specialized/types";
 import {
@@ -70,6 +71,7 @@ export default function BackgroundTool() {
           presetOptions: presetOptionsFromBackgroundCache(toolSettings),
           recentLocations: getRecent(),
           blockedLocations: getBlocklist(),
+          ...avoidedTokensRequestBody(),
         }),
       });
 

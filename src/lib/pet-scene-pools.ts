@@ -185,6 +185,7 @@ function pickPetSetting(
   hints: string | undefined,
   recentLocations: string[],
   presetOptions?: PetPresetOptions,
+  avoidedTokens?: string[],
 ): string {
   const settingHint = parseSettingHint(hints);
   if (settingHint.location) {
@@ -196,7 +197,7 @@ function pickPetSetting(
     return presetSetting;
   }
 
-  const sceneLocation = pickSceneLocation(recentLocations);
+  const sceneLocation = pickSceneLocation(recentLocations, avoidedTokens);
   if (Math.random() < 0.45) {
     return `${pick(PET_SETTINGS)}, ${sceneLocation}`;
   }
@@ -209,6 +210,7 @@ export function buildRandomPetSeed(
   portraitStyle: "portrait" | "full-body" | "action" = "portrait",
   recentLocations: string[] = [],
   presetOptions: PetPresetOptions = {},
+  avoidedTokens?: string[],
 ): RandomSeedBundle {
   const parsed = parsePetHints(hints, {
     ...(presetOptions.species
@@ -220,7 +222,7 @@ export function buildRandomPetSeed(
         ? { pair: false }
         : {}),
   });
-  const location = pickPetSetting(hints, recentLocations, presetOptions);
+  const location = pickPetSetting(hints, recentLocations, presetOptions, avoidedTokens);
   const presetLines = getPetPresetScriptLines({
     ...presetOptions,
     settingVibe: undefined,

@@ -96,6 +96,7 @@ export type GeneratePromptOptions = {
   lockedWardrobeId?: string;
   /** Pin environment/variation seed for reproducible Generate rolls. */
   variationSeed?: string;
+  avoidedTokensInstruction?: string;
 };
 
 type ChatMessage = {
@@ -156,6 +157,7 @@ function buildUserMessage(
   settings: GenerationSettings,
   wardrobeAssignments?: GenerateWardrobeAssignment[] | null,
   variationSeed?: string,
+  avoidedTokensInstruction?: string,
 ): string {
   const trimmed = input.trim();
   if (mode === "negative" || shouldPreserveSubject(trimmed)) {
@@ -214,6 +216,10 @@ function buildUserMessage(
     extras.push(
       `Environment variation seed (honor closely): ${variationSeed.trim()}`,
     );
+  }
+
+  if (avoidedTokensInstruction?.trim()) {
+    extras.push(avoidedTokensInstruction.trim());
   }
 
   return `${trimmed}\n\n${extras.join("\n\n")}`;
@@ -354,6 +360,7 @@ export async function generateWithLlm(
   settings: GenerationSettings = DEFAULT_GENERATION_SETTINGS,
   wardrobeAssignments?: GenerateWardrobeAssignment[] | null,
   variationSeed?: string,
+  avoidedTokensInstruction?: string,
 ): Promise<string> {
   let systemPrompt = buildModelSystemPrompt(settings.model, mode);
 
@@ -376,7 +383,7 @@ export async function generateWithLlm(
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },
     ...buildFewShotMessages(mode, settings, input),
-    { role: "user", content: buildUserMessage(input, mode, settings, wardrobeAssignments, variationSeed) },
+    { role: "user", content: buildUserMessage(input, mode, settings, wardrobeAssignments, variationSeed, avoidedTokensInstruction) },
   ];
 
   const extraBody: Record<string, unknown> = {
@@ -687,6 +694,7 @@ export async function generatePrompt(
         settings,
         wardrobeAssignments,
         options?.variationSeed,
+        options?.avoidedTokensInstruction,
       );
       return buildGenerateResult(prompt, mode, "llm", settings, wardrobeAssignments);
     } catch (error) {

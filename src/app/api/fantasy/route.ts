@@ -1,4 +1,5 @@
 import { generateFantasyPrompt } from "@/lib/specialized/fantasy-generator";
+import { resolveAvoidanceOptions } from "@/lib/avoidance-options";
 import {
   normalizeFantasyPresetOptions,
   type FantasyPresetOptions,
@@ -29,6 +30,8 @@ type FantasyRequestBody = {
   lockedWardrobeId?: string;
   variationSeed?: string;
   alwaysIncludeClothing?: boolean;
+  avoidedTokens?: string[];
+  avoidedTokensInstruction?: string;
 };
 
 export async function GET() {
@@ -39,9 +42,11 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as FantasyRequestBody;
     const shared = normalizeSharedGenerationOptions(body);
+    const avoidance = resolveAvoidanceOptions(body);
 
     const result = await generateFantasyPrompt({
       ...shared,
+      ...avoidance,
       hints: body.hints?.trim(),
       portraitStyle: body.portraitStyle,
       wildness: body.wildness,

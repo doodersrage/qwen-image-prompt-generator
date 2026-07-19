@@ -3,6 +3,7 @@ import {
   type PetPresetOptions,
 } from "@/lib/pet-options";
 import { generatePetPrompt } from "@/lib/specialized/pet-generator";
+import { resolveAvoidanceOptions } from "@/lib/avoidance-options";
 import {
   normalizeBlockedLocations,
   normalizeRecentLocations,
@@ -24,6 +25,8 @@ type PetRequestBody = {
   blockedLocations?: string[];
   lockedLocation?: string;
   variationSeed?: string;
+  avoidedTokens?: string[];
+  avoidedTokensInstruction?: string;
 };
 
 export async function GET() {
@@ -34,9 +37,11 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as PetRequestBody;
     const shared = normalizeSharedGenerationOptions(body);
+    const avoidance = resolveAvoidanceOptions(body);
 
     const result = await generatePetPrompt({
       ...shared,
+      ...avoidance,
       hints: body.hints?.trim(),
       portraitStyle: body.portraitStyle,
       variationStrength: body.variationStrength,

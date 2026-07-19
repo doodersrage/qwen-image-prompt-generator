@@ -1,4 +1,5 @@
 import { generateRandomScene } from "@/lib/specialized/random-scene";
+import { resolveAvoidanceOptions } from "@/lib/avoidance-options";
 import { normalizeSharedGenerationOptions, normalizeRecentLocations, normalizeRecentClothing, normalizeBlockedLocations, normalizeLockedWardrobeId, normalizeLockedLocation, normalizeVariationSeed } from "@/lib/specialized/normalize";
 import { apiError, apiJson, apiMethodNotAllowed } from "@/lib/api/response";
 import { NextResponse } from "next/server";
@@ -18,6 +19,7 @@ type RandomSceneRequestBody = {
   lockedWardrobeId?: string;
   lockedLocation?: string;
   variationSeed?: string;
+  avoidedTokens?: string[];
   avoidedTokensInstruction?: string;
 };
 
@@ -29,11 +31,13 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as RandomSceneRequestBody;
     const shared = normalizeSharedGenerationOptions(body);
+    const avoidance = resolveAvoidanceOptions(body);
 
     const alwaysIncludeClothing = body.alwaysIncludeClothing !== false;
 
     const result = await generateRandomScene({
       ...shared,
+      ...avoidance,
       genre: body.genre,
       includePeople:
         typeof body.includePeople === "boolean" ? body.includePeople : true,
@@ -48,7 +52,6 @@ export async function POST(request: Request) {
       lockedWardrobeId: normalizeLockedWardrobeId(body.lockedWardrobeId),
       lockedLocation: normalizeLockedLocation(body.lockedLocation),
       variationSeed: normalizeVariationSeed(body.variationSeed),
-      avoidedTokensInstruction: body.avoidedTokensInstruction?.trim() || undefined,
     });
 
     return apiJson(result);

@@ -41,7 +41,8 @@ export type WebhookEvent =
   | "comfyui.job.error"
   | "comfyui.job.queued"
   | "comfyui.batch.completed"
-  | "scheduled.batch.run";
+  | "scheduled.batch.run"
+  | "scheduled.batch.completed";
 
 export type WebhookJobPayload = {
   event: WebhookEvent;

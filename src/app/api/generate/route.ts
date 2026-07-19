@@ -2,6 +2,7 @@ import {
   generatePrompt,
   type PromptMode,
 } from "@/lib/prompt-generator";
+import { resolveAvoidanceOptions } from "@/lib/avoidance-options";
 import { applyLockedLocation } from "@/lib/locked-location";
 import { applyLockedVariationSeed } from "@/lib/locked-variation-seed";
 import { normalizeGenerationSettings } from "@/lib/generation-settings";
@@ -35,6 +36,8 @@ type GenerateRequestBody = {
   lockedLocation?: string;
   variationSeed?: string;
   model?: string;
+  avoidedTokens?: string[];
+  avoidedTokensInstruction?: string;
 };
 
 export async function GET() {
@@ -44,6 +47,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as GenerateRequestBody;
+    const avoidance = resolveAvoidanceOptions(body);
     const rawInput = body.input?.trim();
     const mode: PromptMode = body.mode === "negative" ? "negative" : "positive";
     const settings = normalizeGenerationSettings({
@@ -72,6 +76,7 @@ export async function POST(request: Request) {
       recentClothing: normalizeRecentClothing(body.recentClothing),
       lockedWardrobeId: normalizeLockedWardrobeId(body.lockedWardrobeId),
       variationSeed: normalizeVariationSeed(body.variationSeed),
+      avoidedTokensInstruction: avoidance.avoidedTokensInstruction,
     });
 
     return apiJson(result);

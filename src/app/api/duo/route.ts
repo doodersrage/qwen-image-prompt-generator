@@ -1,3 +1,4 @@
+import { resolveAvoidanceOptions } from "@/lib/avoidance-options";
 import { generateCharacterPrompt } from "@/lib/specialized/character-generator";
 import { enrichGenerateResult } from "@/lib/generation-diagnostics";
 import {
@@ -28,6 +29,8 @@ type DuoRequestBody = {
   lockedLocation?: string;
   variationSeed?: string;
   activeCharacterDescriptor?: string;
+  avoidedTokens?: string[];
+  avoidedTokensInstruction?: string;
 };
 
 export async function GET() {
@@ -38,6 +41,7 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as DuoRequestBody;
     const shared = normalizeSharedGenerationOptions(body);
+    const avoidance = resolveAvoidanceOptions(body);
     const preset = body.sportPresetId ? getSportPreset(body.sportPresetId) : undefined;
 
     const hints = (body.hints?.trim() || preset?.hints || "").trim();
@@ -59,6 +63,7 @@ export async function POST(request: Request) {
 
     const result = await generateCharacterPrompt({
       ...shared,
+      ...avoidance,
       hints,
       portraitStyle,
       variationStrength:

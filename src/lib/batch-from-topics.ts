@@ -33,6 +33,8 @@ export type BatchFromTopicsOptions = {
   distinctPeople?: boolean;
   teamKit?: boolean;
   llm?: LlmRequestOptions;
+  avoidedTokens?: string[];
+  avoidedTokensInstruction?: string;
 };
 
 export type BatchFromTopicsItem = {
@@ -58,6 +60,10 @@ export async function batchGenerateFromTopics(
 
   for (const topic of topics) {
     const hints = applyLockedLocation(topic, options.lockedLocation) ?? topic;
+    const avoidance = {
+      avoidedTokens: options.avoidedTokens,
+      avoidedTokensInstruction: options.avoidedTokensInstruction,
+    };
 
     if (options.target === "duo") {
       const result = await generateCharacterPrompt({
@@ -73,6 +79,7 @@ export async function batchGenerateFromTopics(
         lockedLocation: options.lockedLocation,
         variationSeed: options.variationSeed,
         llm: options.llm,
+        ...avoidance,
       });
       const enriched = enrichGenerateResult(result, hints, {
         teamKit: options.teamKit,
@@ -97,6 +104,7 @@ export async function batchGenerateFromTopics(
         lockedLocation: options.lockedLocation,
         variationSeed: options.variationSeed,
         llm: options.llm,
+        ...avoidance,
       });
       results.push({
         topic,
@@ -118,6 +126,7 @@ export async function batchGenerateFromTopics(
         recentLocations: options.recentLocations,
         blockedLocations: options.blockedLocations,
         llm: options.llm,
+        ...avoidance,
       });
       results.push({
         topic,
@@ -142,6 +151,7 @@ export async function batchGenerateFromTopics(
         blockedLocations: options.blockedLocations,
         alwaysIncludeClothing: options.alwaysIncludeClothing !== false,
         llm: options.llm,
+        ...avoidance,
       });
       results.push({
         topic,
@@ -159,6 +169,7 @@ export async function batchGenerateFromTopics(
         recentLocations: options.recentLocations,
         blockedLocations: options.blockedLocations,
         llm: options.llm,
+        ...avoidance,
       });
       results.push({
         topic,
@@ -178,6 +189,7 @@ export async function batchGenerateFromTopics(
     const result = await generatePrompt(hints, "positive", settings, {
       recentClothing: options.recentClothing,
       lockedWardrobeId: options.lockedWardrobeId,
+      avoidedTokensInstruction: options.avoidedTokensInstruction,
     });
 
     results.push({

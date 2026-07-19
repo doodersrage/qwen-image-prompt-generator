@@ -940,6 +940,18 @@ export default function SettingsTool() {
         <label className="flex items-center gap-2 text-sm text-zinc-300">
           <input
             type="checkbox"
+            checked={settings.autoSaveHistoryOnQueue !== false}
+            onChange={(event) =>
+              updateSettings({ autoSaveHistoryOnQueue: event.target.checked })
+            }
+            className="h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-violet-500"
+          />
+          Auto-save to history when queueing from result panels (skips if already saved)
+        </label>
+
+        <label className="flex items-center gap-2 text-sm text-zinc-300">
+          <input
+            type="checkbox"
             checked={settings.autoNegativeOnQueue !== false}
             onChange={(event) =>
               updateSettings({ autoNegativeOnQueue: event.target.checked })

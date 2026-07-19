@@ -1,4 +1,5 @@
 import { batchGenerateFromTopics, type BatchFromTopicsTarget } from "@/lib/batch-from-topics";
+import { resolveAvoidanceOptions } from "@/lib/avoidance-options";
 import { parseLlmRequestOptions } from "@/lib/llm-request-options";
 import {
   normalizeRecentClothing,
@@ -37,6 +38,8 @@ type TopicsBatchRequestBody = {
   variationSeed?: string;
   llmTemperature?: number;
   allowTemplateFallback?: boolean;
+  avoidedTokens?: string[];
+  avoidedTokensInstruction?: string;
 };
 
 export async function GET() {
@@ -53,6 +56,7 @@ export async function POST(request: Request) {
     }
 
     const shared = normalizeSharedGenerationOptions(body);
+    const avoidance = resolveAvoidanceOptions(body);
     const target = BATCH_TARGETS.includes(body.target ?? "generate")
       ? (body.target ?? "generate")
       : "generate";
@@ -62,6 +66,7 @@ export async function POST(request: Request) {
       target,
       model: shared.model,
       detail: shared.detail,
+      ...avoidance,
       lockedWardrobeId: normalizeLockedWardrobeId(body.lockedWardrobeId),
       lockedLocation: normalizeLockedLocation(body.lockedLocation),
       variationSeed: normalizeVariationSeed(body.variationSeed),

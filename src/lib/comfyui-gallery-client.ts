@@ -16,6 +16,7 @@ import { resolveComfyUiRuntime } from "./comfyui-runtime";
 import { loadComfyUiSettings } from "./comfyui-settings";
 import { subscribeComfyUiWebSocket } from "./comfyui-websocket";
 import { dispatchWebhook } from "./webhook-settings";
+import { noteScheduledBatchJobComplete } from "./scheduled-batch-tracker";
 import type { WorkflowParamValues } from "./comfyui-config";
 
 export type RegisterComfyGalleryJobInput = {
@@ -240,6 +241,7 @@ function applyComfyJobStatus(
     notifyComfyJobComplete(entry);
   }
   if (entry?.status === "completed") {
+    noteScheduledBatchJobComplete(entry.tool);
     void dispatchWebhook({
       event: "comfyui.job.completed",
       promptId,

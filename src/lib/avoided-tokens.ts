@@ -1,3 +1,10 @@
+import {
+  buildAvoidedTokensInstructionFromList,
+  filterAvoidedCandidatesFromList,
+  promptContainsAvoidedTokensFromList,
+  tokenizeForAvoidance,
+} from "./avoidance-options";
+
 export const AVOIDED_TOKENS_KEY = "comfy-prompt-avoided-tokens-v1";
 
 export function loadAvoidedTokens(): Set<string> {
@@ -30,35 +37,32 @@ export function recordAvoidedTokensFromPrompt(prompt: string): void {
   );
 }
 
-function tokenizeForAvoidance(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, " ")
-    .split(/\s+/)
-    .filter((token) => token.length > 3);
+export function exportAvoidedTokenList(): string[] {
+  return [...loadAvoidedTokens()].slice(-80);
+}
+
+export function avoidedTokensRequestBody(): {
+  avoidedTokens?: string[];
+  avoidedTokensInstruction?: string;
+} {
+  const avoidedTokens = exportAvoidedTokenList();
+  if (avoidedTokens.length === 0) {
+    return {};
+  }
+  return {
+    avoidedTokens,
+    avoidedTokensInstruction: buildAvoidedTokensInstructionFromList(avoidedTokens),
+  };
 }
 
 export function promptContainsAvoidedTokens(text: string, avoided = loadAvoidedTokens()): boolean {
-  if (avoided.size === 0 || !text.trim()) {
-    return false;
-  }
-  const tokens = tokenizeForAvoidance(text);
-  return tokens.some((token) => avoided.has(token));
+  return promptContainsAvoidedTokensFromList(text, [...avoided]);
 }
 
 export function filterAvoidedCandidates(candidates: string[]): string[] {
-  const avoided = loadAvoidedTokens();
-  if (avoided.size === 0) {
-    return candidates;
-  }
-  const filtered = candidates.filter((entry) => !promptContainsAvoidedTokens(entry, avoided));
-  return filtered.length > 0 ? filtered : candidates;
+  return filterAvoidedCandidatesFromList(candidates, [...loadAvoidedTokens()]);
 }
 
 export function buildAvoidedTokensInstruction(): string | undefined {
-  const avoided = [...loadAvoidedTokens()].slice(-20);
-  if (avoided.length === 0) {
-    return undefined;
-  }
-  return `Avoid these overused or low-rated motifs: ${avoided.join(", ")}.`;
+  return buildAvoidedTokensInstructionFromList([...loadAvoidedTokens()]);
 }

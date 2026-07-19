@@ -125,6 +125,7 @@ ${options.avoidedTokensInstruction ? `- ${options.avoidedTokensInstruction}` : "
       options.recentLocations,
       options.blockedLocations,
     ),
+    avoidedTokens: options.avoidedTokens,
   });
 
   return {

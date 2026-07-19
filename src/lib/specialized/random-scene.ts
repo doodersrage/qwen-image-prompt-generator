@@ -34,6 +34,7 @@ export async function generateRandomScene(
       options.recentLocations,
       options.blockedLocations,
     ),
+    avoidedTokens: options.avoidedTokens,
   });
   const seed = applyLockedVariationSeed(rolledSeed, options.variationSeed);
   const locationBlock = buildMandatoryLocationBlock(pinnedLocation);

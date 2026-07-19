@@ -10,7 +10,7 @@ import { useRecentClothing } from "@/hooks/useRecentClothing";
 import { useRecentLocations } from "@/hooks/useRecentLocations";
 import { useLocationBlocklist } from "@/hooks/useLocationBlocklist";
 import { sharedLlmRequestBody } from "@/lib/llm-request-options";
-import { buildAvoidedTokensInstruction } from "@/lib/avoided-tokens";
+import { avoidedTokensRequestBody } from "@/lib/avoided-tokens";
 import { resolveQueueNegativePrompt } from "@/lib/queue-negative";
 import { DEFAULT_TOPIC_TOOL_CACHE } from "@/lib/settings-cache";
 import { runWorkflowPreflight } from "@/lib/workflow-preflight";
@@ -116,7 +116,7 @@ export default function TopicTool() {
           variety: toolSettings.variety,
           recentLocations: [],
           blockedLocations: getBlocklist(),
-          avoidedTokensInstruction: buildAvoidedTokensInstruction(),
+          ...avoidedTokensRequestBody(),
         }),
       });
 
@@ -166,6 +166,7 @@ export default function TopicTool() {
           lockedLocation: shared.lockedLocation,
           variationSeed: shared.lockedVariationSeed,
           blockedLocations: getBlocklist(),
+          ...avoidedTokensRequestBody(),
           ...sharedLlmRequestBody(shared),
         }),
       });

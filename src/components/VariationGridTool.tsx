@@ -19,6 +19,7 @@ import {
   runBatchLintGate,
   type BatchLintSummary,
 } from "@/lib/batch-lint-gate";
+import { avoidedTokensRequestBody } from "@/lib/avoided-tokens";
 import { resolveQueueNegativePrompt } from "@/lib/queue-negative";
 import { runWorkflowPreflight } from "@/lib/workflow-preflight";
 import { resolveComfyUiRuntime } from "@/lib/comfyui-runtime";
@@ -95,6 +96,7 @@ function buildVariationRequestBody(
   getBlocklist: () => string[],
   overrides: CellOverrides = {},
 ) {
+  const avoidance = avoidedTokensRequestBody();
   const variationStrength =
     overrides.variationStrength ?? toolSettings.variationStrength ?? 65;
   const sportPresetId = overrides.sportPresetId ?? toolSettings.sportPresetId;
@@ -115,6 +117,7 @@ function buildVariationRequestBody(
       recentClothing: getRecentClothing(),
       lockedWardrobeId: shared.lockedWardrobeId,
       lockedLocation,
+      ...avoidance,
     };
   }
 
@@ -128,6 +131,7 @@ function buildVariationRequestBody(
       settingType,
       recentLocations: getRecentLocations(),
       blockedLocations: getBlocklist(),
+      ...avoidance,
     };
   }
 
@@ -141,6 +145,7 @@ function buildVariationRequestBody(
       recentLocations: getRecentLocations(),
       blockedLocations: getBlocklist(),
       lockedLocation,
+      ...avoidance,
     };
   }
 
@@ -158,6 +163,7 @@ function buildVariationRequestBody(
       lockedLocation,
       lockedWardrobeId: shared.lockedWardrobeId,
       alwaysIncludeClothing: shared.alwaysIncludeClothing !== false,
+      ...avoidance,
     };
   }
 
@@ -173,6 +179,7 @@ function buildVariationRequestBody(
       lockedWardrobeId: shared.lockedWardrobeId,
       lockedLocation,
       blockedLocations: getBlocklist(),
+      ...avoidance,
     };
   }
 
@@ -189,6 +196,7 @@ function buildVariationRequestBody(
     lockedWardrobeId: shared.lockedWardrobeId,
     lockedLocation,
     blockedLocations: getBlocklist(),
+    ...avoidance,
   };
 }
 

@@ -1,4 +1,5 @@
 import { generateCharacterPrompt } from "@/lib/specialized/character-generator";
+import { resolveAvoidanceOptions } from "@/lib/avoidance-options";
 import { enrichGenerateResult } from "@/lib/generation-diagnostics";
 import { normalizeSharedGenerationOptions, normalizeRecentLocations, normalizeRecentClothing, normalizeBlockedLocations, normalizeLockedWardrobeId, normalizeLockedLocation, normalizeVariationSeed } from "@/lib/specialized/normalize";
 import {
@@ -26,6 +27,8 @@ type CharacterRequestBody = {
   lockedLocation?: string;
   variationSeed?: string;
   activeCharacterDescriptor?: string;
+  avoidedTokens?: string[];
+  avoidedTokensInstruction?: string;
 };
 
 export async function GET() {
@@ -36,6 +39,7 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as CharacterRequestBody;
     const shared = normalizeSharedGenerationOptions(body);
+    const avoidance = resolveAvoidanceOptions(body);
 
     const portraitStyle =
       body.portraitStyle === "full-body" ||
@@ -48,6 +52,7 @@ export async function POST(request: Request) {
 
     const result = await generateCharacterPrompt({
       ...shared,
+      ...avoidance,
       hints: body.hints?.trim(),
       portraitStyle,
       variationStrength:

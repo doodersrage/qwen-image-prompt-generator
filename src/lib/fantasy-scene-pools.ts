@@ -70,6 +70,7 @@ function pickFantasyLocation(
   hints: string | undefined,
   recentLocations: string[],
   presetOptions?: FantasyPresetOptions,
+  avoidedTokens?: string[],
 ): string {
   const settingHint = parseSettingHint(hints);
   if (settingHint.location) {
@@ -81,7 +82,7 @@ function pickFantasyLocation(
     return presetSetting;
   }
 
-  return pickSceneLocation(recentLocations);
+  return pickSceneLocation(recentLocations, avoidedTokens);
 }
 
 function pickSubjectLine(
@@ -112,9 +113,10 @@ export function buildRandomFantasySeed(
   recentLocations: string[] = [],
   presetOptions: FantasyPresetOptions = {},
   wildness = 65,
+  avoidedTokens?: string[],
 ): RandomSeedBundle {
   const focus = resolveFantasyFocus(presetOptions, hints);
-  const location = pickFantasyLocation(hints, recentLocations, presetOptions);
+  const location = pickFantasyLocation(hints, recentLocations, presetOptions, avoidedTokens);
   const presetLines = getFantasyPresetScriptLines({
     ...presetOptions,
     settingArchetype: undefined,

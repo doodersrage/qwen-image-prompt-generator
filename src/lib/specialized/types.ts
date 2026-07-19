@@ -23,6 +23,8 @@ export type SharedGenerationOptions = {
   model: ComfyImageModel;
   detail: DetailLevel;
   llm?: LlmRequestOptions;
+  avoidedTokens?: string[];
+  avoidedTokensInstruction?: string;
 };
 
 export type RandomSceneOptions = SharedGenerationOptions & {
@@ -37,6 +39,7 @@ export type RandomSceneOptions = SharedGenerationOptions & {
   /** When set, reuse this environment/variation seed instead of rolling random. */
   variationSeed?: string;
   alwaysIncludeClothing?: boolean;
+  avoidedTokens?: string[];
   avoidedTokensInstruction?: string;
 };
 
@@ -124,6 +127,7 @@ export type TopicOptions = {
   variety?: number;
   recentLocations?: string[];
   blockedLocations?: string[];
+  avoidedTokens?: string[];
   avoidedTokensInstruction?: string;
 };
 

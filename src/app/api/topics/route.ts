@@ -1,3 +1,4 @@
+import { resolveAvoidanceOptions } from "@/lib/avoidance-options";
 import { normalizeRecentLocations, normalizeBlockedLocations } from "@/lib/specialized/normalize";
 import { generateTopics } from "@/lib/specialized/topic-generator";
 import { apiError, apiJson, apiMethodNotAllowed } from "@/lib/api/response";
@@ -11,6 +12,7 @@ type TopicsRequestBody = {
   variety?: number;
   recentLocations?: string[];
   blockedLocations?: string[];
+  avoidedTokens?: string[];
   avoidedTokensInstruction?: string;
 };
 
@@ -41,7 +43,7 @@ export async function POST(request: Request) {
           : 50,
       recentLocations: normalizeRecentLocations(body.recentLocations),
       blockedLocations: normalizeBlockedLocations(body.blockedLocations),
-      avoidedTokensInstruction: body.avoidedTokensInstruction?.trim() || undefined,
+      ...resolveAvoidanceOptions(body),
     });
 
     return apiJson(result);

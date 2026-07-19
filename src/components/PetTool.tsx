@@ -12,6 +12,7 @@ import { useLocationBlocklist } from "@/hooks/useLocationBlocklist";
 import { promptResultPreviewProps } from "@/lib/prompt-result-preview-props";
 import { presetOptionsFromPetCache } from "@/lib/pet-options";
 import { getComfyModelDefinition } from "@/lib/comfy-models";
+import { avoidedTokensRequestBody } from "@/lib/avoided-tokens";
 import { getReformatTargetLabel, getReformatTargetModel } from "@/lib/reformat-target";
 import {
   applyShareableSceneParams,
@@ -121,6 +122,7 @@ export default function PetTool() {
           blockedLocations: getBlocklist(),
           lockedLocation: shared.lockedLocation,
           variationSeed: shared.lockedVariationSeed,
+          ...avoidedTokensRequestBody(),
         }),
       });
 

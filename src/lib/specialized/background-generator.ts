@@ -30,6 +30,7 @@ export async function generateBackgroundPrompt(
       options.recentLocations,
       options.blockedLocations,
     ),
+    avoidedTokens: options.avoidedTokens,
   });
   const locationBlock = buildMandatoryLocationBlock(settingHint.location);
   const presetBlock = buildBackgroundPresetBlock(presetOptions);
@@ -54,6 +55,7 @@ export async function generateBackgroundPrompt(
     presetDirective,
     locationBlock,
     `Background ingredients:\n${seed}`,
+    options.avoidedTokensInstruction ?? null,
     "Write one highly detailed background-only prompt.",
   ]
     .filter(Boolean)

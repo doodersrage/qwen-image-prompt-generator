@@ -28,6 +28,8 @@ export type ComfyUiSettings = {
   notifyOnComplete?: boolean;
   /** Auto-fetch negative prompt when queueing SD-family models. */
   autoNegativeOnQueue?: boolean;
+  /** Save to Studio history when queueing from a result panel (skips if already saved). */
+  autoSaveHistoryOnQueue?: boolean;
   /** Prefer ComfyUI WebSocket progress updates over polling-only status. */
   useWebSocketProgress?: boolean;
   /** Saved negative presets for queue / copy pair. */
@@ -51,6 +53,7 @@ export const DEFAULT_COMFYUI_SETTINGS: ComfyUiSettings = {
   loraLibrary: [],
   notifyOnComplete: false,
   autoNegativeOnQueue: true,
+  autoSaveHistoryOnQueue: true,
   useWebSocketProgress: false,
   negativeProfiles: [],
   selectedNegativeProfileId: "general-sd",

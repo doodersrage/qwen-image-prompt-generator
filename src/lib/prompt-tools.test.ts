@@ -1435,9 +1435,20 @@ describe("queue params settings", () => {
   });
 });
 
-describe("avoided tokens", () => {
-  it("returns undefined instruction when empty", async () => {
-    const { buildAvoidedTokensInstruction } = await import("./avoided-tokens");
-    assert.equal(buildAvoidedTokensInstruction(), undefined);
+describe("avoidance options", () => {
+  it("filters template candidates by token list", async () => {
+    const { filterAvoidedCandidatesFromList } = await import("./avoidance-options");
+    const filtered = filterAvoidedCandidatesFromList(
+      ["gravel cyclist in forest", "neon city portrait"],
+      ["gravel"],
+    );
+    assert.equal(filtered.length, 1);
+    assert.match(filtered[0] ?? "", /neon city/);
+  });
+
+  it("builds instruction text from token list", async () => {
+    const { buildAvoidedTokensInstructionFromList } = await import("./avoidance-options");
+    const instruction = buildAvoidedTokensInstructionFromList(["velodrome", "neon"]);
+    assert.match(instruction ?? "", /velodrome/);
   });
 });

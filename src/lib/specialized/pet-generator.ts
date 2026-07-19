@@ -67,6 +67,7 @@ export async function generatePetPrompt(
     portraitStyle,
     locationExclude,
     presetOptions,
+    options.avoidedTokens,
   );
   const seed = applyLockedVariationSeed(rolledSeed, options.variationSeed);
   const mandatoryBlock = buildPetMandatoryBlock(parsed, effectiveHints);
@@ -93,6 +94,7 @@ export async function generatePetPrompt(
     parsed.pair
       ? "PAIR MODE (mandatory): exactly two animals interacting in frame. No third animal, crowd, or background critters."
       : "SOLO MODE (mandatory): exactly one animal in frame. No extra pets, animal crowds, or background animals.",
+    options.avoidedTokensInstruction ?? null,
     "Write one model-ready pet scene prompt.",
   ]
     .filter(Boolean)

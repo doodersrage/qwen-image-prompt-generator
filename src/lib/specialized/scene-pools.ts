@@ -13,6 +13,7 @@ import {
   pickSportActionPose,
   pickSportActionSetting,
 } from "../athletic-sport-actions";
+import { promptContainsAvoidedTokensFromList } from "../avoidance-options";
 
 const LOCATIONS = [
   "abandoned observatory on a windy cliff",
@@ -834,13 +835,19 @@ function isLocationExcluded(
 }
 
 /** Handcrafted location or procedurally composed scene (~52% composed). */
-export function pickSceneLocation(exclude: readonly string[] = []): string {
+export function pickSceneLocation(
+  exclude: readonly string[] = [],
+  avoidedTokens?: readonly string[],
+): string {
   const preferComposed = randomInt(100) < COMPOSED_LOCATION_WEIGHT;
 
   if (preferComposed) {
     for (let attempt = 0; attempt < PICK_RETRY_LIMIT; attempt += 1) {
       const composed = composeSceneLocation();
-      if (!isLocationExcluded(composed, exclude)) {
+      if (
+        !isLocationExcluded(composed, exclude) &&
+        !promptContainsAvoidedTokensFromList(composed, avoidedTokens ?? [])
+      ) {
         return composed;
       }
     }
@@ -850,7 +857,10 @@ export function pickSceneLocation(exclude: readonly string[] = []): string {
 
   for (let attempt = 0; attempt < PICK_RETRY_LIMIT; attempt += 1) {
     const candidate = pick(ALL_LOCATIONS);
-    if (!isLocationExcluded(candidate, exclude)) {
+    if (
+      !isLocationExcluded(candidate, exclude) &&
+      !promptContainsAvoidedTokensFromList(candidate, avoidedTokens ?? [])
+    ) {
       return candidate;
     }
   }
@@ -1071,6 +1081,20 @@ function pick<T>(items: readonly T[]): T {
   return items[randomInt(items.length)]!;
 }
 
+function pickFiltered<T>(
+  items: readonly T[],
+  avoidedTokens?: readonly string[],
+  toText: (item: T) => string = String,
+): T {
+  if (!avoidedTokens?.length) {
+    return pick(items);
+  }
+  const filtered = items.filter(
+    (item) => !promptContainsAvoidedTokensFromList(toText(item), avoidedTokens),
+  );
+  return pick(filtered.length > 0 ? filtered : items);
+}
+
 function pickCharacterEnvironmentSetting(
   location: string | null,
   portraitStyle: "portrait" | "full-body" | "action",
@@ -1097,19 +1121,24 @@ export function buildRandomSceneSeed(options: {
   genre?: string;
   includePeople?: boolean;
   recentLocations?: string[];
+  avoidedTokens?: string[];
 }): RandomSeedBundle {
   const genreHint = parseSettingHint(options.genre);
-  const location = genreHint.location || pickSceneLocation(options.recentLocations);
+  const location = genreHint.location || pickSceneLocation(options.recentLocations, options.avoidedTokens);
   const parts = [location];
 
   if (randomInt(100) < 42) {
-    parts.push(pick(SCENE_MOMENTS));
+    parts.push(pickFiltered(SCENE_MOMENTS, options.avoidedTokens));
   }
 
-  parts.push(pick(WEATHER), pick(LIGHTING), pick(MOODS));
+  parts.push(
+    pickFiltered(WEATHER, options.avoidedTokens),
+    pickFiltered(LIGHTING, options.avoidedTokens),
+    pickFiltered(MOODS, options.avoidedTokens),
+  );
 
   if (options.includePeople !== false) {
-    parts.unshift(pick(SUBJECTS));
+    parts.unshift(pickFiltered(SUBJECTS, options.avoidedTokens));
   }
 
   if (options.genre?.trim()) {
@@ -1129,20 +1158,21 @@ export function buildRandomBackgroundSeed(options: {
   timeOfDay?: string;
   mood?: string;
   recentLocations?: string[];
+  avoidedTokens?: string[];
 }): RandomSeedBundle {
   const settingHint = parseSettingHint(options.settingType);
-  const location = settingHint.location || pickSceneLocation(options.recentLocations);
+  const location = settingHint.location || pickSceneLocation(options.recentLocations, options.avoidedTokens);
   const backdrop = settingHint.hasExplicitLocation
-    ? settingHint.remainder || pick(BACKDROP_TYPES)
-    : options.settingType?.trim() || pick(BACKDROP_TYPES);
+    ? settingHint.remainder || pickFiltered(BACKDROP_TYPES, options.avoidedTokens)
+    : options.settingType?.trim() || pickFiltered(BACKDROP_TYPES, options.avoidedTokens);
 
   const parts = [
     backdrop,
     location,
-    options.timeOfDay?.trim() || pick(LIGHTING),
-    options.mood?.trim() || pick(MOODS),
-    pick(WEATHER),
-    pick(BACKGROUND_FEATURES),
+    options.timeOfDay?.trim() || pickFiltered(LIGHTING, options.avoidedTokens),
+    options.mood?.trim() || pickFiltered(MOODS, options.avoidedTokens),
+    pickFiltered(WEATHER, options.avoidedTokens),
+    pickFiltered(BACKGROUND_FEATURES, options.avoidedTokens),
     "empty of people, figures, silhouettes, and crowds",
   ];
 
@@ -1153,6 +1183,7 @@ export function buildRandomCharacterSeed(
   hints?: string,
   portraitStyle: "portrait" | "full-body" | "action" = "portrait",
   recentLocations: string[] = [],
+  avoidedTokens?: string[],
 ): RandomSeedBundle {
   const settingHint = parseSettingHint(hints);
   const explicitLocation = settingHint.location;
@@ -1176,9 +1207,9 @@ export function buildRandomCharacterSeed(
     parts.push(
       actionSetting,
       pickCharacterActionPose(hints),
-      pick(CHARACTER_ACTION_MOTION),
-      pick(LIGHTING),
-      pick(MOODS),
+      pickFiltered(CHARACTER_ACTION_MOTION, avoidedTokens),
+      pickFiltered(LIGHTING, avoidedTokens),
+      pickFiltered(MOODS, avoidedTokens),
     );
     if (!explicitLocation) {
       location = actionSetting
@@ -1201,9 +1232,9 @@ export function buildRandomCharacterSeed(
     );
     parts.push(
       environmentSetting,
-      pick(CHARACTER_POSES),
-      pick(LIGHTING),
-      pick(MOODS),
+      pickFiltered(CHARACTER_POSES, avoidedTokens),
+      pickFiltered(LIGHTING, avoidedTokens),
+      pickFiltered(MOODS, avoidedTokens),
     );
     if (!explicitLocation) {
       location = environmentSetting.replace(SOLO_LOCATION_SUFFIX, "").trim();
@@ -1262,12 +1293,13 @@ export function normalizeTopicPhrase(phrase: string): string {
 export function buildRandomTopicPhrase(
   seed?: string,
   recentLocations: string[] = [],
+  avoidedTokens?: string[],
 ): RandomSeedBundle {
   const settingHint = parseSettingHint(seed);
-  const location = settingHint.location || pickSceneLocation(recentLocations);
-  const subject = pick(SUBJECTS);
-  const mood = pick(MOODS);
-  const lighting = pick(LIGHTING);
+  const location = settingHint.location || pickSceneLocation(recentLocations, avoidedTokens);
+  const subject = pickFiltered(SUBJECTS, avoidedTokens);
+  const mood = pickFiltered(MOODS, avoidedTokens);
+  const lighting = pickFiltered(LIGHTING, avoidedTokens);
 
   if (seed?.trim()) {
     const theme = settingHint.remainder || seed.trim();
@@ -1277,28 +1309,31 @@ export function buildRandomTopicPhrase(
     const sameThemeAndLocation = themeKey === locationKey;
     const templates = [
       !sameThemeAndLocation ? `${theme} — ${resolvedLocation}` : null,
-      `${theme}, ${pick(MOODS)}`,
-      `${theme} under ${pick(LIGHTING)}`,
-      `${pick(SUBJECTS)} in a ${theme} setting`,
-      `${theme} ${pick(SEED_TOPIC_ANGLES)}`,
-      `${theme} meets ${pick(BACKDROP_TYPES)} at ${resolvedLocation}`,
+      `${theme}, ${pickFiltered(MOODS, avoidedTokens)}`,
+      `${theme} under ${pickFiltered(LIGHTING, avoidedTokens)}`,
+      `${pickFiltered(SUBJECTS, avoidedTokens)} in a ${theme} setting`,
+      `${theme} ${pickFiltered(SEED_TOPIC_ANGLES, avoidedTokens)}`,
+      `${theme} meets ${pickFiltered(BACKDROP_TYPES, avoidedTokens)} at ${resolvedLocation}`,
       settingHint.location && !sameThemeAndLocation
         ? `${theme} in ${settingHint.location}`
         : null,
     ].filter((entry): entry is string => Boolean(entry));
-    const phrase = normalizeTopicPhrase(pick(templates));
+    const phrase = normalizeTopicPhrase(pickFiltered(templates, avoidedTokens));
 
     return { seed: phrase, location: settingHint.location || location };
   }
 
   const phrase = normalizeTopicPhrase(
-    pick([
-      `${subject} in ${location}`,
-      `${location}, ${mood}`,
-      `${pick(BACKDROP_TYPES)}: ${location}, ${lighting}`,
-      `${subject}, ${pick(WEATHER)}, ${mood}`,
-      `${location} — ${subject}, ${lighting}`,
-    ]),
+    pickFiltered(
+      [
+        `${subject} in ${location}`,
+        `${location}, ${mood}`,
+        `${pickFiltered(BACKDROP_TYPES, avoidedTokens)}: ${location}, ${lighting}`,
+        `${subject}, ${pickFiltered(WEATHER, avoidedTokens)}, ${mood}`,
+        `${location} — ${subject}, ${lighting}`,
+      ],
+      avoidedTokens,
+    ),
   );
 
   return { seed: phrase, location };
@@ -1308,6 +1343,7 @@ export function buildTemplateTopicList(options: {
   seedTopic?: string;
   count: number;
   recentLocations?: string[];
+  avoidedTokens?: string[];
 }): string[] {
   const seen = new Set<string>();
   const avoidLocations = new Set(
@@ -1322,11 +1358,19 @@ export function buildTemplateTopicList(options: {
     const { seed: phrase, location } = buildRandomTopicPhrase(
       options.seedTopic,
       batchLocations,
+      options.avoidedTokens,
     );
     const phraseKey = phrase.toLowerCase();
     const locationKey = normalizeLocationKey(location);
 
     if (seen.has(phraseKey)) {
+      continue;
+    }
+
+    if (
+      options.avoidedTokens?.length &&
+      promptContainsAvoidedTokensFromList(phrase, options.avoidedTokens)
+    ) {
       continue;
     }
 

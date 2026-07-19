@@ -27,9 +27,9 @@ import { readVariationSeedFromResult } from "@/lib/variation-seed-metadata";
 import TagAssistToolbar from "@/components/TagAssistToolbar";
 import QwenEditBuilderPanel from "@/components/QwenEditBuilderPanel";
 import { modelUsesTagAssist } from "@/lib/tag-assist";
+import { avoidedTokensRequestBody } from "@/lib/avoided-tokens";
 import {
   applyRatingDrivenWildness,
-  buildAvoidedTokensInstruction,
   ratingDrivenWildnessLabel,
 } from "@/lib/rating-driven-random";
 import { sharedLlmRequestBody } from "@/lib/llm-request-options";
@@ -255,7 +255,7 @@ export default function PromptGenerator() {
           lockedLocation: shared.lockedLocation,
           variationSeed: shared.lockedVariationSeed,
           alwaysIncludeClothing: alwaysIncludeClothing,
-          avoidedTokensInstruction: buildAvoidedTokensInstruction(),
+          ...avoidedTokensRequestBody(),
           ...sharedLlmRequestBody(shared),
         }),
       });
@@ -352,6 +352,7 @@ export default function PromptGenerator() {
           lockedWardrobeId: shared.lockedWardrobeId,
           lockedLocation: shared.lockedLocation,
           variationSeed: shared.lockedVariationSeed,
+          ...avoidedTokensRequestBody(),
           ...sharedLlmRequestBody(shared),
         }),
       });

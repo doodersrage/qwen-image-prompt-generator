@@ -18,6 +18,7 @@ import {
 import { getComfyModelDefinition } from "@/lib/comfy-models";
 import { promptResultPreviewProps } from "@/lib/prompt-result-preview-props";
 import { getReformatTargetLabel, getReformatTargetModel } from "@/lib/reformat-target";
+import { avoidedTokensRequestBody } from "@/lib/avoided-tokens";
 import {
   applyShareableSceneParams,
   parseScenePresetFromSearch,
@@ -144,6 +145,7 @@ export default function FantasyTool() {
           lockedWardrobeId: shared.lockedWardrobeId,
           variationSeed: shared.lockedVariationSeed,
           alwaysIncludeClothing: shared.alwaysIncludeClothing !== false,
+          ...avoidedTokensRequestBody(),
         }),
       });
 

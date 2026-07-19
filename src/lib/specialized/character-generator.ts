@@ -101,6 +101,7 @@ export async function generateCharacterPrompt(
     effectiveHints,
     portraitStyle,
     locationExclude,
+    options.avoidedTokens,
   );
   const seed = applyLockedVariationSeed(rolledSeed, options.variationSeed);
   const alwaysIncludeClothing = options.alwaysIncludeClothing !== false;
@@ -345,6 +346,7 @@ ${soloRules}
       ? "DUO MODE (mandatory): exactly two interacting people in frame. No third person, crowd, or background faces."
       : buildSoloSubjectLockDirective(effectiveHints) ?? buildSinglePersonUserDirective(),
     duoFromHints ? buildDistinctPeopleUserDirective(options.hints ?? "") : null,
+    options.avoidedTokensInstruction ?? null,
     "Write one model-ready character prompt.",
   ].filter(Boolean);
 

@@ -5,8 +5,9 @@ import { registerComfyGalleryJob } from "@/lib/comfyui-gallery-client";
 import { scheduleComfyGalleryPoll } from "@/lib/comfyui-gallery-poller";
 import { resolveComfyUiRuntime } from "@/lib/comfyui-runtime";
 import { resolveQueueNegativePrompt } from "@/lib/queue-negative";
-import { buildAvoidedTokensInstruction } from "@/lib/avoided-tokens";
+import { avoidedTokensRequestBody } from "@/lib/avoided-tokens";
 import { dispatchWebhook } from "@/lib/webhook-settings";
+import { registerScheduledBatchQueue } from "@/lib/scheduled-batch-tracker";
 import { loadSettingsCache } from "@/lib/settings-cache";
 import {
   loadScheduledBatchConfig,
@@ -47,7 +48,7 @@ export default function ScheduledBatchRunner() {
                 target: "generate",
                 model: shared.model,
                 detail: shared.detail,
-                avoidedTokensInstruction: buildAvoidedTokensInstruction(),
+                ...avoidedTokensRequestBody(),
               }),
             });
             const data = (await response.json()) as {
@@ -71,7 +72,7 @@ export default function ScheduledBatchRunner() {
                   genre: config.genre?.trim() || undefined,
                   includePeople: true,
                   wildness: 50,
-                  avoidedTokensInstruction: buildAvoidedTokensInstruction(),
+                  ...avoidedTokensRequestBody(),
                 }),
               });
               const data = (await response.json()) as { prompt?: string };
@@ -102,10 +103,12 @@ export default function ScheduledBatchRunner() {
               comfyUrl?: string;
             };
             if (response.ok) {
+              let queuedJobs = 0;
               for (const [index, result] of (data.results ?? []).entries()) {
                 if (!result.promptId) {
                   continue;
                 }
+                queuedJobs += 1;
                 registerComfyGalleryJob({
                   promptId: result.promptId,
                   prompt: prompts[index] ?? "",
@@ -118,6 +121,7 @@ export default function ScheduledBatchRunner() {
                   comfyUrl: result.comfyUrl ?? data.comfyUrl ?? "http://127.0.0.1:8188",
                 });
               }
+              registerScheduledBatchQueue(queuedJobs);
             }
           }
 

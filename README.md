@@ -117,7 +117,8 @@ Legacy URLs `/duo`, `/compose`, and `/random-scene` redirect to the merged Chara
 - **Keyboard shortcuts** — Ctrl+Enter generate, Ctrl+Shift+C copy pair, Ctrl+Shift+G queue ComfyUI
 - **Queue param overrides** — optional seed/width/height/cfg/steps overrides in Settings and result panels
 - **LoRA trigger injection** — missing trigger phrases from the LoRA library append on ComfyUI queue
-- **Avoided tokens** — low gallery ratings record motifs to avoid; generation APIs honor an avoidance instruction
+- **Avoided tokens** — low gallery ratings record motifs to avoid; all generators honor avoidance via LLM instruction and template pool filtering
+- **Auto-save on queue** — Settings toggle; skips duplicate history when you already saved manually
 - **Catalog rating bias** — Studio catalog sorts clothing/locations by gallery review scores; click **Insert** to add to hints
 - **Gallery compare** — select 2–4 completed entries for side-by-side review on `/gallery`
 - **Mutate winner** — re-queue gallery entries with location/wardrobe/wildness/variation mutations

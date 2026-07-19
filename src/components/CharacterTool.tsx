@@ -20,6 +20,8 @@ import { readSceneLocationFromMetadata } from "@/lib/recent-locations";
 import { readClothingIdsFromMetadata } from "@/lib/recent-clothing";
 import { getComfyModelDefinition } from "@/lib/comfy-models";
 import { getReformatTargetLabel, getReformatTargetModel } from "@/lib/reformat-target";
+import { avoidedTokensRequestBody } from "@/lib/avoided-tokens";
+import { sharedLlmRequestBody } from "@/lib/llm-request-options";
 import { presetOptionsFromCache } from "@/lib/character-options";
 import {
   DEFAULT_CHARACTER_TOOL_CACHE,
@@ -236,6 +238,7 @@ export default function CharacterTool() {
               variationSeed: shared.lockedVariationSeed,
               alwaysIncludeClothing: shared.alwaysIncludeClothing !== false,
               teamKit: toolSettings.teamKit === true,
+              ...avoidedTokensRequestBody(),
             }),
           });
 
@@ -288,6 +291,8 @@ export default function CharacterTool() {
                   ? toolSettings.batchCount ?? 3
                   : SOLO_BATCH_COUNT
                 : undefined,
+            ...avoidedTokensRequestBody(),
+            ...sharedLlmRequestBody(shared),
           }),
         });
 

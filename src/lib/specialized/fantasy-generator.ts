@@ -54,6 +54,7 @@ export async function generateFantasyPrompt(
     locationExclude,
     presetOptions,
     wildness,
+    options.avoidedTokens,
   );
   const seed = applyLockedVariationSeed(rolledSeed, options.variationSeed);
   const presetBlock = buildFantasyPresetBlock(presetOptions);
@@ -113,6 +114,7 @@ export async function generateFantasyPrompt(
     `Framing: ${getFantasyShotFramingLine(shotFraming)}`,
     shotFraming === "action" ? FANTASY_ACTION_INSTRUCTIONS : null,
     `Scene focus: ${focus}`,
+    options.avoidedTokensInstruction ?? null,
     "Write one model-ready fantasy scene prompt.",
   ]
     .filter(Boolean)

@@ -1,4 +1,5 @@
 import { batchGenerateCharacter } from "@/lib/batch-generate";
+import { resolveAvoidanceOptions } from "@/lib/avoidance-options";
 import {
   normalizeCharacterPresetOptions,
   type CharacterPresetOptions,
@@ -25,6 +26,8 @@ type BatchRequestBody = {
   lockedWardrobeId?: string;
   lockedLocation?: string;
   variationSeed?: string;
+  avoidedTokens?: string[];
+  avoidedTokensInstruction?: string;
 };
 
 export async function GET() {
@@ -35,6 +38,7 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as BatchRequestBody;
     const shared = normalizeSharedGenerationOptions(body);
+    const avoidance = resolveAvoidanceOptions(body);
 
     const portraitStyle =
       body.portraitStyle === "full-body" ||
@@ -45,6 +49,7 @@ export async function POST(request: Request) {
 
     const result = await batchGenerateCharacter({
       ...shared,
+      ...avoidance,
       hints: body.hints?.trim(),
       portraitStyle,
       variationStrength:

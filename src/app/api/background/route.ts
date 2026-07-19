@@ -1,4 +1,5 @@
 import { generateBackgroundPrompt } from "@/lib/specialized/background-generator";
+import { resolveAvoidanceOptions } from "@/lib/avoidance-options";
 import { normalizeSharedGenerationOptions, normalizeRecentLocations, normalizeBlockedLocations } from "@/lib/specialized/normalize";
 import {
   normalizeBackgroundPresetOptions,
@@ -20,6 +21,8 @@ type BackgroundRequestBody = {
   >;
   recentLocations?: string[];
   blockedLocations?: string[];
+  avoidedTokens?: string[];
+  avoidedTokensInstruction?: string;
 };
 
 export async function GET() {
@@ -30,9 +33,11 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as BackgroundRequestBody;
     const shared = normalizeSharedGenerationOptions(body);
+    const avoidance = resolveAvoidanceOptions(body);
 
     const result = await generateBackgroundPrompt({
       ...shared,
+      ...avoidance,
       settingType: body.settingType?.trim(),
       timeOfDay: body.timeOfDay?.trim(),
       mood: body.mood?.trim(),

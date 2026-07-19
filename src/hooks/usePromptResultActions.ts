@@ -33,6 +33,7 @@ import {
   resolveParentHistoryId,
 } from "@/lib/prompt-lineage-session";
 import { injectLoraTriggers } from "@/lib/lora-prompt-injection";
+import { loadComfyUiSettings } from "@/lib/comfyui-settings";
 import { resolveQueueParams } from "@/lib/queue-params-settings";
 import { runWorkflowPreflight } from "@/lib/workflow-preflight";
 import { dispatchWebhook } from "@/lib/webhook-settings";
@@ -367,13 +368,16 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
 
         const queueParams = resolveQueueParams();
         const runtime = resolveRuntimeForModel(config.model);
+        const autoSaveEnabled = loadComfyUiSettings().autoSaveHistoryOnQueue !== false;
         const resolvedHistoryId =
           historyId ??
-          saveHistory({
-            prompt: preparedPrompt,
-            hints: config.hints,
-            parentHistoryId: resolveParentHistoryId(),
-          });
+          (autoSaveEnabled && !historySaved
+            ? saveHistory({
+                prompt: preparedPrompt,
+                hints: config.hints,
+                parentHistoryId: resolveParentHistoryId(),
+              })
+            : undefined);
 
         const response = await fetch("/api/comfyui", {
           method: "POST",
@@ -440,7 +444,7 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
         setComfyUiStatus(err instanceof Error ? err.message : "ComfyUI failed.");
       }
     },
-    [config.model, config.tool, config.hints, fetchNegative, saveHistory, trackComfyUiJob],
+    [config.model, config.tool, config.hints, fetchNegative, saveHistory, trackComfyUiJob, historySaved],
   );
 
   const previewWorkflow = useCallback(
