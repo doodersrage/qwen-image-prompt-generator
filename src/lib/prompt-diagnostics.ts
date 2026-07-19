@@ -1,5 +1,6 @@
 import {
   inferCyclingDiscipline,
+  promptContainsForeignSportActions,
   type CyclingDiscipline,
 } from "./athletic-sport-actions";
 import {
@@ -98,6 +99,14 @@ export function analyzePromptDiagnostics(
         message: "Competition duo uses elderly descriptors—prefer twenties to forties.",
       });
     }
+  }
+
+  if (sport && prompt && promptContainsForeignSportActions(sport, prompt)) {
+    issues.push({
+      severity: "error",
+      code: "sport.foreign_actions",
+      message: "Prompt mixes in actions or gear from another sport.",
+    });
   }
 
   if (duoMode && prompt && !/\bon the (?:left|right)\b/i.test(prompt)) {

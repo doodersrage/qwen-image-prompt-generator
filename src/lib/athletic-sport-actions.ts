@@ -310,7 +310,21 @@ const SPORT_ACTION_BUNDLES: Record<AthleticSport, SportActionBundle> = {
       "a rain-soaked city road with reflective asphalt",
       "a trail path with kicked gravel behind the stride",
     ],
-    foreignTokens: ["cyclist", "pedaling", "handlebars", "dunk", "golf swing", "climbing dyno"],
+    foreignTokens: [
+      "cyclist",
+      "cyclists",
+      "pedaling",
+      "pedals",
+      "pedal",
+      "handlebars",
+      "bicycle",
+      "bike",
+      "cycling kit",
+      "bib shorts",
+      "dunk",
+      "golf swing",
+      "climbing dyno",
+    ],
   },
 };
 
@@ -572,13 +586,6 @@ export function stripIncompatibleCyclingVenuesFromPrompt(
     .trim();
 }
 
-function bundleFor(sport: AthleticSport | null | undefined): SportActionBundle | null {
-  if (!sport) {
-    return null;
-  }
-  return SPORT_ACTION_BUNDLES[sport] ?? null;
-}
-
 function foreignActionPattern(sport: AthleticSport): RegExp | null {
   const bundle = SPORT_ACTION_BUNDLES[sport];
   if (!bundle) {
@@ -594,6 +601,41 @@ function foreignActionPattern(sport: AthleticSport): RegExp | null {
     token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+"),
   );
   return new RegExp(`\\b(?:${escaped.join("|")})\\b`, "i");
+}
+
+function bundleFor(sport: AthleticSport | null | undefined): SportActionBundle | null {
+  if (!sport) {
+    return null;
+  }
+  return SPORT_ACTION_BUNDLES[sport] ?? null;
+}
+
+const RUNNING_ANTI_CYCLING_REWRITES: ReadonlyArray<readonly [RegExp, string]> = [
+  [/\b(?:powerful thighs\s+)?stroke\s+pedals?\b/gi, "drive a powerful forward stride"],
+  [/\b(?:thighs\s+)?pedaling\b/gi, "thighs driving forward"],
+  [/\bpedaling\b/gi, "striding forward"],
+  [
+    /\b(?:on (?:a |the |her |his |their )?(?:bike|bicycle)|leaning forward on the bike)\b/gi,
+    "on the footpath",
+  ],
+  [/\bhandlebars\b/gi, "arm carriage"],
+  [/\b(?:racing )?bicycle\b/gi, "running path"],
+  [/\bcyclists?\b/gi, "runner"],
+];
+
+function sanitizeForeignSportPhrases(
+  prompt: string,
+  sport: AthleticSport,
+): string {
+  if (sport !== "running" && sport !== "track_field") {
+    return prompt;
+  }
+
+  let working = prompt;
+  for (const [pattern, replacement] of RUNNING_ANTI_CYCLING_REWRITES) {
+    working = working.replace(pattern, replacement);
+  }
+  return working.replace(/\s{2,}/g, " ").trim();
 }
 
 export function getSportActionBundle(
@@ -738,14 +780,14 @@ export function stripForeignSportActionsFromPrompt(
 ): string {
   const bundle = SPORT_ACTION_BUNDLES[sport];
   const pattern = foreignActionPattern(sport);
-  let working = prompt;
-  if (bundle && pattern && pattern.test(prompt)) {
+  let working = sanitizeForeignSportPhrases(prompt, sport);
+  if (bundle && pattern && pattern.test(working)) {
     const globalPattern = new RegExp(
       pattern.source,
       pattern.flags.includes("i") ? "gi" : "g",
     );
 
-    working = prompt
+    working = working
       .split(/(?<=[.!?])\s+/)
       .map((sentence) => {
         if (!pattern.test(sentence)) {
@@ -771,6 +813,11 @@ export function stripForeignSportActionsFromPrompt(
           }
 
           return `${actionPart}${wardrobeTail.startsWith(",") ? wardrobeTail : `, ${wardrobeTail}`}`;
+        }
+
+        const sanitizedSentence = sanitizeForeignSportPhrases(sentence, sport);
+        if (!pattern.test(sanitizedSentence)) {
+          return sanitizedSentence;
         }
 
         return bundle.rewriteDefault;

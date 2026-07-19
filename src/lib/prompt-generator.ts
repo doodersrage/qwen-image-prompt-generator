@@ -41,6 +41,10 @@ import {
 } from "./distinct-people";
 import { inferAthleticSport } from "./athletic-sport-profiles";
 import {
+  formatSportActionInstructions,
+  stripForeignSportActionsFromPrompt,
+} from "./athletic-sport-actions";
+import {
   DEFAULT_GENERATION_SETTINGS,
   type GenerationSettings,
 } from "./generation-settings";
@@ -185,6 +189,14 @@ function buildUserMessage(
     extras.push(wardrobeDirective);
   }
 
+  const sport = inferAthleticSport(trimmed);
+  if (sport) {
+    const sportLines = formatSportActionInstructions(sport, trimmed);
+    if (sportLines) {
+      extras.push(sportLines);
+    }
+  }
+
   if (variationSeed?.trim() && settings.variation.enabled) {
     extras.push(
       `Environment variation seed (honor closely): ${variationSeed.trim()}`,
@@ -273,13 +285,22 @@ function finalizePrompt(
     },
   );
   const formatted = formatPromptForModel(sanitized, settings.model, input, mode);
+  const sportAware =
+    mode === "positive"
+      ? (() => {
+          const sport = inferAthleticSport(input);
+          return sport
+            ? stripForeignSportActionsFromPrompt(formatted, sport, input)
+            : formatted;
+        })()
+      : formatted;
   if (!wardrobeAssignments?.length) {
-    return formatted;
+    return sportAware;
   }
 
   const { maxChars } = getDetailLimits(settings.detail, settings.model);
   const merged = mergeGenerateWardrobeIntoPrompt(
-    formatted,
+    sportAware,
     wardrobeAssignments,
     maxChars,
     input,

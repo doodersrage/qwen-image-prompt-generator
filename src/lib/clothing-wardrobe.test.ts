@@ -369,6 +369,14 @@ describe("character action seeds", () => {
     assert.match(cleaned, /ball|kit|soccer|pitch|follow-through/i);
   });
 
+  it("strips cycling verbs from marathon running prompts", () => {
+    const prompt =
+      "A fit female marathon runner in a race bib and running singlet drives powerful thighs stroke pedals on a bridge footpath at dawn.";
+    const cleaned = stripForeignSportActionsFromPrompt(prompt, "running");
+    assert.doesNotMatch(cleaned, /pedals?|pedaling|handlebars|cyclist/i);
+    assert.match(cleaned, /runner|stride|singlet|race bib/i);
+  });
+
   it("keeps cycling intent when the model hallucinates a javelin throw", () => {
     const intent = "two female cyclists in a fierce competition";
     const polluted =
