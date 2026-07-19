@@ -542,6 +542,70 @@ class PromptToolsBatch(PromptToolsBase):
         return (extract_prompt(response), self.metadata_json(response))
 
 
+class PromptToolsTopicsBatch(PromptToolsBase):
+    RETURN_TYPES = ("STRING", "STRING")
+    RETURN_NAMES = ("prompt", "metadata_json")
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                **cls.model_detail_inputs(),
+                "topics": (
+                    "STRING",
+                    {
+                        "default": "sunset gravel ride\nrainy alley portrait",
+                        "multiline": True,
+                    },
+                ),
+                "target": (
+                    ["generate", "duo", "character", "pet", "fantasy", "background"],
+                    {"default": "generate"},
+                ),
+            },
+            "optional": {**cls.api_input(), **cls.avoidance_inputs()},
+        }
+
+    FUNCTION = "generate"
+
+    def generate(
+        self,
+        model: str,
+        detail: str,
+        topics: str,
+        target: str,
+        api_base_url: str = "",
+        avoided_tokens: str = "",
+    ):
+        topic_list = [
+            line.strip()
+            for line in topics.replace(",", "\n").splitlines()
+            if line.strip()
+        ]
+        if not topic_list:
+            raise RuntimeError("At least one topic is required.")
+
+        payload = {
+            "model": model,
+            "detail": detail,
+            "topics": topic_list[:12],
+            "target": target,
+        }
+        self.apply_avoidance(payload, avoided_tokens)
+
+        response = post_json(api_base_url, "/api/topics/batch", payload)
+        results = response.get("results")
+        if isinstance(results, list) and results:
+            prompts = [
+                entry.get("prompt", "").strip()
+                for entry in results
+                if isinstance(entry, dict) and entry.get("prompt")
+            ]
+            if prompts:
+                return ("\n---\n".join(prompts), self.metadata_json(response))
+        return (extract_prompt(response), self.metadata_json(response))
+
+
 class PromptToolsLint(PromptToolsBase):
     RETURN_NAMES = ("diagnostics_json",)
 
@@ -792,6 +856,7 @@ NODE_CLASS_MAPPINGS = {
     "PromptToolsImageToPrompt": PromptToolsImageToPrompt,
     "PromptToolsDuo": PromptToolsDuo,
     "PromptToolsBatch": PromptToolsBatch,
+    "PromptToolsTopicsBatch": PromptToolsTopicsBatch,
     "PromptToolsLint": PromptToolsLint,
     "PromptToolsNegative": PromptToolsNegative,
     "PromptToolsFix": PromptToolsFix,
@@ -812,6 +877,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "PromptToolsImageToPrompt": "Prompt Tools · Image → Prompt",
     "PromptToolsDuo": "Prompt Tools · Duo / Sport",
     "PromptToolsBatch": "Prompt Tools · Batch Roll",
+    "PromptToolsTopicsBatch": "Prompt Tools · Topics Batch",
     "PromptToolsLint": "Prompt Tools · Lint",
     "PromptToolsNegative": "Prompt Tools · Negative",
     "PromptToolsFix": "Prompt Tools · Fix Prompt",

@@ -79,6 +79,45 @@ export function loadAvoidedTokens(): Set<string> {
   }
 }
 
+export function downloadAvoidedTokensExport(filename = "avoided-tokens.json"): void {
+  const payload = exportAvoidedTokensJson();
+  const blob = new Blob([payload], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+export function exportAvoidedTokensJson(): string {
+  return JSON.stringify(
+    {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      tokens: exportAvoidedTokenList(),
+    },
+    null,
+    2,
+  );
+}
+
+export function importAvoidedTokensJson(raw: string, mode: "merge" | "replace" = "merge"): number {
+  const parsed = JSON.parse(raw) as { tokens?: unknown };
+  if (!Array.isArray(parsed.tokens)) {
+    throw new Error("Invalid avoided tokens file.");
+  }
+  const tokens = parsed.tokens
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+  if (mode === "replace") {
+    saveAvoidedTokens(tokens);
+    return tokens.length;
+  }
+  return addAvoidedTokens(tokens);
+}
+
 export function recordAvoidedTokensFromPrompt(prompt: string): void {
   if (typeof window === "undefined" || !prompt.trim()) {
     return;

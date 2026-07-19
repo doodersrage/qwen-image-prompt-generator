@@ -480,6 +480,27 @@ describe("studio backup", () => {
       assert.equal(backup.comfyWorkflowPresets?.[0]?.name, "Default");
     }
   });
+
+  it("parses studio backup v3 extras", () => {
+    const backup = parseStudioBackupFile(
+      JSON.stringify({
+        version: 3,
+        exportedAt: new Date().toISOString(),
+        history: [],
+        locationBlocklist: [],
+        settings: { shared: { model: "qwen-image-2512", detail: "balanced" }, tools: {} },
+        avoidedTokens: ["velodrome"],
+        promptProjects: [{ id: "p1", name: "Campaign A", createdAt: 1 }],
+        activeProjectId: "p1",
+      }),
+    );
+    assert.equal(backup.version, 3);
+    if (backup.version === 3) {
+      assert.deepEqual(backup.avoidedTokens, ["velodrome"]);
+      assert.equal(backup.promptProjects?.[0]?.name, "Campaign A");
+      assert.equal(backup.activeProjectId, "p1");
+    }
+  });
 });
 
 describe("compactPromptToLimit", () => {
@@ -1600,5 +1621,157 @@ describe("iteration tree export", () => {
     ] as import("@/hooks/usePromptHistory").PromptHistoryEntry[]);
     assert.match(json, /child prompt/);
     assert.match(json, /"parentId": "root"/);
+  });
+});
+
+describe("gallery similarity", () => {
+  it("ranks entries by prompt and param overlap", async () => {
+    const { rankGallerySimilarity, orderGalleryBySimilarity } = await import(
+      "./gallery-similarity"
+    );
+    const reference = {
+      id: "ref",
+      promptId: "p-ref",
+      prompt: "gravel cyclist muddy rain competitive sprint",
+      model: "qwen-image-2512",
+      comfyUrl: "http://127.0.0.1:8188",
+      status: "completed" as const,
+      queuedAt: 1,
+      images: [],
+      queueParams: { cfg: "7", steps: "22", width: "1024", height: "1024", seed: "1" },
+    };
+    const close = {
+      ...reference,
+      id: "close",
+      promptId: "p-close",
+      prompt: "gravel cyclist rain sprint finish line",
+      queueParams: { cfg: "7", steps: "22", width: "1024", height: "1024", seed: "2" },
+    };
+    const far = {
+      ...reference,
+      id: "far",
+      promptId: "p-far",
+      prompt: "underwater jellyfish bioluminescent cave",
+      model: "flux-2-klein",
+      queueParams: { cfg: "5", steps: "18", width: "768", height: "768", seed: "3" },
+    };
+    const ranked = rankGallerySimilarity([close, far], reference);
+    assert.equal(ranked[0]?.entry.id, "close");
+    const ordered = orderGalleryBySimilarity([far, reference, close], reference);
+    assert.equal(ordered[0]?.id, "ref");
+    assert.equal(ordered[1]?.id, "close");
+  });
+});
+
+describe("iteration branch diff", () => {
+  it("diffs linked history entries", async () => {
+    const { diffHistoryEntries, listIterationEntries } = await import(
+      "./iteration-branch-diff"
+    );
+    const entries = [
+      {
+        id: "root",
+        tool: "character",
+        model: "qwen-image-2512",
+        prompt: "alpha beta gamma",
+        hints: "",
+        timestamp: 1,
+      },
+      {
+        id: "child",
+        tool: "refine",
+        model: "qwen-image-2512",
+        prompt: "alpha beta delta",
+        hints: "",
+        timestamp: 2,
+        metadata: { parentHistoryId: "root" },
+      },
+    ] as PromptHistoryEntry[];
+    const flat = listIterationEntries(entries);
+    assert.equal(flat.length, 2);
+    const diff = diffHistoryEntries(flat[0]!, flat[1]!);
+    assert.equal(diff.diff.changed, true);
+  });
+});
+
+describe("avoided tokens import export", () => {
+  it("round-trips json export", async () => {
+    const storage = new Map<string, string>();
+    const originalWindow = globalThis.window;
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        localStorage: {
+          getItem: (key: string) => storage.get(key) ?? null,
+          setItem: (key: string, value: string) => {
+            storage.set(key, value);
+          },
+          removeItem: (key: string) => {
+            storage.delete(key);
+          },
+        },
+        dispatchEvent: () => undefined,
+      },
+    });
+
+    try {
+      const {
+        exportAvoidedTokensJson,
+        importAvoidedTokensJson,
+        exportAvoidedTokenList,
+        clearAvoidedTokens,
+      } = await import("./avoided-tokens");
+      clearAvoidedTokens();
+      importAvoidedTokensJson(
+        JSON.stringify({ version: 1, tokens: ["neon", "velodrome"] }),
+        "replace",
+      );
+      assert.deepEqual(exportAvoidedTokenList().sort(), ["neon", "velodrome"]);
+      const exported = JSON.parse(exportAvoidedTokensJson()) as { tokens?: string[] };
+      assert.deepEqual(exported.tokens?.sort(), ["neon", "velodrome"]);
+      clearAvoidedTokens();
+    } finally {
+      Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: originalWindow,
+      });
+    }
+  });
+});
+
+describe("api smoke routes", () => {
+  it("lint POST validates empty body", async () => {
+    const { POST } = await import("../app/api/lint/route");
+    const response = await POST(
+      new Request("http://localhost/api/lint", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      }),
+    );
+    assert.equal(response.status, 400);
+  });
+
+  it("lint POST returns diagnostics", async () => {
+    const { POST } = await import("../app/api/lint/route");
+    const response = await POST(
+      new Request("http://localhost/api/lint", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hints: "gravel race", prompt: "two cyclists sprint" }),
+      }),
+    );
+    assert.equal(response.status, 200);
+    const data = (await response.json()) as { issues?: unknown[] };
+    assert.ok(Array.isArray(data.issues));
+  });
+
+  it("health GET returns service payload", async () => {
+    const { GET } = await import("../app/api/health/route");
+    const response = await GET(new Request("http://localhost/api/health"));
+    assert.equal(response.status, 200);
+    const data = (await response.json()) as { llm?: unknown; comfyui?: unknown };
+    assert.ok(data.llm);
+    assert.ok(data.comfyui);
   });
 });

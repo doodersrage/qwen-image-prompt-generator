@@ -29,7 +29,7 @@ import {
   buildPromptSidecar,
   downloadPromptSidecar,
 } from "@/lib/prompt-sidecar";
-import { requeueComfyJob } from "@/lib/comfyui-requeue";
+import { requeueComfyJob, requeueComfyJobs } from "@/lib/comfyui-requeue";
 import {
   applyScenePresetLocks,
   buildScenePresetFromCurrent,
@@ -101,9 +101,14 @@ import {
 import { studioHistoryUrl } from "@/lib/prompt-lineage";
 import { startRefineFromHistoryEntry } from "@/lib/improve-output";
 import { analyzeGalleryRatingTokens, negativeScoringTokens } from "@/lib/rating-token-analytics";
-import { loadComfyGallery } from "@/lib/comfyui-gallery";
+import { loadComfyGallery, COMFYUI_GALLERY_UPDATED_EVENT } from "@/lib/comfyui-gallery";
 import { addAvoidedToken, addAvoidedTokens } from "@/lib/avoided-tokens";
 import { downloadIterationForestJson } from "@/lib/iteration-tree-export";
+import {
+  diffHistoryEntries,
+  listIterationEntries,
+} from "@/lib/iteration-branch-diff";
+import { runPromptCampaign, type CampaignStepResult } from "@/lib/campaign-runner";
 import type { EnrichedToolGenerateResult } from "@/lib/specialized/types";
 import {
   ToolBadge,
@@ -145,6 +150,7 @@ type StudioTab =
   | "iteration"
   | "projects"
   | "portfolio"
+  | "campaign"
   | "analytics";
 
 type CatalogClothing = {
@@ -215,6 +221,19 @@ export default function StudioTool() {
   const [portfolioItems, setPortfolioItems] = useState<ModelPortfolioItem[]>([]);
   const [portfolioStatus, setPortfolioStatus] = useState<string | null>(null);
   const [portfolioLoading, setPortfolioLoading] = useState(false);
+  const [galleryRevision, setGalleryRevision] = useState(0);
+  const [campaignTarget, setCampaignTarget] = useState<"random-scene" | "topics">(
+    "random-scene",
+  );
+  const [campaignCount, setCampaignCount] = useState(4);
+  const [campaignGenre, setCampaignGenre] = useState("");
+  const [campaignTopics, setCampaignTopics] = useState("");
+  const [campaignQueue, setCampaignQueue] = useState(true);
+  const [campaignLoading, setCampaignLoading] = useState(false);
+  const [campaignStatus, setCampaignStatus] = useState<string | null>(null);
+  const [campaignResults, setCampaignResults] = useState<CampaignStepResult[]>([]);
+  const [iterationDiffLeftId, setIterationDiffLeftId] = useState("");
+  const [iterationDiffRightId, setIterationDiffRightId] = useState("");
 
   const actions = usePromptResultActions({
     tool: "studio",
@@ -245,8 +264,17 @@ export default function StudioTool() {
   );
   const ratingTokenStats = useMemo(
     () => analyzeGalleryRatingTokens(loadComfyGallery()),
-    [tab],
+    [tab, galleryRevision],
   );
+  const iterationEntries = useMemo(() => listIterationEntries(entries), [entries]);
+  const iterationDiff = useMemo(() => {
+    const left = iterationEntries.find((entry) => entry.id === iterationDiffLeftId);
+    const right = iterationEntries.find((entry) => entry.id === iterationDiffRightId);
+    if (!left || !right) {
+      return null;
+    }
+    return diffHistoryEntries(left, right);
+  }, [iterationDiffLeftId, iterationDiffRightId, iterationEntries]);
 
   const favoriteEntries = useMemo(
     () => entries.filter((entry) => entry.favorite),
@@ -270,6 +298,13 @@ export default function StudioTool() {
     setUserTemplates(loadUserTemplates());
     setProjects(loadPromptProjects());
     setActiveProjectIdState(loadActiveProjectId());
+  }, []);
+
+  useEffect(() => {
+    const refreshAnalytics = () => setGalleryRevision((previous) => previous + 1);
+    window.addEventListener(COMFYUI_GALLERY_UPDATED_EVENT, refreshAnalytics);
+    return () =>
+      window.removeEventListener(COMFYUI_GALLERY_UPDATED_EVENT, refreshAnalytics);
   }, []);
 
   useEffect(() => {
@@ -455,6 +490,7 @@ export default function StudioTool() {
     { id: "projects", label: "Projects" },
     { id: "compare", label: "Compare" },
     { id: "portfolio", label: "Portfolio" },
+    { id: "campaign", label: "Campaign" },
     { id: "analytics", label: "Analytics" },
     { id: "catalog", label: "Catalog" },
     { id: "templates", label: "Templates" },
@@ -855,6 +891,28 @@ export default function StudioTool() {
                       );
                     });
                   }}
+                  onRequeueBatch={() => {
+                    const batchPrompts = readHistoryBatchPrompts(entry);
+                    if (batchPrompts.length === 0) {
+                      return;
+                    }
+                    setBackupStatus(`Re-queueing batch (${batchPrompts.length})…`);
+                    void requeueComfyJobs(
+                      batchPrompts.map((prompt) => ({
+                        prompt,
+                        tool: entry.tool,
+                        model: entry.model,
+                        hints: entry.hints,
+                        newSeed: true,
+                      })),
+                      setBackupStatus,
+                    ).then(({ queued, failed }) => {
+                      setBackupStatus(
+                        `Batch re-queue finished · ${queued} queued · ${failed} failed`,
+                      );
+                    });
+                  }}
+                  batchPromptCount={readHistoryBatchPrompts(entry).length}
                 />
               ))}
             </ToolBlockGroup>
@@ -867,6 +925,66 @@ export default function StudioTool() {
           <p className="text-sm text-zinc-400">
             Branches built from saved history entries linked by parent history ids.
           </p>
+          {iterationEntries.length >= 2 ? (
+            <ToolMetaPanel title="Branch diff" className="mb-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="space-y-1 text-xs text-zinc-400">
+                  Left (older)
+                  <select
+                    value={iterationDiffLeftId}
+                    onChange={(event) => setIterationDiffLeftId(event.target.value)}
+                    className="ui-input block px-3 py-[var(--input-padding-y)] type-body"
+                  >
+                    <option value="">Select entry…</option>
+                    {iterationEntries.map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.tool} · {entry.prompt.slice(0, 48)}…
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-1 text-xs text-zinc-400">
+                  Right (newer)
+                  <select
+                    value={iterationDiffRightId}
+                    onChange={(event) => setIterationDiffRightId(event.target.value)}
+                    className="ui-input block px-3 py-[var(--input-padding-y)] type-body"
+                  >
+                    <option value="">Select entry…</option>
+                    {iterationEntries.map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.tool} · {entry.prompt.slice(0, 48)}…
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              {iterationDiff ? (
+                <div className="mt-3 space-y-2 text-sm">
+                  <p className="type-caption text-zinc-500">
+                    {iterationDiff.diff.beforeChars} → {iterationDiff.diff.afterChars} chars
+                    {iterationDiff.diff.changed ? "" : " · identical"}
+                  </p>
+                  <p className="whitespace-pre-wrap">
+                    {iterationDiff.diff.segments.map((segment, index) => (
+                      <span
+                        key={`${segment.type}-${index}`}
+                        className={
+                          segment.type === "add"
+                            ? "text-emerald-300"
+                            : segment.type === "remove"
+                              ? "text-rose-300 line-through"
+                              : "text-zinc-300"
+                        }
+                      >
+                        {segment.text}{" "}
+                      </span>
+                    ))}
+                  </p>
+                </div>
+              ) : null}
+            </ToolMetaPanel>
+          ) : null}
           <div className="mb-4 flex flex-wrap gap-2">
             <Button
               variant="secondary"
@@ -893,10 +1011,156 @@ export default function StudioTool() {
                   node={node}
                   depth={0}
                   onRequeueStatus={setBackupStatus}
+                  onDiffWithParent={(parentId) => {
+                    setIterationDiffLeftId(parentId);
+                    setIterationDiffRightId(node.entry.id);
+                  }}
                 />
               ))}
             </ToolBlockGroup>
           )}
+        </ToolSection>
+      )}
+
+      {tab === "campaign" && (
+        <ToolSection title="Prompt campaign runner">
+          <p className="text-sm text-zinc-400">
+            Generate a series of prompts (random scenes or topic list) and optionally queue
+            each to ComfyUI under the active project.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="space-y-1 text-xs text-zinc-400">
+              Source
+              <select
+                value={campaignTarget}
+                onChange={(event) =>
+                  setCampaignTarget(event.target.value as "random-scene" | "topics")
+                }
+                className="ui-input block px-3 py-[var(--input-padding-y)] type-body"
+              >
+                <option value="random-scene">Random scenes</option>
+                <option value="topics">Topics batch</option>
+              </select>
+            </label>
+            <label className="space-y-1 text-xs text-zinc-400">
+              Count
+              <input
+                type="number"
+                min={1}
+                max={12}
+                value={campaignCount}
+                onChange={(event) =>
+                  setCampaignCount(Number(event.target.value) || 4)
+                }
+                className="ui-input block w-full px-3 py-[var(--input-padding-y)] type-body"
+              />
+            </label>
+          </div>
+          {campaignTarget === "random-scene" ? (
+            <FieldLabel htmlFor="campaign-genre">Genre/theme hint (optional)</FieldLabel>
+          ) : (
+            <FieldLabel htmlFor="campaign-topics">Topics (one per line)</FieldLabel>
+          )}
+          {campaignTarget === "random-scene" ? (
+            <input
+              id="campaign-genre"
+              value={campaignGenre}
+              onChange={(event) => setCampaignGenre(event.target.value)}
+              className="ui-input w-full px-[var(--input-padding-x)] py-[var(--input-padding-y)] type-body"
+            />
+          ) : (
+            <TextArea
+              id="campaign-topics"
+              rows={4}
+              value={campaignTopics}
+              onChange={(event) => setCampaignTopics(event.target.value)}
+              placeholder="sunset gravel race&#10;rainy alley portrait"
+              className={accentFocusClass(ACCENT)}
+            />
+          )}
+          <label className="flex items-center gap-3 text-sm text-zinc-300">
+            <input
+              type="checkbox"
+              checked={campaignQueue}
+              onChange={(event) => setCampaignQueue(event.target.checked)}
+              className={`h-4 w-4 rounded ${accentFocusClass()}`}
+            />
+            Queue each prompt to ComfyUI
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <PrimaryButton
+              accentClassName={accentButtonClass(ACCENT)}
+              loading={campaignLoading}
+              loadingLabel="Running campaign"
+              disabled={
+                campaignTarget === "topics" &&
+                campaignTopics
+                  .split("\n")
+                  .map((line) => line.trim())
+                  .filter(Boolean).length === 0
+              }
+              onClick={() => {
+                void (async () => {
+                  setCampaignLoading(true);
+                  setCampaignStatus("Running campaign…");
+                  try {
+                    const topics =
+                      campaignTarget === "topics"
+                        ? campaignTopics
+                            .split("\n")
+                            .map((line) => line.trim())
+                            .filter(Boolean)
+                        : undefined;
+                    const results = await runPromptCampaign({
+                      model: shared.model,
+                      target: campaignTarget,
+                      count: campaignCount,
+                      genre: campaignGenre.trim() || undefined,
+                      topics,
+                      queueToComfyUi: campaignQueue,
+                      hints: campaignGenre.trim() || campaignTopics.slice(0, 200),
+                    });
+                    setCampaignResults(results);
+                    const queued = results.filter((step) => step.queued).length;
+                    setCampaignStatus(
+                      `Campaign finished · ${queued}/${results.length} queued · ${results.filter((step) => step.error).length} errors`,
+                    );
+                    setGalleryRevision((previous) => previous + 1);
+                  } catch (err) {
+                    setCampaignStatus(
+                      err instanceof Error ? err.message : "Campaign failed.",
+                    );
+                  } finally {
+                    setCampaignLoading(false);
+                  }
+                })();
+              }}
+            >
+              Run campaign
+            </PrimaryButton>
+          </div>
+          {campaignStatus ? (
+            <p className="type-caption text-[var(--accent-text)]">{campaignStatus}</p>
+          ) : null}
+          {campaignResults.length > 0 ? (
+            <ToolBlockGroup className="mt-[var(--block-gap)]">
+              {campaignResults.map((step) => (
+                <ToolContentPanel key={step.index} className="ui-block-group">
+                  <p className="type-caption text-zinc-500">
+                    Step {step.index + 1}
+                    {step.queued ? " · queued" : ""}
+                    {step.promptId ? ` · ${step.promptId}` : ""}
+                    {step.error ? ` · ${step.error}` : ""}
+                  </p>
+                  {step.prompt ? (
+                    <pre className="type-code max-h-32 overflow-auto whitespace-pre-wrap text-zinc-300">
+                      {step.prompt}
+                    </pre>
+                  ) : null}
+                </ToolContentPanel>
+              ))}
+            </ToolBlockGroup>
+          ) : null}
         </ToolSection>
       )}
 
@@ -1992,6 +2256,16 @@ export default function StudioTool() {
   );
 }
 
+function readHistoryBatchPrompts(entry: PromptHistoryEntry): string[] {
+  const raw = entry.metadata?.batchPrompts;
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.filter(
+    (item): item is string => typeof item === "string" && item.trim().length > 0,
+  );
+}
+
 function HistoryCard({
   entry,
   highlighted,
@@ -2005,6 +2279,8 @@ function HistoryCard({
   onDiffRight,
   onSaveTemplate,
   onRequeue,
+  onRequeueBatch,
+  batchPromptCount = 0,
 }: {
   entry: PromptHistoryEntry;
   highlighted?: boolean;
@@ -2018,6 +2294,8 @@ function HistoryCard({
   onDiffRight: () => void;
   onSaveTemplate: () => void;
   onRequeue: (newSeed: boolean) => void;
+  onRequeueBatch?: () => void;
+  batchPromptCount?: number;
 }) {
   const regenerateUrl = buildRegenerateUrl(entry);
   const showHintDiff =
@@ -2061,6 +2339,15 @@ function HistoryCard({
             <Button variant="accent-outline" className="!min-h-8 px-3 type-caption" onClick={() => onRequeue(true)}>
               Re-queue (new seed)
             </Button>
+            {batchPromptCount > 1 && onRequeueBatch ? (
+              <Button
+                variant="accent-outline"
+                className="!min-h-8 px-3 type-caption"
+                onClick={onRequeueBatch}
+              >
+                Re-queue batch ({batchPromptCount})
+              </Button>
+            ) : null}
             <Button
               variant="ghost"
               className="!min-h-8 px-3 type-caption"
@@ -2139,12 +2426,18 @@ function IterationTreeNodeCard({
   node,
   depth,
   onRequeueStatus,
+  onDiffWithParent,
 }: {
   node: IterationTreeNode;
   depth: number;
   onRequeueStatus: (message: string) => void;
+  onDiffWithParent?: (parentId: string) => void;
 }) {
   const regenerateUrl = buildRegenerateUrl(node.entry);
+  const parentHistoryId =
+    typeof node.entry.metadata?.parentHistoryId === "string"
+      ? node.entry.metadata.parentHistoryId
+      : undefined;
 
   return (
     <div className="space-y-3" style={{ marginLeft: depth * 16 }}>
@@ -2201,6 +2494,15 @@ function IterationTreeNodeCard({
           >
             Queue (new seed)
           </button>
+          {parentHistoryId && onDiffWithParent ? (
+            <button
+              type="button"
+              onClick={() => onDiffWithParent(parentHistoryId)}
+              className="type-caption text-amber-300 hover:text-amber-200"
+            >
+              Diff vs parent
+            </button>
+          ) : null}
           <a
             href={studioHistoryUrl(node.entry.id)}
             className="type-caption text-zinc-400 hover:text-zinc-200"
@@ -2215,6 +2517,7 @@ function IterationTreeNodeCard({
           node={child}
           depth={depth + 1}
           onRequeueStatus={onRequeueStatus}
+          onDiffWithParent={onDiffWithParent}
         />
       ))}
     </div>

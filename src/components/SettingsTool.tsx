@@ -55,6 +55,8 @@ import {
   addAvoidedTokens,
   clearAvoidedTokens,
   exportAvoidedTokenList,
+  importAvoidedTokensJson,
+  downloadAvoidedTokensExport,
   removeAvoidedToken,
 } from "@/lib/avoided-tokens";
 import {
@@ -181,6 +183,23 @@ export default function SettingsTool() {
   const [avoidedTokens, setAvoidedTokens] = useState<string[]>([]);
   const [avoidedTokenDraft, setAvoidedTokenDraft] = useState("");
   const [webhookLog, setWebhookLog] = useState<WebhookLogEntry[]>([]);
+  const [webhookEventFilter, setWebhookEventFilter] = useState<string>("all");
+  const [expandedWebhookLogId, setExpandedWebhookLogId] = useState<string | null>(
+    null,
+  );
+  const [backupReminder, setBackupReminder] = useState<string | null>(null);
+
+  const filteredWebhookLog = useMemo(() => {
+    if (webhookEventFilter === "all") {
+      return webhookLog;
+    }
+    return webhookLog.filter((entry) => entry.event === webhookEventFilter);
+  }, [webhookEventFilter, webhookLog]);
+
+  const webhookEventOptions = useMemo(() => {
+    const events = new Set(webhookLog.map((entry) => entry.event));
+    return [...events].sort();
+  }, [webhookLog]);
 
   useEffect(() => {
     if (isComfyNotificationSupported()) {
@@ -199,6 +218,18 @@ export default function SettingsTool() {
     setScheduledBatch(loadScheduledBatchConfig());
     setAvoidedTokens(exportAvoidedTokenList());
     setWebhookLog(loadWebhookLog());
+    try {
+      const lastBackupRaw = window.localStorage.getItem("studio-backup-last-export-v1");
+      const lastBackup = lastBackupRaw ? Number(lastBackupRaw) : 0;
+      const weekMs = 7 * 24 * 60 * 60 * 1000;
+      if (!lastBackup || Date.now() - lastBackup > weekMs) {
+        setBackupReminder(
+          "No recent Studio backup detected — export a v3 backup to preserve avoided tokens, webhooks, and projects.",
+        );
+      }
+    } catch {
+      setBackupReminder(null);
+    }
   }, []);
 
   useEffect(() => {
@@ -1220,6 +1251,38 @@ export default function SettingsTool() {
           >
             Clear all
           </Button>
+          <Button
+            variant="secondary"
+            disabled={avoidedTokens.length === 0}
+            onClick={() => {
+              downloadAvoidedTokensExport();
+              setStatus("Avoided tokens exported.");
+            }}
+          >
+            Export JSON
+          </Button>
+          <label className="cursor-pointer rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:border-zinc-500">
+            Import JSON
+            <input
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (!file) {
+                  return;
+                }
+                void file.text().then((raw) => {
+                  const merge = window.confirm(
+                    "Merge imported tokens into the list? Cancel replaces the full list.",
+                  );
+                  const count = importAvoidedTokensJson(raw, merge ? "merge" : "replace");
+                  setStatus(`Imported ${count} avoided token(s).`);
+                });
+                event.target.value = "";
+              }}
+            />
+          </label>
         </div>
         {avoidedTokens.length === 0 ? (
           <p className="text-sm text-zinc-500">No avoided tokens yet.</p>
@@ -1248,6 +1311,21 @@ export default function SettingsTool() {
           Recent webhook dispatch attempts (newest first).
         </p>
         <div className="flex flex-wrap gap-2">
+          <label className="space-y-1 text-xs text-zinc-400">
+            Event filter
+            <select
+              value={webhookEventFilter}
+              onChange={(event) => setWebhookEventFilter(event.target.value)}
+              className="block rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+            >
+              <option value="all">All events</option>
+              {webhookEventOptions.map((eventName) => (
+                <option key={eventName} value={eventName}>
+                  {eventName}
+                </option>
+              ))}
+            </select>
+          </label>
           <Button
             variant="secondary"
             disabled={webhookLog.length === 0}
@@ -1259,11 +1337,11 @@ export default function SettingsTool() {
             Clear log
           </Button>
         </div>
-        {webhookLog.length === 0 ? (
+        {filteredWebhookLog.length === 0 ? (
           <p className="text-sm text-zinc-500">No webhook events logged yet.</p>
         ) : (
           <ol className="space-y-2">
-            {webhookLog.slice(0, 12).map((entry) => (
+            {filteredWebhookLog.slice(0, 12).map((entry) => (
               <li
                 key={entry.id}
                 className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-3 text-xs text-zinc-400"
@@ -1273,6 +1351,22 @@ export default function SettingsTool() {
                   {new Date(entry.timestamp).toLocaleString()}
                 </p>
                 <p>{entry.message ?? entry.url}</p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedWebhookLogId((previous) =>
+                      previous === entry.id ? null : entry.id,
+                    )
+                  }
+                  className="mt-2 text-zinc-400 hover:text-zinc-200"
+                >
+                  {expandedWebhookLogId === entry.id ? "Hide payload" : "Show payload"}
+                </button>
+                {expandedWebhookLogId === entry.id ? (
+                  <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded border border-zinc-800 bg-zinc-950 p-2 text-[11px] text-zinc-300">
+                    {JSON.stringify(entry.payload, null, 2)}
+                  </pre>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => {
@@ -1413,13 +1507,22 @@ export default function SettingsTool() {
       <ToolSection title="Local data">
         <p className="text-sm text-zinc-400">
           Backup includes history, settings, scene presets, user templates, location
-          blocklist, ComfyUI settings, gallery entries, and workflow JSON files (v2).
+          blocklist, ComfyUI settings, gallery entries, workflow JSON (v2), avoided
+          tokens, webhook log/settings, projects, and scheduled batch (v3).
         </p>
+        {backupReminder ? (
+          <p className="mb-3 text-sm text-amber-300/90">{backupReminder}</p>
+        ) : null}
         <div className="flex flex-wrap gap-2 text-sm">
           <button
             type="button"
             onClick={() => {
               downloadStudioBackup();
+              window.localStorage.setItem(
+                "studio-backup-last-export-v1",
+                String(Date.now()),
+              );
+              setBackupReminder(null);
               setStatus("Studio backup downloaded.");
             }}
             className="rounded-lg border border-zinc-700 px-4 py-2 text-zinc-200 hover:border-zinc-500"

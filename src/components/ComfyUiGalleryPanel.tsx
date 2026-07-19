@@ -44,6 +44,7 @@ import {
 import { downloadGalleryZipBundle } from "@/lib/gallery-zip-export";
 import { studioHistoryUrl } from "@/lib/prompt-lineage";
 import { requeueComfyJob, requeueComfyJobs } from "@/lib/comfyui-requeue";
+import { queueParamExperimentGrid } from "@/lib/param-experiment-grid";
 import {
   buildGalleryLightboxPlaylist,
   galleryEntryViewUrls,
@@ -97,6 +98,7 @@ export default function ComfyUiGalleryPanel({
     removeEntries,
     toggleFavorite,
     setFavorites,
+    setProjectIds,
     clearAll,
     refreshPending,
     primaryViewUrl,
@@ -120,24 +122,21 @@ export default function ComfyUiGalleryPanel({
   const [compareOpen, setCompareOpen] = useState(false);
   const [compareStatus, setCompareStatus] = useState<string | null>(null);
   const [paramAxis, setParamAxis] = useState<ParamExperimentAxis>("cfg");
-  const [projectFilter, setProjectFilter] = useState(false);
-  const activeProjectId = useMemo(
-    () => (projectFilter ? loadActiveProjectId() : undefined),
-    [projectFilter, entries],
-  );
-  const activeProjectName = useMemo(() => {
-    if (!activeProjectId) {
-      return null;
+  const [projectFilterId, setProjectFilterId] = useState<string>("");
+  const projects = useMemo(() => loadPromptProjects(), [entries]);
+  const resolvedProjectFilterId = useMemo(() => {
+    if (projectFilterId === "active") {
+      return loadActiveProjectId();
     }
-    return loadPromptProjects().find((project) => project.id === activeProjectId)?.name;
-  }, [activeProjectId]);
+    return projectFilterId || undefined;
+  }, [projectFilterId, entries]);
 
   useEffect(() => {
     setFilter((previous) => ({
       ...previous,
-      projectId: activeProjectId,
+      projectId: resolvedProjectFilterId,
     }));
-  }, [activeProjectId, setFilter]);
+  }, [resolvedProjectFilterId, setFilter]);
 
   const bulkEnabled = showFilters && !compact;
   const paginationEnabled = showFilters && !compact && !limit;
@@ -260,6 +259,86 @@ export default function ComfyUiGalleryPanel({
     () => visibleEntries.filter((entry) => selectedIds.includes(entry.id)),
     [selectedIds, visibleEntries],
   );
+
+  const reviewFocusIndex = useMemo(() => {
+    if (!filter.reviewMode || visibleEntries.length === 0) {
+      return 0;
+    }
+    const selectedIndex = visibleEntries.findIndex((entry) => selectedIds.includes(entry.id));
+    return selectedIndex >= 0 ? selectedIndex : 0;
+  }, [filter.reviewMode, visibleEntries, selectedIds]);
+
+  const reviewFocusEntry = visibleEntries[reviewFocusIndex] ?? null;
+
+  useEffect(() => {
+    if (!filter.reviewMode || !reviewFocusEntry) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (event.key >= "1" && event.key <= "5") {
+        const rating = Number(event.key) as 1 | 2 | 3 | 4 | 5;
+        setReviewRating(reviewFocusEntry.id, rating);
+        recordCatalogBiasFromPrompt(reviewFocusEntry.prompt, rating);
+        if (rating <= 2) {
+          recordAvoidedTokensFromPrompt(reviewFocusEntry.prompt);
+        }
+        void runAutoImproveOnRating(reviewFocusEntry, rating).then((message) => {
+          if (message) {
+            setRequeueStatus(message);
+          }
+        });
+        event.preventDefault();
+        return;
+      }
+
+      if (event.key === "f" || event.key === "F") {
+        toggleFavorite(reviewFocusEntry.id);
+        event.preventDefault();
+        return;
+      }
+
+      if (event.key === "n" || event.key === "N" || event.key === "ArrowRight") {
+        const nextIndex = Math.min(reviewFocusIndex + 1, visibleEntries.length - 1);
+        const nextEntry = visibleEntries[nextIndex];
+        if (nextEntry) {
+          setSelectedIds([nextEntry.id]);
+        }
+        event.preventDefault();
+        return;
+      }
+
+      if (event.key === "p" || event.key === "P" || event.key === "ArrowLeft") {
+        const previousIndex = Math.max(reviewFocusIndex - 1, 0);
+        const previousEntry = visibleEntries[previousIndex];
+        if (previousEntry) {
+          setSelectedIds([previousEntry.id]);
+        }
+        event.preventDefault();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    filter.reviewMode,
+    reviewFocusEntry,
+    reviewFocusIndex,
+    visibleEntries,
+    setReviewRating,
+    toggleFavorite,
+  ]);
 
   const toggleSelected = (id: string) => {
     setSelectedIds((previous) =>
@@ -408,14 +487,21 @@ export default function ComfyUiGalleryPanel({
             </label>
           )}
 
-          <label className="flex items-center gap-2 pb-1.5 text-xs text-zinc-300">
-            <input
-              type="checkbox"
-              checked={projectFilter}
-              onChange={(event) => setProjectFilter(event.target.checked)}
-              className="h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-violet-500"
-            />
-            Active project{activeProjectName ? `: ${activeProjectName}` : ""}
+          <label className="space-y-1 text-xs text-zinc-400">
+            Project
+            <select
+              value={projectFilterId}
+              onChange={(event) => setProjectFilterId(event.target.value)}
+              className="block rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+            >
+              <option value="">All projects</option>
+              <option value="active">Active project</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label className="flex items-center gap-2 pb-1.5 text-xs text-zinc-300">
@@ -453,6 +539,11 @@ export default function ComfyUiGalleryPanel({
             />
             Review mode
           </label>
+          {filter.reviewMode ? (
+            <p className="col-span-full text-[11px] text-zinc-500">
+              Shortcuts: 1–5 rate · F favorite · N/P or arrows navigate
+            </p>
+          ) : null}
 
           <label className="flex items-center gap-2 pb-1.5 text-xs text-zinc-300">
             <input
@@ -557,6 +648,60 @@ export default function ComfyUiGalleryPanel({
             />
             Select visible ({selectedIds.length})
           </label>
+          <button
+            type="button"
+            disabled={selectedIds.length === 0}
+            onClick={() => {
+              const projectId = loadActiveProjectId();
+              if (!projectId) {
+                setRequeueStatus("Set an active project in Studio first.");
+                return;
+              }
+              setProjectIds(selectedIds, projectId);
+              setRequeueStatus(`Assigned ${selectedIds.length} entries to active project.`);
+            }}
+            className="rounded-lg border border-zinc-700 px-2 py-1 text-zinc-300 hover:border-zinc-500 disabled:opacity-40"
+          >
+            Assign active project
+          </button>
+          {projects.length > 0 ? (
+            <label className="flex items-center gap-1 text-[11px] text-zinc-400">
+              Assign to
+              <select
+                id="gallery-assign-project"
+                defaultValue=""
+                className="rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-200"
+              >
+                <option value="" disabled>
+                  Project…
+                </option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={selectedIds.length === 0}
+                onClick={() => {
+                  const select = document.getElementById(
+                    "gallery-assign-project",
+                  ) as HTMLSelectElement | null;
+                  const projectId = select?.value;
+                  if (!projectId) {
+                    setRequeueStatus("Choose a project to assign.");
+                    return;
+                  }
+                  setProjectIds(selectedIds, projectId);
+                  setRequeueStatus(`Assigned ${selectedIds.length} entries.`);
+                }}
+                className="rounded-lg border border-zinc-700 px-2 py-1 text-zinc-300 hover:border-zinc-500 disabled:opacity-40"
+              >
+                Apply
+              </button>
+            </label>
+          ) : null}
           <button
             type="button"
             disabled={selectedIds.length === 0}
@@ -746,6 +891,29 @@ export default function ComfyUiGalleryPanel({
             onClick={() => {
               const entry = selectedEntries[0];
               if (!entry) return;
+              setRequeueStatus("Queueing CFG × steps grid…");
+              void queueParamExperimentGrid({
+                prompt: entry.prompt,
+                model: entry.model ?? "qwen-image-2512",
+                negativePrompt: entry.negativePrompt,
+                hints: entry.prompt.slice(0, 200),
+                baseParams: entry.queueParams,
+              }).then(({ queued, cells }) =>
+                setRequeueStatus(
+                  `Param grid queued ${queued} jobs · ${cells.slice(0, 4).join("; ")}${cells.length > 4 ? "…" : ""}`,
+                ),
+              );
+            }}
+            className="rounded-lg border border-violet-700/60 px-2 py-1 text-violet-200 hover:border-violet-500 disabled:opacity-40"
+          >
+            Param grid (CFG×steps)
+          </button>
+          <button
+            type="button"
+            disabled={selectedIds.length !== 1}
+            onClick={() => {
+              const entry = selectedEntries[0];
+              if (!entry) return;
               setRequeueStatus("Mutating winner…");
               void queueMutatedGalleryJobs({
                 entry,
@@ -882,6 +1050,11 @@ export default function ComfyUiGalleryPanel({
               });
             }
             setCompareStatus(`Winner: ${entry.model ?? "unknown"} · seed ${entry.queueParams?.seed ?? "?"}`);
+            void runAutoImproveOnRating(entry, 5).then((message) => {
+              if (message) {
+                setCompareStatus(message);
+              }
+            });
           }}
           onRate={(entryId, rating) => {
             setReviewRating(entryId, rating);

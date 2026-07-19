@@ -1,7 +1,8 @@
 import type { ComfyOutputImage } from "./comfyui-outputs";
 import { buildComfyViewPath } from "./comfyui-outputs";
 import type { WorkflowParamValues } from "./comfyui-config";
-import { filterBySemanticQuery, rankSimilarToCorpus } from "./semantic-search";
+import { filterBySemanticQuery } from "./semantic-search";
+import { orderGalleryBySimilarity } from "./gallery-similarity";
 
 export const COMFYUI_GALLERY_KEY = "comfyui-gallery-v1";
 export const COMFYUI_GALLERY_UPDATED_EVENT = "comfyui-gallery-updated";
@@ -290,12 +291,7 @@ export function filterComfyGalleryEntries(
   if (filter.similarToEntryId) {
     const reference = entries.find((entry) => entry.id === filter.similarToEntryId);
     if (reference) {
-      const ranked = rankSimilarToCorpus(
-        filtered.filter((entry) => entry.id !== reference.id),
-        reference.prompt,
-        (entry) => entry.prompt,
-      );
-      filtered = ranked.map((item) => item.item);
+      filtered = orderGalleryBySimilarity(filtered, reference);
     }
   }
 
@@ -516,6 +512,18 @@ export function removeComfyGalleryEntries(ids: string[]): void {
   }
   const idSet = new Set(ids);
   saveComfyGallery(loadComfyGallery().filter((entry) => !idSet.has(entry.id)));
+}
+
+export function setComfyGalleryProjectIds(
+  ids: string[],
+  projectId: string | undefined,
+): void {
+  const idSet = new Set(ids);
+  saveComfyGallery(
+    loadComfyGallery().map((entry) =>
+      idSet.has(entry.id) ? { ...entry, projectId: projectId || undefined } : entry,
+    ),
+  );
 }
 
 export function setComfyGalleryFavorites(ids: string[], favorite: boolean): void {

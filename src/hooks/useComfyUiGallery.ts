@@ -10,6 +10,7 @@ import {
   removeComfyGalleryEntries,
   removeComfyGalleryEntry,
   setComfyGalleryFavorites,
+  setComfyGalleryProjectIds,
   setGalleryReviewRating,
   toggleComfyGalleryFavorite,
   type ComfyGalleryEntry,
@@ -104,6 +105,14 @@ export function useComfyUiGallery(initialFilter?: ComfyGalleryFilter) {
     [refresh],
   );
 
+  const setProjectIds = useCallback(
+    (ids: string[], projectId: string | undefined) => {
+      setComfyGalleryProjectIds(ids, projectId);
+      refresh();
+    },
+    [refresh],
+  );
+
   return {
     mounted,
     entries,
@@ -116,6 +125,7 @@ export function useComfyUiGallery(initialFilter?: ComfyGalleryFilter) {
     removeEntries,
     toggleFavorite,
     setFavorites,
+    setProjectIds,
     clearAll,
     refreshPending,
     primaryViewUrl: galleryEntryPrimaryViewUrl,

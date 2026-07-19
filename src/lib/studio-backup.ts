@@ -40,6 +40,26 @@ import {
   saveComfyWorkflowPresets,
   type ComfyWorkflowPreset,
 } from "@/lib/comfyui-workflow-presets";
+import { exportAvoidedTokenList, saveAvoidedTokens } from "@/lib/avoided-tokens";
+import { WEBHOOK_LOG_KEY, loadWebhookLog, type WebhookLogEntry } from "@/lib/webhook-log";
+import {
+  ACTIVE_PROJECT_KEY,
+  loadActiveProjectId,
+  loadPromptProjects,
+  savePromptProjects,
+  setActiveProjectId,
+  type PromptProject,
+} from "@/lib/prompt-projects";
+import {
+  loadScheduledBatchConfig,
+  saveScheduledBatchConfig,
+  type ScheduledBatchConfig,
+} from "@/lib/scheduled-batch";
+import {
+  loadWebhookSettings,
+  saveWebhookSettings,
+  type WebhookSettings,
+} from "@/lib/webhook-settings";
 
 export type StudioBackupV1 = {
   version: 1;
@@ -59,11 +79,21 @@ export type StudioBackupV2 = Omit<StudioBackupV1, "version"> & {
   comfyWorkflowFiles?: ComfyWorkflowFile[];
 };
 
-export type StudioBackup = StudioBackupV1 | StudioBackupV2;
+export type StudioBackupV3 = Omit<StudioBackupV2, "version"> & {
+  version: 3;
+  avoidedTokens?: string[];
+  webhookLog?: WebhookLogEntry[];
+  promptProjects?: PromptProject[];
+  activeProjectId?: string;
+  scheduledBatch?: ScheduledBatchConfig;
+  webhookSettings?: WebhookSettings;
+};
 
-export function exportStudioBackup(): StudioBackupV2 {
+export type StudioBackup = StudioBackupV1 | StudioBackupV2 | StudioBackupV3;
+
+export function exportStudioBackup(): StudioBackupV3 {
   return {
-    version: 2,
+    version: 3,
     exportedAt: new Date().toISOString(),
     history: loadHistoryFromStorage(),
     locationBlocklist: loadLocationBlocklist(),
@@ -74,11 +104,17 @@ export function exportStudioBackup(): StudioBackupV2 {
     comfyGallery: loadComfyGallery(),
     comfyWorkflowPresets: loadComfyWorkflowPresets(),
     comfyWorkflowFiles: loadComfyWorkflowFiles(),
+    avoidedTokens: exportAvoidedTokenList(),
+    webhookLog: loadWebhookLog(),
+    promptProjects: loadPromptProjects(),
+    activeProjectId: loadActiveProjectId(),
+    scheduledBatch: loadScheduledBatchConfig(),
+    webhookSettings: loadWebhookSettings(),
   };
 }
 
 export function importStudioBackup(backup: StudioBackup): void {
-  if (backup.version !== 1 && backup.version !== 2) {
+  if (backup.version !== 1 && backup.version !== 2 && backup.version !== 3) {
     throw new Error("Unsupported backup version.");
   }
 
@@ -95,7 +131,7 @@ export function importStudioBackup(backup: StudioBackup): void {
     saveUserTemplates(backup.userTemplates);
   }
 
-  if (backup.version === 2) {
+  if (backup.version === 2 || backup.version === 3) {
     if (backup.comfyUiSettings) {
       saveComfyUiSettings(backup.comfyUiSettings);
     }
@@ -107,6 +143,29 @@ export function importStudioBackup(backup: StudioBackup): void {
     }
     if (backup.comfyWorkflowFiles) {
       saveComfyWorkflowFiles(backup.comfyWorkflowFiles);
+    }
+  }
+
+  if (backup.version === 3) {
+    if (backup.avoidedTokens) {
+      saveAvoidedTokens(backup.avoidedTokens);
+    }
+    if (backup.webhookLog) {
+      window.localStorage.setItem(WEBHOOK_LOG_KEY, JSON.stringify(backup.webhookLog));
+    }
+    if (backup.promptProjects) {
+      savePromptProjects(backup.promptProjects);
+    }
+    if (backup.activeProjectId) {
+      setActiveProjectId(backup.activeProjectId);
+    } else {
+      setActiveProjectId(undefined);
+    }
+    if (backup.scheduledBatch) {
+      saveScheduledBatchConfig(backup.scheduledBatch);
+    }
+    if (backup.webhookSettings) {
+      saveWebhookSettings(backup.webhookSettings);
     }
   }
 }
@@ -138,7 +197,7 @@ export function parseStudioBackupFile(raw: string): StudioBackup {
   const parsed = JSON.parse(raw) as StudioBackup;
   if (
     !parsed ||
-    (parsed.version !== 1 && parsed.version !== 2) ||
+    (parsed.version !== 1 && parsed.version !== 2 && parsed.version !== 3) ||
     !Array.isArray(parsed.history)
   ) {
     throw new Error("Invalid studio backup file.");

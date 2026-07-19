@@ -34,7 +34,7 @@ Video, audio, and 3D-only architectures (WAN, Hunyuan Video, Stable Audio, etc.)
 | **Background** | `/background` | Environment-only prompt with no people |
 | **Image → Prompt** | `/image-prompt` | Upload an image; vision LLM writes the prompt |
 | **Negative** | `/negative` | Sport-aware negative/preserve prompts for SD models |
-| **Studio** | `/studio` | History, iteration tree, projects, compare, portfolio, analytics, catalog, templates |
+| **Studio** | `/studio` | History, iteration tree, projects, compare, portfolio, campaign, analytics, catalog, templates |
 | **Lint** | `/lint` | Paste prompts for diagnostics, fix, compact, reformat |
 | **Refine** | `/refine` | Refine an existing prompt with image + intent hints |
 | **Settings** | `/settings` | LLM/ComfyUI health, webhooks, scheduled batch, backup/reset |
@@ -147,6 +147,18 @@ Legacy URLs `/duo`, `/compose`, and `/random-scene` redirect to the merged Chara
 - **Gallery handoffs** — send selected prompts to Topics batch or Variations matrix (`?matrix=1`)
 - **History/gallery export** — CSV and JSONL export from Studio and Gallery bulk actions
 - **Prompt matrix mode** — `/variations?matrix=1` for row×column variation grids
+- **Studio backup v3** — export/import avoided tokens, webhook log/settings, projects, scheduled batch
+- **Avoided tokens import/export** — JSON list management on Settings
+- **Gallery project filter & assign** — filter by project dropdown; bulk assign entries to projects
+- **Gallery param grid** — CFG × steps experiment grid from a selected entry
+- **Gallery review shortcuts** — 1–5 rate, F favorite, N/P navigate in review mode
+- **Compare pick-winner auto-improve** — high-rated winner triggers auto-improve loop
+- **Studio campaign runner** — batch random scenes or topics with optional ComfyUI queue
+- **Iteration branch diff** — compare parent/child prompts on Studio iteration tab
+- **History batch re-queue** — re-queue saved `batchPrompts` from batch ComfyUI sends
+- **Analytics live refresh** — Studio analytics updates when gallery ratings change
+- **Webhook log UI** — event filter and payload preview on Settings
+- **ComfyUI Topics Batch node** — `PromptToolsTopicsBatch` calls `/api/topics/batch`
 
 ## Prompt size limits (selected models)
 
