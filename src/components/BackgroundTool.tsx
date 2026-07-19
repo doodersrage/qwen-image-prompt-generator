@@ -117,6 +117,7 @@ export default function BackgroundTool() {
           shared={shared}
           onModelChange={(model) => updateShared({ model })}
           onDetailChange={(detail) => updateShared({ detail })}
+          onWorkflowPresetChange={(id) => updateShared({ selectedWorkflowFileId: id })}
           lockedLocation={shared.lockedLocation}
           onClearLockedLocation={() => updateShared({ lockedLocation: undefined })}
           autoFixRules={shared.autoFixRules !== false}

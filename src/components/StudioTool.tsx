@@ -579,6 +579,7 @@ export default function StudioTool() {
             shared={shared}
             onModelChange={(model) => updateShared({ model })}
             onDetailChange={(detail) => updateShared({ detail })}
+          onWorkflowPresetChange={(id) => updateShared({ selectedWorkflowFileId: id })}
           />
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -844,6 +845,7 @@ export default function StudioTool() {
             shared={shared}
             onModelChange={(model) => updateShared({ model })}
             onDetailChange={(detail) => updateShared({ detail })}
+          onWorkflowPresetChange={(id) => updateShared({ selectedWorkflowFileId: id })}
             lockedWardrobeId={shared.lockedWardrobeId}
             lockedLocation={shared.lockedLocation}
             lockedVariationSeed={shared.lockedVariationSeed}

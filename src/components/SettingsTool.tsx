@@ -20,16 +20,11 @@ import {
   saveComfyUiSettings,
 } from "@/lib/comfyui-settings";
 import {
-  deleteComfyWorkflowPreset,
-  loadComfyWorkflowPresets,
-  upsertComfyWorkflowPreset,
-  type ComfyWorkflowPreset,
-} from "@/lib/comfyui-workflow-presets";
-import {
   isComfyNotificationSupported,
   requestComfyNotificationPermission,
 } from "@/lib/comfyui-notifications";
 import ComfyUiGalleryPanel from "@/components/ComfyUiGalleryPanel";
+import ComfyWorkflowLibraryPanel from "@/components/ComfyWorkflowLibraryPanel";
 import WorkflowPreviewPanel from "@/components/WorkflowPreviewPanel";
 import { fetchWorkflowPreview } from "@/lib/comfyui-requeue";
 
@@ -66,8 +61,6 @@ export default function SettingsTool() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<string | null>(null);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
-  const [presetName, setPresetName] = useState("");
-  const [workflowPresets, setWorkflowPresets] = useState<ComfyWorkflowPreset[]>([]);
   const [notificationPermission, setNotificationPermission] = useState<
     NotificationPermission | "unsupported"
   >("default");
@@ -81,7 +74,6 @@ export default function SettingsTool() {
   > | null>(null);
 
   useEffect(() => {
-    setWorkflowPresets(loadComfyWorkflowPresets());
     if (isComfyNotificationSupported()) {
       setNotificationPermission(Notification.permission);
     } else {
@@ -180,61 +172,6 @@ export default function SettingsTool() {
     setStatus("ComfyUI settings reset to server defaults.");
     void refreshHealth();
   }, [refreshHealth, updateSettings]);
-
-  const handleSaveWorkflowPreset = useCallback(() => {
-    if (!settings.workflowJson?.trim()) {
-      setWorkflowError("Add a workflow JSON before saving a preset.");
-      return;
-    }
-
-    const validation = validateWorkflowJson(
-      settings.workflowJson,
-      placeholderTokensFromSettings(settings),
-    );
-    if (!validation.ok) {
-      setWorkflowError(validation.error ?? "Invalid workflow JSON.");
-      return;
-    }
-
-    const name = presetName.trim() || `Workflow ${new Date().toLocaleString()}`;
-    const saved = upsertComfyWorkflowPreset({
-      name,
-      apiUrl: settings.apiUrl,
-      workflowJson: settings.workflowJson,
-      positiveToken: settings.positiveToken,
-      negativeToken: settings.negativeToken,
-      queueParams: settings.queueParams,
-      customTokens: settings.customTokens,
-    });
-    setWorkflowPresets(loadComfyWorkflowPresets());
-    setPresetName("");
-    setWorkflowError(null);
-    setStatus(`Saved workflow preset “${saved.name}”.`);
-  }, [presetName, settings]);
-
-  const handleApplyWorkflowPreset = useCallback(
-    (preset: ComfyWorkflowPreset) => {
-      updateSettings({
-        useServerDefaults: false,
-        apiUrl: preset.apiUrl ?? "",
-        workflowJson: preset.workflowJson,
-        positiveToken: preset.positiveToken,
-        negativeToken: preset.negativeToken,
-        queueParams: preset.queueParams ?? settings.queueParams,
-        customTokens: preset.customTokens ?? settings.customTokens,
-      });
-      setWorkflowError(null);
-      setStatus(`Applied preset “${preset.name}”.`);
-      void refreshHealth();
-    },
-    [refreshHealth, settings.customTokens, settings.queueParams, updateSettings],
-  );
-
-  const handleDeleteWorkflowPreset = useCallback((id: string) => {
-    deleteComfyWorkflowPreset(id);
-    setWorkflowPresets(loadComfyWorkflowPresets());
-    setStatus("Workflow preset deleted.");
-  }, []);
 
   const handleEnableNotifications = useCallback(async () => {
     const permission = await requestComfyNotificationPermission();
@@ -382,16 +319,21 @@ export default function SettingsTool() {
         )}
       </section>
 
+      <ComfyWorkflowLibraryPanel
+        placeholderTokens={placeholderTokensFromSettings(settings)}
+        onStatus={setStatus}
+      />
+
       <section className="space-y-4 rounded-2xl border border-violet-900/40 bg-zinc-900/60 p-6">
         <div className="space-y-1">
-          <h2 className="text-sm font-medium text-zinc-200">ComfyUI queue settings</h2>
+          <h2 className="text-sm font-medium text-zinc-200">ComfyUI connection & injection</h2>
           <p className="text-sm text-zinc-400">
             Override the server&apos;s{" "}
             <code className="rounded bg-zinc-800 px-1 text-violet-300">
               COMFYUI_*
             </code>{" "}
-            env vars for this browser. Used by Send to ComfyUI, batch queue, and the
-            export pipeline.
+            env vars for this browser: API URL, placeholder tokens, queue params, and
+            an optional fallback workflow when no library file is selected.
           </p>
         </div>
 
@@ -560,10 +502,10 @@ export default function SettingsTool() {
           <div className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <label htmlFor="workflow-json" className="text-xs text-zinc-400">
-                Workflow JSON (ComfyUI API format)
+                Fallback workflow JSON (optional)
               </label>
               <label className="cursor-pointer text-xs text-violet-300 hover:text-violet-200">
-                Import .json
+                Import into editor
                 <input
                   type="file"
                   accept="application/json,.json"
@@ -578,6 +520,10 @@ export default function SettingsTool() {
                 />
               </label>
             </div>
+            <p className="text-xs text-zinc-600">
+              Used only when no workflow file is selected in the library above. For
+              multiple workflows, import them into the library instead.
+            </p>
             <textarea
               id="workflow-json"
               value={settings.workflowJson ?? ""}
@@ -642,68 +588,6 @@ export default function SettingsTool() {
               error={previewError}
               preview={workflowPreview}
             />
-          </div>
-
-          <div className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
-            <div className="space-y-1">
-              <h3 className="text-xs font-medium uppercase tracking-wide text-zinc-400">
-                Named workflow presets
-              </h3>
-              <p className="text-xs text-zinc-500">
-                Save the current URL, workflow JSON, tokens, and queue params for quick
-                recall.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <input
-                value={presetName}
-                onChange={(event) => setPresetName(event.target.value)}
-                placeholder="Preset name"
-                className="min-w-[12rem] flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
-              />
-              <button
-                type="button"
-                onClick={handleSaveWorkflowPreset}
-                className="rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:border-zinc-500"
-              >
-                Save preset
-              </button>
-            </div>
-            {workflowPresets.length > 0 ? (
-              <ul className="space-y-2">
-                {workflowPresets.map((preset) => (
-                  <li
-                    key={preset.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-800 px-3 py-2"
-                  >
-                    <div>
-                      <p className="text-sm text-zinc-200">{preset.name}</p>
-                      <p className="text-xs text-zinc-600">
-                        {new Date(preset.createdAt).toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="flex gap-2 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => handleApplyWorkflowPreset(preset)}
-                        className="text-violet-300 hover:text-violet-200"
-                      >
-                        Apply
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteWorkflowPreset(preset.id)}
-                        className="text-zinc-500 hover:text-rose-300"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-xs text-zinc-600">No saved presets yet.</p>
-            )}
           </div>
         </div>
 
@@ -782,7 +666,7 @@ export default function SettingsTool() {
         <h2 className="text-sm font-medium text-zinc-200">Local data</h2>
         <p className="text-sm text-zinc-400">
           Backup includes history, settings, scene presets, user templates, location
-          blocklist, ComfyUI settings, gallery entries, and workflow presets (v2).
+          blocklist, ComfyUI settings, gallery entries, and workflow JSON files (v2).
         </p>
         <div className="flex flex-wrap gap-2 text-sm">
           <button

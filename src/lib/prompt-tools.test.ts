@@ -29,6 +29,12 @@ import { previewWorkflowInjection } from "./comfyui-workflow-preview";
 import { validateWorkflowJson, stripEmptyComfyUiRuntime, injectWorkflowPlaceholders } from "./comfyui-config";
 import { extractImagesFromOutputs } from "./comfyui-outputs";
 import { filterComfyGalleryEntries } from "./comfyui-gallery";
+import { listServerWorkflowPaths } from "./comfyui-server-workflows";
+import {
+  DEFAULT_COMFYUI_SETTINGS,
+  comfyUiSettingsToRuntime,
+} from "./comfyui-settings";
+import type { ComfyWorkflowFile } from "./comfyui-workflow-files";
 import { createScenePreset } from "./scene-presets";
 import { createUserTemplate } from "./user-templates";
 import { diffPromptWords } from "./prompt-diff";
@@ -656,6 +662,45 @@ describe("comfyui workflow config", () => {
     assert.deepEqual(stripEmptyComfyUiRuntime({ apiUrl: "http://127.0.0.1:8188" }), {
       apiUrl: "http://127.0.0.1:8188",
     });
+  });
+});
+
+describe("comfyui workflow files", () => {
+  it("builds runtime with only workflow json from a selected file", () => {
+    const file: ComfyWorkflowFile = {
+      id: "flux-main",
+      name: "Flux main",
+      createdAt: 1,
+      workflowJson: '{"6":{"inputs":{"text":"{{POSITIVE}}"}}}',
+    };
+
+    const runtime = comfyUiSettingsToRuntime({
+      ...DEFAULT_COMFYUI_SETTINGS,
+      useServerDefaults: false,
+      workflowJson: file.workflowJson,
+    });
+
+    assert.equal(runtime?.workflowJson, file.workflowJson);
+    assert.match(runtime?.workflowJson ?? "", /POSITIVE/);
+  });
+
+  it("keeps server defaults when no workflow file is selected", () => {
+    assert.equal(
+      comfyUiSettingsToRuntime({
+        ...DEFAULT_COMFYUI_SETTINGS,
+        useServerDefaults: true,
+      }),
+      undefined,
+    );
+  });
+
+  it("lists server workflow paths from env", () => {
+    process.env.COMFYUI_WORKFLOW_PATHS = "workflows/a.json,workflows/b.json";
+    assert.deepEqual(listServerWorkflowPaths(), [
+      "workflows/a.json",
+      "workflows/b.json",
+    ]);
+    delete process.env.COMFYUI_WORKFLOW_PATHS;
   });
 });
 

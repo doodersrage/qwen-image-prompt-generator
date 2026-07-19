@@ -17,6 +17,10 @@ export type SharedToolSettings = {
   lockedVariationSeed?: string;
   /** Auto-apply rule fixes when lint reports errors after generation. */
   autoFixRules?: boolean;
+  /** Saved workflow assignment used when queueing from generators. */
+  selectedWorkflowFileId?: string;
+  /** @deprecated Use selectedWorkflowFileId */
+  selectedWorkflowPresetId?: string;
 };
 
 export type GenerateToolCache = {

@@ -164,6 +164,7 @@ export default function ComposeTool() {
           shared={shared}
           onModelChange={(model) => updateShared({ model })}
           onDetailChange={(detail) => updateShared({ detail })}
+          onWorkflowPresetChange={(id) => updateShared({ selectedWorkflowFileId: id })}
           showWardrobeOption
           alwaysIncludeClothing={shared.alwaysIncludeClothing !== false}
           onAlwaysIncludeClothingChange={(value) =>

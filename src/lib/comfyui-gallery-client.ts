@@ -4,7 +4,8 @@ import {
   type ComfyGalleryEntry,
 } from "./comfyui-gallery";
 import { notifyComfyJobComplete } from "./comfyui-notifications";
-import { comfyUiSettingsToRuntime, loadComfyUiSettings } from "./comfyui-settings";
+import { resolveComfyUiRuntime } from "./comfyui-runtime";
+import { loadComfyUiSettings } from "./comfyui-settings";
 
 export type RegisterComfyGalleryJobInput = {
   promptId: string;
@@ -30,7 +31,7 @@ export function registerComfyGalleryJob(
 }
 
 export async function fetchComfyJobStatus(promptId: string) {
-  const runtime = comfyUiSettingsToRuntime(loadComfyUiSettings());
+  const runtime = resolveComfyUiRuntime();
   const params = new URLSearchParams({ promptId });
   if (runtime?.apiUrl) {
     params.set("comfyUrl", runtime.apiUrl);

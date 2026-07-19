@@ -72,6 +72,10 @@ export function upsertComfyWorkflowPreset(
   return next;
 }
 
+export function findComfyWorkflowPreset(id: string): ComfyWorkflowPreset | undefined {
+  return loadComfyWorkflowPresets().find((entry) => entry.id === id);
+}
+
 export function deleteComfyWorkflowPreset(id: string): void {
   saveComfyWorkflowPresets(loadComfyWorkflowPresets().filter((entry) => entry.id !== id));
 }

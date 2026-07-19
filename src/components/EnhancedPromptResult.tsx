@@ -3,6 +3,8 @@
 import PromptResultPanel from "@/components/PromptResultPanel";
 import PromptDiagnosticsPanel from "@/components/PromptDiagnosticsPanel";
 import WorkflowPreviewPanel from "@/components/WorkflowPreviewPanel";
+import ComfyWorkflowSelector from "@/components/ComfyWorkflowSelector";
+import { useComfyWorkflowSelection } from "@/hooks/useComfyWorkflowSelection";
 import type { GenerationDiagnostics } from "@/lib/generation-diagnostics";
 
 type EnhancedPromptResultProps = {
@@ -94,6 +96,9 @@ export default function EnhancedPromptResult({
   batchOutputs,
   ...panelProps
 }: EnhancedPromptResultProps) {
+  const workflowSelection = useComfyWorkflowSelection();
+  const showComfyActions = Boolean(onSendComfyUi || onQueueBatchComfyUi || onPreviewWorkflow);
+
   if (!panelProps.output && (!batchOutputs || batchOutputs.length === 0)) {
     return null;
   }
@@ -134,6 +139,16 @@ export default function EnhancedPromptResult({
               </button>
             )}
           </div>
+          {workflowSelection.mounted && (
+            <ComfyWorkflowSelector
+              compact
+              selectedId={workflowSelection.selectedId}
+              defaultLabel={workflowSelection.defaultLabel}
+              localFiles={workflowSelection.localFiles}
+              serverFiles={workflowSelection.serverFiles}
+              onChange={workflowSelection.setSelectedId}
+            />
+          )}
           <div className="space-y-3">
             {batchOutputs.map((prompt, index) => (
               <pre
@@ -162,6 +177,18 @@ export default function EnhancedPromptResult({
         onExportSidecar ||
         onPreviewWorkflow) &&
         panelProps.output && (
+        <div className="space-y-3">
+          {showComfyActions && workflowSelection.mounted && (
+            <ComfyWorkflowSelector
+              compact
+              selectedId={workflowSelection.selectedId}
+              defaultLabel={workflowSelection.defaultLabel}
+              localFiles={workflowSelection.localFiles}
+              serverFiles={workflowSelection.serverFiles}
+              onChange={workflowSelection.setSelectedId}
+              helpText="Workflow JSON used by Send to ComfyUI and Preview workflow below."
+            />
+          )}
         <div className="flex flex-wrap gap-2">
           {onRunPipeline && (
             <button
@@ -256,6 +283,7 @@ export default function EnhancedPromptResult({
               Export sidecar JSON
             </button>
           )}
+        </div>
         </div>
       )}
 

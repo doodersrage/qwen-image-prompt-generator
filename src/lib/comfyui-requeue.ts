@@ -5,10 +5,7 @@ import {
   pollComfyGalleryJob,
   registerComfyGalleryJob,
 } from "./comfyui-gallery-client";
-import {
-  comfyUiSettingsToRuntime,
-  loadComfyUiSettings,
-} from "./comfyui-settings";
+import { resolveComfyUiRuntime } from "./comfyui-runtime";
 import { modelUsesNegativePrompt } from "./prompt-pair";
 
 type WorkflowPreviewResponse = {
@@ -77,7 +74,7 @@ export async function requeueComfyJob(
     }
   }
 
-  const runtime = comfyUiSettingsToRuntime(loadComfyUiSettings());
+  const runtime = resolveComfyUiRuntime();
   const response = await fetch("/api/comfyui", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -140,7 +137,7 @@ export async function fetchWorkflowPreview(input: {
   workflowJson?: string;
   truncated?: boolean;
 }> {
-  const runtime = comfyUiSettingsToRuntime(loadComfyUiSettings());
+  const runtime = resolveComfyUiRuntime();
   const response = await fetch("/api/comfyui/preview", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

@@ -31,6 +31,11 @@ import {
   type ComfyUiSettings,
 } from "@/lib/comfyui-settings";
 import {
+  loadComfyWorkflowFiles,
+  saveComfyWorkflowFiles,
+  type ComfyWorkflowFile,
+} from "@/lib/comfyui-workflow-files";
+import {
   loadComfyWorkflowPresets,
   saveComfyWorkflowPresets,
   type ComfyWorkflowPreset,
@@ -51,6 +56,7 @@ export type StudioBackupV2 = Omit<StudioBackupV1, "version"> & {
   comfyUiSettings?: ComfyUiSettings;
   comfyGallery?: ComfyGalleryEntry[];
   comfyWorkflowPresets?: ComfyWorkflowPreset[];
+  comfyWorkflowFiles?: ComfyWorkflowFile[];
 };
 
 export type StudioBackup = StudioBackupV1 | StudioBackupV2;
@@ -67,6 +73,7 @@ export function exportStudioBackup(): StudioBackupV2 {
     comfyUiSettings: loadComfyUiSettings(),
     comfyGallery: loadComfyGallery(),
     comfyWorkflowPresets: loadComfyWorkflowPresets(),
+    comfyWorkflowFiles: loadComfyWorkflowFiles(),
   };
 }
 
@@ -97,6 +104,9 @@ export function importStudioBackup(backup: StudioBackup): void {
     }
     if (backup.comfyWorkflowPresets) {
       saveComfyWorkflowPresets(backup.comfyWorkflowPresets);
+    }
+    if (backup.comfyWorkflowFiles) {
+      saveComfyWorkflowFiles(backup.comfyWorkflowFiles);
     }
   }
 }

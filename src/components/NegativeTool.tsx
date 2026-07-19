@@ -96,6 +96,7 @@ export default function NegativeTool() {
           shared={shared}
           onModelChange={(model) => updateShared({ model })}
           onDetailChange={(detail) => updateShared({ detail })}
+          onWorkflowPresetChange={(id) => updateShared({ selectedWorkflowFileId: id })}
           detailHelp="Detail level affects compact-to-limit when trimming long negatives."
         />
 

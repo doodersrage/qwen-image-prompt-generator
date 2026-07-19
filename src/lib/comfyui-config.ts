@@ -22,6 +22,8 @@ export type CustomWorkflowToken = {
 export type ComfyUiRuntimeConfig = {
   apiUrl?: string;
   workflowJson?: string;
+  /** Server-side workflow file path from COMFYUI_WORKFLOW_DIR / COMFYUI_WORKFLOW_PATHS. */
+  workflowFileId?: string;
   positiveToken?: string;
   negativeToken?: string;
   queueParams?: WorkflowParamValues;
@@ -364,6 +366,7 @@ export function stripEmptyComfyUiRuntime(
   const cleaned: ComfyUiRuntimeConfig = {
     apiUrl: runtime.apiUrl?.trim() || undefined,
     workflowJson: runtime.workflowJson?.trim() || undefined,
+    workflowFileId: runtime.workflowFileId?.trim() || undefined,
     positiveToken: runtime.positiveToken?.trim() || undefined,
     negativeToken: runtime.negativeToken?.trim() || undefined,
     queueParams: runtime.queueParams,
@@ -387,6 +390,7 @@ export function stripEmptyComfyUiRuntime(
   const result: ComfyUiRuntimeConfig = {};
   if (cleaned.apiUrl) result.apiUrl = cleaned.apiUrl;
   if (cleaned.workflowJson) result.workflowJson = cleaned.workflowJson;
+  if (cleaned.workflowFileId) result.workflowFileId = cleaned.workflowFileId;
   if (cleaned.positiveToken) result.positiveToken = cleaned.positiveToken;
   if (cleaned.negativeToken) result.negativeToken = cleaned.negativeToken;
   if (cleaned.queueParams) result.queueParams = cleaned.queueParams;

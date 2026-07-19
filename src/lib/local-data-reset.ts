@@ -12,9 +12,10 @@ import {
 import { COMFYUI_SETTINGS_KEY, resetComfyUiSettings } from "./comfyui-settings";
 import { clearComfyGallery, COMFYUI_GALLERY_KEY } from "./comfyui-gallery";
 import {
-  COMFY_WORKFLOW_PRESETS_KEY,
-  saveComfyWorkflowPresets,
-} from "./comfyui-workflow-presets";
+  COMFY_WORKFLOW_FILES_KEY,
+  saveComfyWorkflowFiles,
+} from "./comfyui-workflow-files";
+import { COMFY_WORKFLOW_PRESETS_KEY } from "./comfyui-workflow-presets";
 import { USER_TEMPLATES_KEY } from "./user-templates";
 
 export function clearAllLocalPromptData(): void {
@@ -29,7 +30,7 @@ export function clearAllLocalPromptData(): void {
   saveSettingsCache({ shared: DEFAULT_SHARED_SETTINGS, tools: {} });
   resetComfyUiSettings();
   clearComfyGallery();
-  saveComfyWorkflowPresets([]);
+  saveComfyWorkflowFiles([]);
 }
 
 export const LOCAL_DATA_KEYS = [
@@ -40,5 +41,6 @@ export const LOCAL_DATA_KEYS = [
   LOCATION_BLOCKLIST_KEY,
   COMFYUI_SETTINGS_KEY,
   COMFYUI_GALLERY_KEY,
+  COMFY_WORKFLOW_FILES_KEY,
   COMFY_WORKFLOW_PRESETS_KEY,
 ] as const;

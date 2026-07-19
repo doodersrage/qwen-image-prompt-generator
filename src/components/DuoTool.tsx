@@ -224,6 +224,7 @@ export default function DuoTool() {
           shared={shared}
           onModelChange={(model) => updateShared({ model })}
           onDetailChange={(detail) => updateShared({ detail })}
+          onWorkflowPresetChange={(id) => updateShared({ selectedWorkflowFileId: id })}
           detailHelp="Action mode works best with Rich detail for sport scenes."
           showWardrobeOption
           alwaysIncludeClothing={shared.alwaysIncludeClothing !== false}

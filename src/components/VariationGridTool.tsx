@@ -12,10 +12,7 @@ import {
   registerComfyGalleryJob,
 } from "@/lib/comfyui-gallery-client";
 import { modelUsesNegativePrompt } from "@/lib/prompt-pair";
-import {
-  comfyUiSettingsToRuntime,
-  loadComfyUiSettings,
-} from "@/lib/comfyui-settings";
+import { resolveComfyUiRuntime } from "@/lib/comfyui-runtime";
 import { DEFAULT_VARIATIONS_TOOL_CACHE } from "@/lib/settings-cache";
 import SidecarImportButton from "@/components/SidecarImportButton";
 import { variationStrengthLabel } from "@/lib/variation-settings";
@@ -169,7 +166,7 @@ export default function VariationGridTool() {
         negativePrompt = negativeData.prompt;
       }
 
-      const runtime = comfyUiSettingsToRuntime(loadComfyUiSettings());
+      const runtime = resolveComfyUiRuntime();
       const response = await fetch("/api/comfyui", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -246,6 +243,7 @@ export default function VariationGridTool() {
         shared={shared}
         onModelChange={(model) => updateShared({ model })}
         onDetailChange={(detail) => updateShared({ detail })}
+          onWorkflowPresetChange={(id) => updateShared({ selectedWorkflowFileId: id })}
         lockedWardrobeId={shared.lockedWardrobeId}
         lockedLocation={shared.lockedLocation}
         lockedVariationSeed={shared.lockedVariationSeed}

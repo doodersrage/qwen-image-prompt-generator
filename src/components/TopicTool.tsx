@@ -11,10 +11,7 @@ import { DEFAULT_TOPIC_TOOL_CACHE } from "@/lib/settings-cache";
 import type { BatchFromTopicsItem } from "@/lib/batch-from-topics";
 import type { TopicGenerateResult } from "@/lib/specialized/types";
 import { variationStrengthLabel } from "@/lib/variation-settings";
-import {
-  comfyUiSettingsToRuntime,
-  loadComfyUiSettings,
-} from "@/lib/comfyui-settings";
+import { resolveComfyUiRuntime } from "@/lib/comfyui-runtime";
 import {
   pollComfyGalleryJob,
   registerComfyGalleryJob,
@@ -138,7 +135,7 @@ export default function TopicTool() {
 
     setComfyBatchStatus("Queueing batch to ComfyUI…");
     try {
-      const runtime = comfyUiSettingsToRuntime(loadComfyUiSettings());
+      const runtime = resolveComfyUiRuntime();
       const response = await fetch("/api/comfyui", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -214,6 +211,7 @@ export default function TopicTool() {
           shared={shared}
           onModelChange={(model) => updateShared({ model })}
           onDetailChange={(detail) => updateShared({ detail })}
+          onWorkflowPresetChange={(id) => updateShared({ selectedWorkflowFileId: id })}
           lockedWardrobeId={shared.lockedWardrobeId}
           lockedLocation={shared.lockedLocation}
           lockedVariationSeed={shared.lockedVariationSeed}

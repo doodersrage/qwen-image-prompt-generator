@@ -14,10 +14,7 @@ import {
 import type { ComfyImageModel } from "@/lib/comfy-models";
 import type { DetailLevel } from "@/lib/detail-level";
 import type { AthleticSport } from "@/lib/athletic-sport-profiles";
-import {
-  comfyUiSettingsToRuntime,
-  loadComfyUiSettings,
-} from "@/lib/comfyui-settings";
+import { resolveComfyUiRuntime } from "@/lib/comfyui-runtime";
 import {
   galleryEntryPrimaryViewUrl,
 } from "@/lib/comfyui-gallery";
@@ -304,7 +301,7 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
           negativePrompt = (await fetchNegative(sport)) ?? undefined;
         }
 
-        const runtime = comfyUiSettingsToRuntime(loadComfyUiSettings());
+        const runtime = resolveComfyUiRuntime();
         const response = await fetch("/api/comfyui", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -394,7 +391,7 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
           negativePrompt = (await fetchNegative(sport)) ?? undefined;
         }
 
-        const runtime = comfyUiSettingsToRuntime(loadComfyUiSettings());
+        const runtime = resolveComfyUiRuntime();
         const response = await fetch("/api/comfyui", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

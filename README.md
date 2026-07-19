@@ -67,15 +67,15 @@ Video, audio, and 3D-only architectures (WAN, Hunyuan Video, Stable Audio, etc.)
 - **Prompt sidecar** — download JSON sidecar (prompt, model, diagnostics, seed) from result panels or Studio history
 - **ComfyUI job status** — polls ComfyUI history after queue and shows pending/running/completed in the UI
 - **ComfyUI gallery** — `/gallery` stores queued jobs locally and displays output images when ComfyUI finishes; previews appear inline on result panels
-- **ComfyUI workflow params** — `{{SEED}}`, `{{WIDTH}}`, `{{HEIGHT}}`, `{{CFG}}`, `{{STEPS}}` placeholders plus queue defaults in Settings; named workflow presets for quick recall
+- **ComfyUI workflow params** — `{{SEED}}`, `{{WIDTH}}`, `{{HEIGHT}}`, `{{CFG}}`, `{{STEPS}}` placeholders plus queue defaults in Settings; **multiple workflow JSON files** (import in Settings or configure `COMFYUI_WORKFLOW_DIR` / `COMFYUI_WORKFLOW_PATHS` on the server) with a selector next to **Send to ComfyUI**
 - **Gallery tools** — favorites, status/tool filters, image download, and sidecar JSON export per entry
 - **Variation grid** — `/variations` rolls N prompt variations and batch-queues them with unique ComfyUI seeds
 - **Completion notifications** — optional browser notifications when ComfyUI jobs finish (Settings)
-- **Backup v2** — export/import includes ComfyUI settings, gallery entries, and workflow presets
+- **Backup v2** — export/import includes ComfyUI settings, gallery entries, and imported workflow JSON files
 - **Re-queue** — gallery entries and Studio history can be sent to ComfyUI again (same params or new seed)
 - **Sidecar import** — load sidecar JSON on Gallery, Lint, and Variations to restore prompts or re-queue
 - **Workflow dry-run** — preview injected workflow JSON in Settings (and from Lint result panels) before queueing
-- **Custom workflow tokens** — user-defined placeholders like `{{CHECKPOINT}}` and `{{LORA}}` with values in Settings and workflow presets
+- **Custom workflow tokens** — user-defined placeholders like `{{CHECKPOINT}}` and `{{LORA}}` with values in Settings
 - **Gallery bulk actions** — multi-select on `/gallery` for favorite, delete, re-queue, sidecar bundle export, and sequential image download
 - **Preview workflow everywhere** — all ComfyUI-enabled result panels include a dry-run preview button
 - **Generate sport presets** — sport preset chips on Generate (positive mode) with shareable scene URLs

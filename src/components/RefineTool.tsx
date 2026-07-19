@@ -131,6 +131,7 @@ export default function RefineTool() {
           shared={shared}
           onModelChange={(model) => updateShared({ model })}
           onDetailChange={(detail) => updateShared({ detail })}
+          onWorkflowPresetChange={(id) => updateShared({ selectedWorkflowFileId: id })}
         />
 
         <div className="space-y-3 border-t border-zinc-800 pt-4">

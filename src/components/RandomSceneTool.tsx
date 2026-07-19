@@ -136,6 +136,7 @@ export default function RandomSceneTool() {
           shared={shared}
           onModelChange={(model) => updateShared({ model })}
           onDetailChange={(detail) => updateShared({ detail })}
+          onWorkflowPresetChange={(id) => updateShared({ selectedWorkflowFileId: id })}
           showWardrobeOption={toolSettings.includePeople !== false}
           alwaysIncludeClothing={shared.alwaysIncludeClothing !== false}
           onAlwaysIncludeClothingChange={(value) =>

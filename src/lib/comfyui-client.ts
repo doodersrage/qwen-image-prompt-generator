@@ -11,6 +11,7 @@ import {
   resolveCustomWorkflowTokens,
   type WorkflowParamValues,
 } from "./comfyui-config";
+import { loadServerWorkflowJson } from "./comfyui-server-workflows";
 
 export type ComfyQueueRequest = {
   prompt: string;
@@ -66,7 +67,10 @@ export function resolveComfyUiConfig(
   runtime?: ComfyUiRuntimeConfig,
 ): ResolvedComfyUiConfig {
   const clientWorkflow = parseWorkflowJson(runtime?.workflowJson);
-  const envWorkflow = loadWorkflowFromEnv();
+  const selectedServerWorkflow = runtime?.workflowFileId
+    ? loadServerWorkflowJson(runtime.workflowFileId)
+    : null;
+  const envWorkflow = selectedServerWorkflow ?? loadWorkflowFromEnv();
   const workflow = clientWorkflow ?? envWorkflow;
 
   return {
@@ -78,7 +82,11 @@ export function resolveComfyUiConfig(
       process.env.COMFYUI_PROMPT_NODE_ID?.trim() ||
       undefined,
     legacyNegativeNodeId: process.env.COMFYUI_NEGATIVE_NODE_ID?.trim() || undefined,
-    workflowSource: clientWorkflow ? "client" : envWorkflow ? "env" : "none",
+    workflowSource: clientWorkflow
+      ? "client"
+      : envWorkflow
+        ? "env"
+        : "none",
   };
 }
 

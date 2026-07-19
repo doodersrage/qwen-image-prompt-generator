@@ -178,6 +178,7 @@ export default function CharacterTool() {
           shared={shared}
           onModelChange={(model) => updateShared({ model })}
           onDetailChange={(detail) => updateShared({ detail })}
+          onWorkflowPresetChange={(id) => updateShared({ selectedWorkflowFileId: id })}
           detailHelp="Rich detail recommended for character sheets and portraits."
           showWardrobeOption
           alwaysIncludeClothing={shared.alwaysIncludeClothing !== false}

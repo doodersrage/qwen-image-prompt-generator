@@ -1,6 +1,8 @@
 "use client";
 
 import ModelSelector from "@/components/ModelSelector";
+import ComfyWorkflowSelector from "@/components/ComfyWorkflowSelector";
+import { useComfyWorkflowSelection } from "@/hooks/useComfyWorkflowSelection";
 import type { DetailLevel } from "@/lib/detail-level";
 import { getDetailLimits } from "@/lib/detail-level";
 import { getComfyModelDefinition } from "@/lib/comfy-models";
@@ -24,6 +26,7 @@ type SharedToolControlsProps = {
   onClearLockedVariationSeed?: () => void;
   autoFixRules?: boolean;
   onAutoFixRulesChange?: (value: boolean) => void;
+  onWorkflowPresetChange?: (fileId: string | undefined) => void;
 };
 
 export default function SharedToolControls({
@@ -44,9 +47,11 @@ export default function SharedToolControls({
   onClearLockedVariationSeed,
   autoFixRules = true,
   onAutoFixRulesChange,
+  onWorkflowPresetChange,
 }: SharedToolControlsProps) {
   const selectedModel = getComfyModelDefinition(shared.model);
   const activeLimits = getDetailLimits(shared.detail, shared.model);
+  const workflowSelection = useComfyWorkflowSelection();
 
   return (
     <div className="space-y-4">
@@ -91,6 +96,23 @@ export default function SharedToolControls({
           ))}
         </div>
       </div>
+
+      {onWorkflowPresetChange && workflowSelection.mounted && (
+        <ComfyWorkflowSelector
+          selectedId={
+            shared.selectedWorkflowFileId ??
+            shared.selectedWorkflowPresetId ??
+            workflowSelection.selectedId
+          }
+          defaultLabel={workflowSelection.defaultLabel}
+          localFiles={workflowSelection.localFiles}
+          serverFiles={workflowSelection.serverFiles}
+          onChange={(fileId) => {
+            workflowSelection.setSelectedId(fileId);
+            onWorkflowPresetChange(fileId);
+          }}
+        />
+      )}
 
       {showWardrobeOption && onAlwaysIncludeClothingChange && (
         <div className="space-y-3 border-t border-zinc-800 pt-4">
