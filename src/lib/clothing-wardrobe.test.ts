@@ -24,8 +24,10 @@ import {
 } from "./clothing-tags";
 import { summaryMatchesSportWardrobe } from "./athletic-sport-profiles";
 import {
+  inferCyclingDiscipline,
   resolveAthleticSportForWardrobe,
   stripForeignSportActionsFromPrompt,
+  stripIncompatibleCyclingVenuesFromPrompt,
 } from "./athletic-sport-actions";
 import { buildRandomCharacterSeed } from "./specialized/scene-pools";
 import { pickRandomCharacterOutfit } from "./clothing-catalog";
@@ -262,6 +264,68 @@ describe("character action seeds", () => {
     assert.match(seed, /wheel-to-wheel competition/i);
     assert.doesNotMatch(seed, /solo subject only/i);
     assert.doesNotMatch(seed, /javelin/i);
+  });
+
+  it("keeps gravel cyclists off velodromes in action seeds", () => {
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      const { seed, location } = buildRandomCharacterSeed(
+        "gravel cyclist on a long adventure ride",
+        "action",
+      );
+      assert.doesNotMatch(seed, /velodrome|banking turn|indoor track/i);
+      assert.doesNotMatch(location, /velodrome|banking turn|indoor track/i);
+      assert.match(
+        seed,
+        /gravel|fire road|doubletrack|rail-trail|unpaved|dirt|loose/i,
+      );
+    }
+  });
+
+  it("strips velodrome language from gravel cyclist prompts", () => {
+    const polluted =
+      "A gravel cyclist charges through a velodrome banking turn under harsh floodlights, wearing a dusty kit.";
+    const cleaned = stripIncompatibleCyclingVenuesFromPrompt(
+      polluted,
+      "gravel cyclist adventure ride",
+    );
+    assert.doesNotMatch(cleaned, /velodrome|banking turn/i);
+    assert.match(cleaned, /gravel|fire road|loose/i);
+  });
+
+  it("detects gravel discipline before generic road cycling", () => {
+    assert.equal(inferCyclingDiscipline("gravel cyclist"), "gravel");
+    assert.equal(inferCyclingDiscipline("road cyclist criterium"), "road");
+    assert.equal(inferCyclingDiscipline("velodrome sprint"), "track");
+    assert.equal(inferCyclingDiscipline("mountain biker on singletrack"), "mountain");
+    assert.equal(inferCyclingDiscipline("downhill rider"), "mountain");
+    assert.equal(inferCyclingDiscipline("generic cyclist sprint"), "road");
+  });
+
+  it("keeps mountain bikers on trail terrain in action seeds", () => {
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      const { seed, location } = buildRandomCharacterSeed(
+        "mountain biker charging a rocky singletrack descent",
+        "action",
+      );
+      assert.doesNotMatch(seed, /velodrome|city circuit|cobblestone race/i);
+      assert.doesNotMatch(location, /velodrome|city circuit|cobblestone race/i);
+      assert.match(seed, /singletrack|trail|rocky|alpine|flow trail|pine-needle/i);
+    }
+  });
+
+  it("keeps road cyclists on paved race terrain in action seeds", () => {
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      const { seed, location } = buildRandomCharacterSeed(
+        "road cyclist in a criterium sprint",
+        "action",
+      );
+      assert.doesNotMatch(seed, /singletrack|fire road|doubletrack|velodrome/i);
+      assert.doesNotMatch(location, /singletrack|fire road|doubletrack|velodrome/i);
+      assert.match(
+        seed,
+        /city circuit|cobblestone|open road|road bike|racing bicycle|wet pavement/i,
+      );
+    }
   });
 
   it("strips foreign actions from basketball prompts", () => {

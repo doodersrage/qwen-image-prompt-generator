@@ -301,7 +301,7 @@ export function mergeGenerateWardrobeIntoPrompt(
     assignments[0]?.filters.athleticSport ?? null,
   );
   const working = sport
-    ? stripIncompatibleSportActionsFromPrompt(prompt, sport)
+    ? stripIncompatibleSportActionsFromPrompt(prompt, sport, intentHints)
     : prompt;
   const refreshed = assignments.map((assignment) =>
     refreshSportWardrobeAssignmentForPrompt(working, assignment, intentHints),

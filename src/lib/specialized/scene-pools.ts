@@ -9,6 +9,7 @@ import { inferAthleticSport } from "../athletic-sport-profiles";
 import {
   buildSportPoseIncompatibilities,
   getSportDuoCompetitionLine,
+  pickSceneLocationForSportHints,
   pickSportActionPose,
   pickSportActionSetting,
 } from "../athletic-sport-actions";
@@ -642,7 +643,7 @@ const ACTION_POSE_INCOMPATIBILITIES = buildSportPoseIncompatibilities();
 function pickCharacterActionPose(hints?: string): string {
   const sport = inferAthleticSport(hints);
   if (sport) {
-    return pickSportActionPose(sport);
+    return pickSportActionPose(sport, hints);
   }
 
   const normalized = hints?.trim() ?? "";
@@ -857,14 +858,17 @@ export function pickSceneLocation(exclude: readonly string[] = []): string {
   return composeSceneLocation();
 }
 
-function pickCharacterSetting(exclude: readonly string[] = []): string {
+function pickCharacterSetting(
+  exclude: readonly string[] = [],
+  hints?: string,
+): string {
   const roll = randomInt(100);
 
   if (roll < 12) {
     return pick(CHARACTER_SETTINGS);
   }
 
-  return `${pickSceneLocation(exclude)}${SOLO_LOCATION_SUFFIX}`;
+  return `${pickSceneLocationForSportHints(hints, () => pickSceneLocation(exclude))}${SOLO_LOCATION_SUFFIX}`;
 }
 
 function pickCharacterActionSetting(
@@ -873,7 +877,7 @@ function pickCharacterActionSetting(
 ): string {
   const sport = inferAthleticSport(hints);
   if (sport) {
-    return pickSportActionSetting(sport);
+    return pickSportActionSetting(sport, hints);
   }
 
   const roll = randomInt(100);
@@ -886,7 +890,7 @@ function pickCharacterActionSetting(
     return `${composeActionLocation()}, empty except the moving subject`;
   }
 
-  return `${pickSceneLocation(exclude)}, empty except the moving subject`;
+  return `${pickSceneLocationForSportHints(hints, () => pickSceneLocation(exclude))}, empty except the moving subject`;
 }
 
 const MOODS = [
@@ -1071,6 +1075,7 @@ function pickCharacterEnvironmentSetting(
   location: string | null,
   portraitStyle: "portrait" | "full-body" | "action",
   recentLocations: readonly string[] = [],
+  hints?: string,
 ): string {
   if (location) {
     return portraitStyle === "action"
@@ -1079,8 +1084,8 @@ function pickCharacterEnvironmentSetting(
   }
 
   return portraitStyle === "action"
-    ? pickCharacterActionSetting(undefined, recentLocations)
-    : pickCharacterSetting(recentLocations);
+    ? pickCharacterActionSetting(hints, recentLocations)
+    : pickCharacterSetting(recentLocations, hints);
 }
 
 export type RandomSeedBundle = {
@@ -1151,12 +1156,6 @@ export function buildRandomCharacterSeed(
 ): RandomSeedBundle {
   const settingHint = parseSettingHint(hints);
   const explicitLocation = settingHint.location;
-  const environmentSetting = pickCharacterEnvironmentSetting(
-    explicitLocation,
-    portraitStyle,
-    recentLocations,
-  );
-  const location = explicitLocation || environmentSetting.replace(SOLO_LOCATION_SUFFIX, "").replace(/,\s*empty except the moving subject$/i, "").trim();
   const people = parsePeopleConstraint(hints ?? "");
   const duoSeed = (people.count ?? 0) >= 2;
   const parts = duoSeed
@@ -1170,14 +1169,22 @@ export function buildRandomCharacterSeed(
       ]
     : ["solo subject only, no other people anywhere"];
 
+  let location = explicitLocation ?? "";
+
   if (portraitStyle === "action") {
+    const actionSetting = pickCharacterActionSetting(hints, recentLocations);
     parts.push(
-      pickCharacterActionSetting(hints, recentLocations),
+      actionSetting,
       pickCharacterActionPose(hints),
       pick(CHARACTER_ACTION_MOTION),
       pick(LIGHTING),
       pick(MOODS),
     );
+    if (!explicitLocation) {
+      location = actionSetting
+        .replace(/,\s*empty except the moving subject$/i, "")
+        .trim();
+    }
     const intentSport = inferAthleticSport(hints);
     if (duoSeed && intentSport) {
       const competitionLine = getSportDuoCompetitionLine(intentSport, hints ?? "");
@@ -1186,12 +1193,21 @@ export function buildRandomCharacterSeed(
       }
     }
   } else {
+    const environmentSetting = pickCharacterEnvironmentSetting(
+      explicitLocation,
+      portraitStyle,
+      recentLocations,
+      hints,
+    );
     parts.push(
       environmentSetting,
       pick(CHARACTER_POSES),
       pick(LIGHTING),
       pick(MOODS),
     );
+    if (!explicitLocation) {
+      location = environmentSetting.replace(SOLO_LOCATION_SUFFIX, "").trim();
+    }
   }
 
   if (!hints?.trim()) {

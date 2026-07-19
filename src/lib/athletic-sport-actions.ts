@@ -69,12 +69,12 @@ const SPORT_ACTION_BUNDLES: Record<AthleticSport, SportActionBundle> = {
       "sprinting out of the saddle on a road bike with aerodynamic forward lean",
       "leaning hard into a wet corner on a racing bicycle, tires spraying water",
       "driving the pedals in a fierce criterium sprint shoulder to shoulder",
-      "charging through a velodrome banking turn at full speed",
+      "charging through a cobblestone sector with mud spray flying from tires",
     ],
     settings: [
       "a rain-soaked city circuit with wet pavement and neon reflections",
-      "a velodrome banking turn under harsh floodlights",
       "a cobblestone race sector with mud spray flying from tires",
+      "an open road descent with yellow-orange sunset light and long shadows",
     ],
     foreignTokens: [
       "javelin",
@@ -314,6 +314,191 @@ const SPORT_ACTION_BUNDLES: Record<AthleticSport, SportActionBundle> = {
   },
 };
 
+export type CyclingDiscipline = "road" | "gravel" | "mountain" | "cyclocross" | "track";
+
+type CyclingDisciplineOverlay = {
+  instructions: string;
+  rewriteDefault: string;
+  poses: readonly string[];
+  settings: readonly string[];
+  forbiddenVenueTokens: readonly string[];
+};
+
+const CYCLING_DISCIPLINE_OVERLAYS: Record<CyclingDiscipline, CyclingDisciplineOverlay> = {
+  road: {
+    instructions:
+      "Show road cycling race action: pedaling hard, out-of-saddle sprinting, leaning through a corner, or drafting wheel-to-wheel on paved roads. Every subject stays on a road racing bicycle—no singletrack, gravel sectors, or velodrome unless explicitly requested.",
+    rewriteDefault: "sprinting on a road racing bicycle",
+    poses: SPORT_ACTION_BUNDLES.cycling.poses,
+    settings: SPORT_ACTION_BUNDLES.cycling.settings,
+    forbiddenVenueTokens: [
+      "singletrack",
+      "fire road",
+      "doubletrack",
+      "rail-trail",
+      "velodrome",
+      "banking turn",
+      "cyclocross barrier",
+      "trail drop",
+    ],
+  },
+  gravel: {
+    instructions:
+      "Show gravel cycling action on unpaved roads, fire roads, rail-trails, or wide dirt sectors with a gravel or adventure bike. Loose surface, kicked-up dust or stones—never a velodrome, indoor track, or banked oval.",
+    rewriteDefault: "powering through a loose gravel sector on a fire road",
+    poses: [
+      "powering through a loose gravel sector with stones kicking up from knob tires",
+      "railroading a fast descent on a dusty fire road with relaxed grip on the drops",
+      "charging through a muddy doubletrack with spray from wide tires",
+      "climbing a steep gravel pitch out of the saddle with the rear wheel biting for traction",
+    ],
+    settings: [
+      "a remote fire road climb through pine forest with dust hanging in the air",
+      "a wide gravel descent across open prairie with golden-hour side light",
+      "a muddy doubletrack sector after rain with tire tracks in wet earth",
+      "a crushed-stone rail-trail with long shadows and scattered scrub",
+      "a rolling gravel road bend with loose chip and crosswind",
+    ],
+    forbiddenVenueTokens: [
+      "velodrome",
+      "banking turn",
+      "indoor track",
+      "track cycling",
+      "banked oval",
+    ],
+  },
+  mountain: {
+    instructions:
+      "Show mountain biking action on singletrack, trail, or technical terrain with a mountain bike. Roots, rocks, and body English—never a velodrome or road race circuit.",
+    rewriteDefault: "carving through a rooty singletrack descent",
+    poses: [
+      "carving through a rooty singletrack descent with the bike leaned into a berm",
+      "launching off a small trail drop with knees bent and eyes forward",
+      "climbing a rocky switchback with weight shifted over the front wheel",
+    ],
+    settings: [
+      "a pine-needle singletrack with dappled forest light",
+      "a rocky alpine trail with exposed ridgeline views",
+      "a red-dirt flow trail with berms and kicked-up dust",
+    ],
+    forbiddenVenueTokens: [
+      "velodrome",
+      "banking turn",
+      "indoor track",
+      "city circuit",
+      "cobblestone race",
+      "wet pavement and neon",
+      "peloton",
+    ],
+  },
+  cyclocross: {
+    instructions:
+      "Show cyclocross action: running barriers, shouldering the bike, or sprinting through mud in a cross race. Grass, mud, and barriers—never a velodrome.",
+    rewriteDefault: "shouldering the bike over a muddy cyclocross barrier",
+    poses: [
+      "shouldering the bike over a wooden barrier with mud on the calves",
+      "sprinting through a muddy grass straight with knobby tires spraying turf",
+      "remounting at speed after a sand pit run-up",
+    ],
+    settings: [
+      "a muddy cyclocross course with tape-lined corners and parked fans",
+      "a grass-and-sand pit sector with churned ruts and cold overcast light",
+      "a wooded cross loop with fallen leaves and slick off-camber turns",
+    ],
+    forbiddenVenueTokens: ["velodrome", "banking turn", "indoor track"],
+  },
+  track: {
+    instructions:
+      "Show track cycling action on a velodrome or indoor banked oval: high-speed pedaling, sprint lines, or pursuit pace. Stay on the track—no gravel roads or trail terrain.",
+    rewriteDefault: "charging through a velodrome banking turn at full speed",
+    poses: [
+      "charging through a velodrome banking turn at full speed",
+      "accelerating from the sprinter's line with fixed-gear drive",
+      "riding the black line in a tight pursuit formation",
+    ],
+    settings: [
+      "a velodrome banking turn under harsh floodlights",
+      "an indoor track oval with polished boards and echoing crowd blur",
+      "a steep-banked velodrome straight with long afternoon shadows",
+    ],
+    forbiddenVenueTokens: ["gravel road", "fire road", "singletrack", "doubletrack"],
+  },
+};
+
+const CYCLING_DISCIPLINE_HINTS: ReadonlyArray<{
+  discipline: CyclingDiscipline;
+  pattern: RegExp;
+}> = [
+  { discipline: "gravel", pattern: /\b(?:gravel(?:\s+(?:bike|bicycle|cyclist|cyclists|ride|riding|race|racing|grind|event|road|path|course|sector|adventure))?|graveler|bikepacking|dirt road|fire road|unpaved|all-road|adventure bike)\b/i },
+  { discipline: "track", pattern: /\b(?:velodrome|track cycling|indoor track|keirin|omnium|sprint cycling on track)\b/i },
+  {
+    discipline: "mountain",
+    pattern:
+      /\b(?:mountain bike|mountain biker|mountain biking|mtb\b|mtb rider|downhill(?:\s+bike|\s+biking|\s+rider)?|enduro(?:\s+bike|\s+biking|\s+rider)?|singletrack|trail bike|trail rider|trail riding|xc bike|cross-country bike|cross country bike)\b/i,
+  },
+  { discipline: "cyclocross", pattern: /\b(?:cyclocross|cx race|cross racing)\b/i },
+  {
+    discipline: "road",
+    pattern:
+      /\b(?:road bike|road bicycle|road cyclist|road cycling|road race|criterium|crit race|peloton|grand tour|tour de|time trial|aero bars|drop bars on pavement)\b/i,
+  },
+];
+
+export function inferCyclingDiscipline(hints?: string): CyclingDiscipline {
+  const text = hints ?? "";
+  for (const entry of CYCLING_DISCIPLINE_HINTS) {
+    if (entry.pattern.test(text)) {
+      return entry.discipline;
+    }
+  }
+  return "road";
+}
+
+function cyclingDisciplineOverlay(hints?: string): CyclingDisciplineOverlay {
+  return CYCLING_DISCIPLINE_OVERLAYS[inferCyclingDiscipline(hints)];
+}
+
+function locationConflictsWithCyclingDiscipline(
+  location: string,
+  discipline: CyclingDiscipline,
+): boolean {
+  const lower = location.toLowerCase();
+  return CYCLING_DISCIPLINE_OVERLAYS[discipline].forbiddenVenueTokens.some((token) =>
+    lower.includes(token.toLowerCase()),
+  );
+}
+
+export function stripIncompatibleCyclingVenuesFromPrompt(
+  prompt: string,
+  hints?: string,
+): string {
+  if (inferAthleticSport(hints) !== "cycling") {
+    return prompt;
+  }
+
+  const overlay = cyclingDisciplineOverlay(hints);
+  if (overlay.forbiddenVenueTokens.length === 0) {
+    return prompt;
+  }
+
+  const escaped = overlay.forbiddenVenueTokens.map((token) =>
+    token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+"),
+  );
+  const pattern = new RegExp(`\\b(?:${escaped.join("|")})\\b`, "i");
+  if (!pattern.test(prompt)) {
+    return prompt;
+  }
+
+  return prompt
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) =>
+      pattern.test(sentence) ? overlay.rewriteDefault : sentence,
+    )
+    .join(" ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function bundleFor(sport: AthleticSport | null | undefined): SportActionBundle | null {
   if (!sport) {
     return null;
@@ -344,12 +529,21 @@ export function getSportActionBundle(
   return bundleFor(sport);
 }
 
-export function getSportActionInstructions(sport: AthleticSport): string {
+export function getSportActionInstructions(
+  sport: AthleticSport,
+  hints?: string,
+): string {
+  if (sport === "cycling") {
+    return cyclingDisciplineOverlay(hints).instructions;
+  }
   return SPORT_ACTION_BUNDLES[sport]?.instructions ?? "";
 }
 
-export function formatSportActionInstructions(sport: AthleticSport): string {
-  const instructions = getSportActionInstructions(sport);
+export function formatSportActionInstructions(
+  sport: AthleticSport,
+  hints?: string,
+): string {
+  const instructions = getSportActionInstructions(sport, hints);
   if (!instructions.trim()) {
     return "";
   }
@@ -387,7 +581,12 @@ export function getSportDuoCompetitionLine(
   return DUO_COMPETITION_LINES[sport] ?? null;
 }
 
-export function pickSportActionPose(sport: AthleticSport): string {
+export function pickSportActionPose(sport: AthleticSport, hints?: string): string {
+  if (sport === "cycling") {
+    const poses = cyclingDisciplineOverlay(hints).poses;
+    return poses[Math.floor(Math.random() * poses.length)]!;
+  }
+
   const poses = SPORT_ACTION_BUNDLES[sport]?.poses ?? [];
   if (poses.length === 0) {
     return "committed mid-action with readable momentum";
@@ -395,12 +594,38 @@ export function pickSportActionPose(sport: AthleticSport): string {
   return poses[Math.floor(Math.random() * poses.length)]!;
 }
 
-export function pickSportActionSetting(sport: AthleticSport): string {
+export function pickSportActionSetting(sport: AthleticSport, hints?: string): string {
+  if (sport === "cycling") {
+    const settings = cyclingDisciplineOverlay(hints).settings;
+    return settings[Math.floor(Math.random() * settings.length)]!;
+  }
+
   const settings = SPORT_ACTION_BUNDLES[sport]?.settings ?? [];
   if (settings.length === 0) {
     return "an athletic venue matched to the sport";
   }
   return settings[Math.floor(Math.random() * settings.length)]!;
+}
+
+export function pickSceneLocationForSportHints(
+  hints: string | undefined,
+  pickLocation: () => string,
+  maxAttempts = 20,
+): string {
+  const sport = inferAthleticSport(hints);
+  if (sport !== "cycling") {
+    return pickLocation();
+  }
+
+  const discipline = inferCyclingDiscipline(hints);
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const candidate = pickLocation();
+    if (!locationConflictsWithCyclingDiscipline(candidate, discipline)) {
+      return candidate;
+    }
+  }
+
+  return pickSportActionSetting("cycling", hints);
 }
 
 export function buildSportPoseIncompatibilities(): ReadonlyArray<{
@@ -436,51 +661,53 @@ export function promptContainsForeignSportActions(
 export function stripForeignSportActionsFromPrompt(
   prompt: string,
   sport: AthleticSport,
+  hints?: string,
 ): string {
   const bundle = SPORT_ACTION_BUNDLES[sport];
   const pattern = foreignActionPattern(sport);
-  if (!bundle || !pattern || !pattern.test(prompt)) {
-    return prompt;
-  }
+  let working = prompt;
+  if (bundle && pattern && pattern.test(prompt)) {
+    const globalPattern = new RegExp(
+      pattern.source,
+      pattern.flags.includes("i") ? "gi" : "g",
+    );
 
-  const globalPattern = new RegExp(
-    pattern.source,
-    pattern.flags.includes("i") ? "gi" : "g",
-  );
-
-  return prompt
-    .split(/(?<=[.!?])\s+/)
-    .map((sentence) => {
-      if (!pattern.test(sentence)) {
-        return sentence;
-      }
-
-      const wardrobeMatch = sentence.match(
-        /\b(?:,\s*)?(?:wearing|dressed in|outfit includes)\b[^]*$/i,
-      );
-      if (wardrobeMatch?.index != null) {
-        const wardrobeTail = wardrobeMatch[0];
-        const actionPart = sentence
-          .slice(0, wardrobeMatch.index)
-          .replace(globalPattern, " ")
-          .replace(/\s{2,}/g, " ")
-          .replace(/\s+,/g, ",")
-          .trim();
-
-        if (!actionPart || pattern.test(actionPart)) {
-          const lead = bundle.rewriteDefault.replace(/\.$/, "");
-          const tail = wardrobeTail.replace(/^,\s*/, "");
-          return `${lead}, ${tail}`;
+    working = prompt
+      .split(/(?<=[.!?])\s+/)
+      .map((sentence) => {
+        if (!pattern.test(sentence)) {
+          return sentence;
         }
 
-        return `${actionPart}${wardrobeTail.startsWith(",") ? wardrobeTail : `, ${wardrobeTail}`}`;
-      }
+        const wardrobeMatch = sentence.match(
+          /\b(?:,\s*)?(?:wearing|dressed in|outfit includes)\b[^]*$/i,
+        );
+        if (wardrobeMatch?.index != null) {
+          const wardrobeTail = wardrobeMatch[0];
+          const actionPart = sentence
+            .slice(0, wardrobeMatch.index)
+            .replace(globalPattern, " ")
+            .replace(/\s{2,}/g, " ")
+            .replace(/\s+,/g, ",")
+            .trim();
 
-      return bundle.rewriteDefault;
-    })
-    .join(" ")
-    .replace(/\s{2,}/g, " ")
-    .trim();
+          if (!actionPart || pattern.test(actionPart)) {
+            const lead = bundle.rewriteDefault.replace(/\.$/, "");
+            const tail = wardrobeTail.replace(/^,\s*/, "");
+            return `${lead}, ${tail}`;
+          }
+
+          return `${actionPart}${wardrobeTail.startsWith(",") ? wardrobeTail : `, ${wardrobeTail}`}`;
+        }
+
+        return bundle.rewriteDefault;
+      })
+      .join(" ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+
+  return stripIncompatibleCyclingVenuesFromPrompt(working, hints);
 }
 
 export function sentenceContainsExcludedWardrobe(
@@ -515,8 +742,9 @@ export function resolveAthleticSportForWardrobe(
 export function stripIncompatibleSportActionsFromPrompt(
   prompt: string,
   sport: AthleticSport,
+  hints?: string,
 ): string {
-  return stripForeignSportActionsFromPrompt(prompt, sport);
+  return stripForeignSportActionsFromPrompt(prompt, sport, hints);
 }
 
 export function promptContainsIncompatibleSportAction(

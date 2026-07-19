@@ -84,7 +84,7 @@ export const ATHLETIC_SPORT_PROFILES: readonly AthleticSportProfile[] = [
   },
   {
     id: "cycling",
-    hint: /\b(?:cyclist(?!-toned)|cyclists|cycling|cyclocross|mountain bike|mountain biker|road bike|road cycling|bicycle race|bike race|cycling race|peloton|bicyclist|cycling jersey|bib shorts|cycling kit|cycling bib|criterium|bike leg|cycle sprint|grand tour|tour de|cycling shoes|cycle shoes|on (?:a |the |her |his |their )?bike|on bicycle|leaning forward on the bike|handlebars|pedaling|pedals)\b/i,
+    hint: /\b(?:cyclist(?!-toned)|cyclists|cycling|gravel(?:\s+(?:bike|bicycle|cyclist|cyclists|ride|racing))?|bikepacking|cyclocross|mountain bike|mountain biker|road bike|road cycling|bicycle race|bike race|cycling race|peloton|bicyclist|cycling jersey|bib shorts|cycling kit|cycling bib|criterium|bike leg|cycle sprint|grand tour|tour de|cycling shoes|cycle shoes|on (?:a |the |her |his |their )?bike|on bicycle|leaning forward on the bike|handlebars|pedaling|pedals)\b/i,
     outfitLabels: [/\bcycling kit\b/i],
     topLabels: [/\bcycling jersey\b/i],
     bottomLabels: [/\b(?:cycling bib shorts|bib shorts)\b/i],

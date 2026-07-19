@@ -154,7 +154,7 @@ export async function generateCharacterPrompt(
   const actionBlock =
     portraitStyle === "action" && !hasPoseAnchor(presetOptions)
       ? intentSport
-        ? `\n${formatSportActionInstructions(intentSport)}`
+        ? `\n${formatSportActionInstructions(intentSport, intentCorpus)}`
         : `\n${ACTION_INSTRUCTIONS}`
       : "";
 
@@ -239,7 +239,11 @@ ${soloRules}
       result = mergeCharacterPresetsIntoPrompt(result, presetOptions);
     }
     if (intentSport) {
-      result = stripIncompatibleSportActionsFromPrompt(result, intentSport);
+      result = stripIncompatibleSportActionsFromPrompt(
+        result,
+        intentSport,
+        intentCorpus,
+      );
     }
     return result;
   };
@@ -267,7 +271,7 @@ ${soloRules}
       : `Framing: ${portraitStyle}`,
     portraitStyle === "action" && !hasPoseAnchor(presetOptions)
       ? intentSport
-        ? getSportActionInstructions(intentSport)
+        ? getSportActionInstructions(intentSport, intentCorpus)
         : "The character must be actively doing something—not posing for a portrait."
       : null,
     duoMode
@@ -313,7 +317,11 @@ ${soloRules}
         );
       }
       if (intentSport) {
-        prompt = stripIncompatibleSportActionsFromPrompt(prompt, intentSport);
+        prompt = stripIncompatibleSportActionsFromPrompt(
+          prompt,
+          intentSport,
+          intentCorpus,
+        );
       }
       return prompt;
     },
