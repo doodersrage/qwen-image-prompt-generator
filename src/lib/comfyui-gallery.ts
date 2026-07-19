@@ -45,6 +45,7 @@ export type ComfyGalleryEntry = {
   comfyUrl: string;
   status: ComfyGalleryJobStatus;
   statusMessage?: string;
+  queuePosition?: number | null;
   queuedAt: number;
   completedAt?: number;
   favorite?: boolean;
@@ -251,7 +252,7 @@ export function updateComfyGalleryByPromptId(
   patch: Partial<
     Pick<
       ComfyGalleryEntry,
-      "status" | "statusMessage" | "completedAt" | "images" | "comfyUrl" | "favorite"
+      "status" | "statusMessage" | "queuePosition" | "completedAt" | "images" | "comfyUrl" | "favorite"
     >
   >,
 ): ComfyGalleryEntry | null {

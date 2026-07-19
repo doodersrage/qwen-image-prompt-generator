@@ -26,6 +26,7 @@ import {
 } from "./scene-preset-url";
 import { buildPromptSidecar, parsePromptSidecar } from "./prompt-sidecar";
 import { previewWorkflowInjection } from "./comfyui-workflow-preview";
+import { formatComfyUiJobStatusLine } from "./comfyui-job-status";
 import { validateWorkflowJson, stripEmptyComfyUiRuntime, injectWorkflowPlaceholders } from "./comfyui-config";
 import { extractImagesFromOutputs } from "./comfyui-outputs";
 import {
@@ -843,6 +844,30 @@ describe("comfyui gallery outputs", () => {
       sortGalleryEntries(entries, "favorites-first").map((entry) => entry.id),
       ["2", "1"],
     );
+  });
+});
+
+describe("comfyui job status formatting", () => {
+  it("includes queue position while pending", () => {
+    const line = formatComfyUiJobStatusLine({
+      promptId: "abc-123",
+      status: "pending",
+      queuePosition: 2,
+      statusMessage: "Queue position 2",
+      comfyUrl: "http://127.0.0.1:8188",
+    });
+    assert.match(line, /Queued · position 2/);
+    assert.match(line, /prompt_id abc-123/);
+  });
+
+  it("labels running jobs", () => {
+    const line = formatComfyUiJobStatusLine({
+      promptId: "abc-123",
+      status: "running",
+      queuePosition: 0,
+      statusMessage: "Running now",
+    });
+    assert.match(line, /Running in ComfyUI/);
   });
 });
 

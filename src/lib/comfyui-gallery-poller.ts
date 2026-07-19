@@ -30,6 +30,7 @@ export function scheduleComfyGalleryPoll(
   const promise = pollComfyGalleryJob(trimmed, options?.onStatus, {
     ...options,
     comfyUrl: options?.comfyUrl ?? entry?.comfyUrl,
+    onJobUpdate: options?.onJobUpdate,
   }).finally(() => {
     activePolls.delete(trimmed);
   });

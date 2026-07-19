@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import ImageLightbox, { type ImageLightboxState } from "@/components/ui/ImageLightbox";
+import { ComfyUiGalleryJobPlaceholder } from "@/components/ui/ComfyUiJobStatusPanel";
 import { Button } from "@/components/ui/Button";
 import { useComfyUiGallery } from "@/hooks/useComfyUiGallery";
 import {
@@ -623,13 +624,13 @@ function GalleryCard({
               className="h-full w-full object-cover"
             />
           </button>
+        ) : entry.status === "pending" || entry.status === "running" ? (
+          <ComfyUiGalleryJobPlaceholder entry={entry} />
         ) : (
           <div className="flex h-full items-center justify-center px-4 text-center text-xs text-zinc-500">
-            {entry.status === "pending" || entry.status === "running"
-              ? `${entry.status}…`
-              : entry.status === "error"
-                ? entry.statusMessage ?? "Generation failed"
-                : "No image output"}
+            {entry.status === "error"
+              ? entry.statusMessage ?? "Generation failed"
+              : "No image output"}
           </div>
         )}
         {selectable && (
@@ -662,6 +663,13 @@ function GalleryCard({
             <p className={`text-xs font-medium uppercase tracking-wide ${statusColor}`}>
               {entry.status}
             </p>
+            {(entry.status === "pending" || entry.status === "running") &&
+            entry.queuePosition != null &&
+            entry.queuePosition > 0 ? (
+              <p className="mt-0.5 text-[11px] text-zinc-500">
+                Queue position {entry.queuePosition}
+              </p>
+            ) : null}
             {promptExpanded ? (
               <div className="mt-2 space-y-3">
                 <div>

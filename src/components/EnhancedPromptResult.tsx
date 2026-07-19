@@ -17,6 +17,12 @@ import {
   type BatchPromptCrossLinks,
 } from "@/components/ui/BatchPromptCard";
 import ImageLightbox, { type ImageLightboxState } from "@/components/ui/ImageLightbox";
+import ComfyUiJobStatusPanel from "@/components/ui/ComfyUiJobStatusPanel";
+import type { ComfyUiJobTrackerState } from "@/lib/comfyui-job-status";
+import {
+  formatComfyUiJobStatusLine,
+  isComfyUiJobProcessing,
+} from "@/lib/comfyui-job-status";
 import type { GenerationDiagnostics } from "@/lib/generation-diagnostics";
 
 export type BatchPromptItem = {
@@ -91,6 +97,7 @@ type EnhancedPromptResultProps = {
   pipelineStatus?: string | null;
   preDiagnostics?: GenerationDiagnostics | null;
   comfyUiStatus?: string | null;
+  comfyUiJob?: ComfyUiJobTrackerState | null;
   comfyUiPreviewUrl?: string | null;
   historySaved?: boolean;
   pairCopied?: boolean;
@@ -125,6 +132,7 @@ export default function EnhancedPromptResult({
   pipelineStatus,
   preDiagnostics,
   comfyUiStatus,
+  comfyUiJob,
   comfyUiPreviewUrl,
   historySaved,
   pairCopied,
@@ -382,13 +390,18 @@ export default function EnhancedPromptResult({
         </ToolSection>
       )}
 
+      {comfyUiJob && (isComfyUiJobProcessing(comfyUiJob) || comfyUiJob.status === "error") ? (
+        <ComfyUiJobStatusPanel job={comfyUiJob} />
+      ) : null}
+
       {(fixStatus ||
         comfyUiStatus ||
         compactStatus ||
         reformatStatus ||
         pipelineStatus ||
         previewStatus ||
-        variationSeed) && (
+        variationSeed) &&
+        !(comfyUiJob && isComfyUiJobProcessing(comfyUiJob)) && (
         <p className="type-caption">
           {pipelineStatus ||
             previewStatus ||

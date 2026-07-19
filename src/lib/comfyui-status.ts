@@ -12,6 +12,8 @@ export type ComfyPromptStatus = {
   statusMessage?: string;
   comfyUrl: string;
   images?: ComfyOutputImage[];
+  /** 1-based pending queue position; 0 means running now. */
+  queuePosition?: number | null;
 };
 
 type ComfyHistoryEntry = {
@@ -21,6 +23,78 @@ type ComfyHistoryEntry = {
   };
   outputs?: Record<string, unknown>;
 };
+
+type ComfyQueueResponse = {
+  queue_running?: Array<[number, string, ...unknown[]]>;
+  queue_pending?: Array<[number, string, ...unknown[]]>;
+};
+
+type QueueContext = {
+  isRunning: boolean;
+  pendingPosition: number | null;
+};
+
+async function resolveQueueContext(
+  promptId: string,
+  comfyUrl: string,
+): Promise<QueueContext | null> {
+  try {
+    const response = await fetch(`${comfyUrl}/queue`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json()) as ComfyQueueResponse;
+    const running = payload.queue_running ?? [];
+    const pending = payload.queue_pending ?? [];
+
+    if (running.some((item) => item[1] === promptId)) {
+      return { isRunning: true, pendingPosition: null };
+    }
+
+    const pendingIndex = pending.findIndex((item) => item[1] === promptId);
+    if (pendingIndex >= 0) {
+      return { isRunning: false, pendingPosition: pendingIndex + 1 };
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function applyQueueContext(
+  status: ComfyPromptStatus,
+  queue: QueueContext | null,
+): ComfyPromptStatus {
+  if (!queue || status.status === "completed" || status.status === "error") {
+    return status;
+  }
+
+  if (queue.isRunning) {
+    return {
+      ...status,
+      status: "running",
+      queuePosition: 0,
+      statusMessage: status.statusMessage?.trim()
+        ? status.statusMessage
+        : "Running now",
+    };
+  }
+
+  if (queue.pendingPosition != null) {
+    return {
+      ...status,
+      status: "pending",
+      queuePosition: queue.pendingPosition,
+      statusMessage: `Queue position ${queue.pendingPosition}`,
+    };
+  }
+
+  return status;
+}
 
 export async function getComfyUiPromptStatus(
   promptId: string,
@@ -36,7 +110,9 @@ export async function getComfyUiPromptStatus(
     if (response.ok) {
       const payload = (await response.json()) as Record<string, ComfyHistoryEntry>;
       const entry = payload[promptId] ?? (payload as unknown as ComfyHistoryEntry);
-      return interpretHistoryEntry(promptId, comfyUrl, entry);
+      const status = interpretHistoryEntry(promptId, comfyUrl, entry);
+      const queue = await resolveQueueContext(promptId, comfyUrl);
+      return applyQueueContext(status, queue);
     }
 
     const allResponse = await fetch(`${comfyUrl}/history`, {
@@ -57,16 +133,24 @@ export async function getComfyUiPromptStatus(
       ComfyHistoryEntry
     >;
     const entry = history[promptId];
+    const queue = await resolveQueueContext(promptId, comfyUrl);
+
     if (!entry) {
-      return {
-        promptId,
-        status: "pending",
-        statusMessage: "Not in history yet (still queued or running)",
-        comfyUrl,
-      };
+      return applyQueueContext(
+        {
+          promptId,
+          status: "pending",
+          statusMessage: "Not in history yet (still queued or running)",
+          comfyUrl,
+        },
+        queue,
+      );
     }
 
-    return interpretHistoryEntry(promptId, comfyUrl, entry);
+    return applyQueueContext(
+      interpretHistoryEntry(promptId, comfyUrl, entry),
+      queue,
+    );
   } catch (error) {
     return {
       promptId,

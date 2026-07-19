@@ -19,6 +19,10 @@ import {
   hintsDescribeCyclingActivity,
   hintsLockPrimaryGarment,
   hintsSpecifyDress,
+  hintsSpecifyFootwear,
+  extractBriefGarmentPhrases,
+  inferDressLabelFilter,
+  inferFootwearLabelFilter,
   hintsSwimwearOnlyMode,
   hintsWorkWardrobeAllowed,
   inferAthleticSport,
@@ -132,6 +136,36 @@ describe("multi-person wardrobe assignments", () => {
       buildGenerateWardrobeUserDirective(assignments) ?? "",
       /brief requires a dress/i,
     );
+  });
+
+  it("respects mini dress and tall heels in the brief", () => {
+    const hint = "beautiful woman in mini dress and tall heels";
+    assert.equal(hintsSpecifyDress(hint), true);
+    assert.equal(hintsSpecifyFootwear(hint), true);
+    assert.deepEqual(extractBriefGarmentPhrases(hint), ["mini dress", "tall heels"]);
+
+    const assignments = buildGenerateWardrobeAssignments(
+      hint,
+      DEFAULT_GENERATION_SETTINGS,
+      { assumePeople: true },
+    );
+
+    assert.ok(assignments && assignments.length === 1);
+    const summary = assignments[0]?.summary ?? "";
+    const directive = buildGenerateWardrobeUserDirective(assignments) ?? "";
+
+    assert.doesNotMatch(summary, /\bloafer\b/i);
+    assert.doesNotMatch(summary, /\bslip dress\b/i);
+    assert.doesNotMatch(summary, /\btie\b/i);
+    assert.match(directive, /mini dress/i);
+    assert.match(directive, /tall heels/i);
+
+    if (/\bdress\b/i.test(summary)) {
+      assert.match(summary, /\b(?:mini|cropped)\b/i);
+    }
+    if (/\b(?:shoe|heel|pump|sandal|boot|loafer)\b/i.test(summary)) {
+      assert.match(summary, /\b(?:heel|pump|stiletto)\b/i);
+    }
   });
 });
 

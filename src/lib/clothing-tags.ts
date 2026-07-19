@@ -611,9 +611,121 @@ const EXPLICIT_PRIMARY_GARMENT_PHRASE =
 const EXPLICIT_WEARING_PHRASE =
   /\b(?:wearing|dressed in|wears a|wears an|outfit is|outfit:)\s+[^,.\n;]{4,}/i;
 
-/** Generic dress phrasing such as "woman in a dress" or "in a red summer dress". */
+/** Generic dress phrasing such as "woman in a dress" or "in mini dress". */
 const EXPLICIT_DRESS_PHRASE =
-  /\b(?:in|wearing|wears)\s+(?:a|an|her|his|their)\s+(?:\w+\s+){0,4}dress\b/i;
+  /\b(?:in|wearing|wears)\s+(?:(?:a|an|her|his|their)\s+)?(?:\w+\s+){0,4}dress\b/i;
+
+const DRESS_STYLE_HINTS: Array<{ phrase: RegExp; label: RegExp }> = [
+  { phrase: /\bmini dress\b/i, label: /\b(?:mini|cropped)\b.*\bdress\b/i },
+  { phrase: /\bmaxi dress\b/i, label: /\bmaxi\b.*\bdress\b/i },
+  { phrase: /\bslip dress\b/i, label: /\bslip dress\b/i },
+  { phrase: /\bwrap dress\b/i, label: /\bwrap dress\b/i },
+  { phrase: /\bshirt dress\b/i, label: /\bshirt dress\b/i },
+  { phrase: /\bsweater dress\b/i, label: /\bsweater dress\b/i },
+  { phrase: /\bcocktail dress\b/i, label: /\bcocktail dress\b/i },
+  { phrase: /\bsheath dress\b/i, label: /\bsheath dress\b/i },
+  { phrase: /\bsummer dress\b/i, label: /\bsummer dress\b/i },
+  { phrase: /\bevening gown\b/i, label: /\b(?:evening gown|ballroom dance dress|ball gown)\b/i },
+];
+
+const FOOTWEAR_STYLE_HINTS: Array<{ phrase: RegExp; label: RegExp; brief: string }> = [
+  {
+    phrase: /\b(?:tall heels|high heels|stilettos?)\b/i,
+    label: /\b(?:stiletto|platform heel|high heel)\b/i,
+    brief: "tall heels",
+  },
+  {
+    phrase: /\bblock heels?\b/i,
+    label: /\bblock heel\b/i,
+    brief: "block heels",
+  },
+  {
+    phrase: /\bkitten heels?\b/i,
+    label: /\bkitten heel\b/i,
+    brief: "kitten heels",
+  },
+  {
+    phrase: /\b(?:heeled sandals|strappy heels)\b/i,
+    label: /\b(?:heeled sandal|strappy heel|heel sandal)\b/i,
+    brief: "heeled sandals",
+  },
+  {
+    phrase: /\b(?:pumps|court shoes)\b/i,
+    label: /\b(?:pump|court shoe)\b/i,
+    brief: "heels",
+  },
+  {
+    phrase: /\bheels\b/i,
+    label: /\b(?:heel|pump|stiletto)\b/i,
+    brief: "heels",
+  },
+];
+
+export function inferDressLabelFilter(hints?: string): RegExp | null {
+  const value = hints?.trim() ?? "";
+  if (!value) {
+    return null;
+  }
+
+  for (const { phrase, label } of DRESS_STYLE_HINTS) {
+    if (phrase.test(value)) {
+      return label;
+    }
+  }
+
+  if (hintsSpecifyDress(value)) {
+    return /\bdress\b/i;
+  }
+
+  return null;
+}
+
+export function inferFootwearLabelFilter(hints?: string): RegExp | null {
+  const value = hints?.trim() ?? "";
+  if (!value) {
+    return null;
+  }
+
+  for (const { phrase, label } of FOOTWEAR_STYLE_HINTS) {
+    if (phrase.test(value)) {
+      return label;
+    }
+  }
+
+  return null;
+}
+
+export function hintsSpecifyFootwear(hints?: string): boolean {
+  return inferFootwearLabelFilter(hints) !== null;
+}
+
+export function extractBriefGarmentPhrases(hints?: string): string[] {
+  const value = hints?.trim() ?? "";
+  if (!value) {
+    return [];
+  }
+
+  const phrases: string[] = [];
+  for (const { phrase } of DRESS_STYLE_HINTS) {
+    const match = value.match(phrase);
+    if (match?.[0]) {
+      phrases.push(match[0].toLowerCase());
+    }
+  }
+
+  if (phrases.length === 0 && EXPLICIT_DRESS_PHRASE.test(value)) {
+    phrases.push("dress");
+  }
+
+  for (const { phrase, brief } of FOOTWEAR_STYLE_HINTS) {
+    if (phrase.test(value) && !phrases.includes(brief)) {
+      phrases.push(brief);
+      break;
+    }
+  }
+
+  return phrases;
+}
 
 export function hintsSpecifyDress(hints?: string): boolean {
   const value = hints?.trim() ?? "";
@@ -647,6 +759,9 @@ export function hintsLockPrimaryGarment(hints?: string): boolean {
     return true;
   }
   if (hintsSpecifyDress(value)) {
+    return true;
+  }
+  if (hintsSpecifyFootwear(value)) {
     return true;
   }
   return EXPLICIT_PRIMARY_GARMENT_PHRASE.test(value);
@@ -862,6 +977,8 @@ export function scoreClothingContextMatch(
 export function buildClothingGuardrailLines(
   filters: ClothingPickFilters,
 ): string[] {
+  const briefGarments = extractBriefGarmentPhrases(filters.hintCorpus);
+
   return [
     filters.athleticSport
       ? getAthleticSportGuardrail(filters.athleticSport)
@@ -898,6 +1015,9 @@ export function buildClothingGuardrailLines(
     hintsSpecifyDress(filters.hintCorpus)
       ? "The brief calls for a dress—keep a dress silhouette; do not substitute blouses, tops, skirt separates, or jumpsuits."
       : null,
+    briefGarments.length > 0
+      ? `The brief specifies ${briefGarments.join(" and ")}—keep those garment types and proportions exactly; do not substitute loafers for heels, long dresses for mini dresses, or unrelated accessories like ties.`
+      : null,
   ].filter((line): line is string => Boolean(line));
 }
 
@@ -911,6 +1031,7 @@ export function buildClothingCoherenceUserDirective(
       : filters.gender === "women"
         ? "a woman"
         : "a man";
+  const briefGarments = extractBriefGarmentPhrases(filters.hintCorpus);
   const briefSpecifiesDress = hintsSpecifyDress(filters.hintCorpus);
   const accentOnlyLock = filters.lockPrimaryGarment && !briefSpecifiesDress;
 
@@ -918,13 +1039,20 @@ export function buildClothingCoherenceUserDirective(
     "WARDROBE COHERENCE (mandatory):",
     `The subject reads clearly as ${genderLabel}.`,
     `Scene-appropriate clothing context: ${filters.contexts.join(", ")}.`,
+    briefGarments.length > 0
+      ? `Brief garment requirements: ${briefGarments.join(", ")}. These override any conflicting catalog roll.`
+      : null,
     accentOnlyLock
       ? `Assigned accent pieces only (footwear/accessories): ${outfitSummary}.`
-      : `Assigned wardrobe ingredients: ${outfitSummary}.`,
+      : outfitSummary.trim()
+        ? `Assigned wardrobe ingredients: ${outfitSummary}.`
+        : briefGarments.length > 0
+          ? "Use the brief garment requirements above; do not invent a conflicting outfit."
+          : null,
     accentOnlyLock
       ? "The scene brief already specifies what the subject wears—keep that garment. Weave assigned accent pieces only; do not add a second outfit, uniform, outer layer, or extra garment hanging nearby."
       : briefSpecifiesDress
-        ? "The brief requires a dress—describe her in the assigned dress (or an equivalent dress from the brief). Do not swap to blouses, tops, or skirt separates."
+        ? "The brief requires a dress—describe her in a dress that matches the brief. Do not swap to blouses, tops, skirt separates, or wrong dress lengths."
         : "Weave these garments into the subject's description—do not open with a separate wardrobe paragraph.",
     "Name each garment briefly in the final prompt—short labels only, not long material paragraphs.",
     "Mention each assigned garment once—do not repeat the same piece or stack duplicate garment types.",

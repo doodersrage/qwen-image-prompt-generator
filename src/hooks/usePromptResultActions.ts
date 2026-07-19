@@ -20,6 +20,10 @@ import {
 } from "@/lib/comfyui-gallery";
 import { scheduleComfyGalleryPoll } from "@/lib/comfyui-gallery-poller";
 import { registerComfyGalleryJob } from "@/lib/comfyui-gallery-client";
+import {
+  formatComfyUiJobStatusLine,
+  type ComfyUiJobTrackerState,
+} from "@/lib/comfyui-job-status";
 import { fetchWorkflowPreview } from "@/lib/comfyui-requeue";
 
 export type PromptResultActionsConfig = {
@@ -43,6 +47,7 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
   const [historySaved, setHistorySaved] = useState(false);
   const [fixStatus, setFixStatus] = useState<string | null>(null);
   const [comfyUiStatus, setComfyUiStatus] = useState<string | null>(null);
+  const [comfyUiJob, setComfyUiJob] = useState<ComfyUiJobTrackerState | null>(null);
   const [comfyUiPreviewUrl, setComfyUiPreviewUrl] = useState<string | null>(null);
   const [pairCopied, setPairCopied] = useState(false);
   const [compactStatus, setCompactStatus] = useState<string | null>(null);
@@ -57,6 +62,7 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
     setHistorySaved(false);
     setFixStatus(null);
     setComfyUiStatus(null);
+    setComfyUiJob(null);
     setComfyUiPreviewUrl(null);
     setPairCopied(false);
     setCompactStatus(null);
@@ -85,36 +91,42 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
         comfyUrl: input.comfyUrl,
       });
 
+      const initialJob: ComfyUiJobTrackerState = {
+        promptId: input.promptId,
+        status: "pending",
+        statusMessage: "Submitted to ComfyUI",
+        comfyUrl: input.comfyUrl,
+      };
+      setComfyUiJob(initialJob);
+      setComfyUiStatus(formatComfyUiJobStatusLine(initialJob));
+
       void scheduleComfyGalleryPoll(input.promptId, {
         comfyUrl: input.comfyUrl,
-        onStatus: setComfyUiStatus,
+        onJobUpdate: (job) => {
+          setComfyUiJob(job);
+          setComfyUiStatus(formatComfyUiJobStatusLine(job));
+        },
       }).then((entry) => {
         if (!entry) {
           return;
         }
+
+        const finishedJob: ComfyUiJobTrackerState = {
+          promptId: input.promptId,
+          status: entry.status,
+          statusMessage: entry.statusMessage,
+          comfyUrl: entry.comfyUrl,
+          imageCount: entry.images.length,
+        };
+        setComfyUiJob(finishedJob);
+        setComfyUiStatus(formatComfyUiJobStatusLine(finishedJob));
 
         if (entry.status === "completed") {
           const preview = galleryEntryPrimaryViewUrl(entry);
           if (showPreview && preview) {
             setComfyUiPreviewUrl(preview);
           }
-          setComfyUiStatus(
-            [
-              "completed",
-              entry.comfyUrl,
-              entry.images.length > 0 ? `${entry.images.length} image(s)` : null,
-              `prompt_id ${input.promptId}`,
-            ]
-              .filter(Boolean)
-              .join(" · "),
-          );
           return;
-        }
-
-        if (entry.status === "error") {
-          setComfyUiStatus(
-            `error · ${entry.statusMessage ?? input.promptId}`,
-          );
         }
       });
     },
@@ -337,6 +349,12 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
         );
 
         if (data.promptId) {
+          setComfyUiJob({
+            promptId: data.promptId,
+            status: "pending",
+            statusMessage: "Submitted to ComfyUI",
+            comfyUrl: data.comfyUrl,
+          });
           trackComfyUiJob({
             promptId: data.promptId,
             prompt,
@@ -682,6 +700,7 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
     historySaved,
     fixStatus,
     comfyUiStatus,
+    comfyUiJob,
     comfyUiPreviewUrl,
     pairCopied,
     resetStatuses,

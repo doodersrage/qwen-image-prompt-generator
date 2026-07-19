@@ -468,6 +468,7 @@ export default function DuoTool() {
         pipelineStatus={actions.pipelineStatus}
         preDiagnostics={actions.preDiagnostics}
         comfyUiStatus={actions.comfyUiStatus}
+        comfyUiJob={actions.comfyUiJob}
         comfyUiPreviewUrl={actions.comfyUiPreviewUrl}
         historySaved={actions.historySaved}
         pairCopied={actions.pairCopied}

@@ -19,6 +19,10 @@ import {
   entryHasRestrictedContext,
   hintsMentionClothing,
   hintsSpecifyDress,
+  hintsSpecifyFootwear,
+  inferDressLabelFilter,
+  inferFootwearLabelFilter,
+  extractBriefGarmentPhrases,
   inferClothingContexts,
   inferClothingGender,
   normalizeClothingContextTags,
@@ -619,15 +623,54 @@ function pickProfessionGarment(
 function pickDressGarment(
   filters: ClothingPickFilters,
 ): EnrichedClothingEntry | null {
-  const basePool = (BY_CATEGORY.outfit ?? []).filter((entry) =>
+  const labelFilter = inferDressLabelFilter(filters.hintCorpus);
+  let basePool = (BY_CATEGORY.outfit ?? []).filter((entry) =>
     /\bdress\b/i.test(entry.label),
   );
   if (basePool.length === 0) {
     return null;
   }
 
+  if (labelFilter) {
+    const styledPool = basePool.filter((entry) => labelFilter.test(entry.label));
+    if (styledPool.length === 0) {
+      return null;
+    }
+    basePool = styledPool;
+  }
+
   const genderPool = filterPoolByGender(basePool, filters.gender);
   const categoryPool = filterPoolByCategory(genderPool, "outfit", filters);
+  const pickFlags = pickFilterFlags(filters);
+
+  return (
+    pickScoredEntry(
+      categoryPool,
+      filters.contexts,
+      filters.excludeIds,
+      pickFlags,
+    ) ??
+    pickScoredEntry(genderPool, filters.contexts, filters.excludeIds, pickFlags)
+  );
+}
+
+function pickFootwearFromHints(
+  filters: ClothingPickFilters,
+): EnrichedClothingEntry | null {
+  const labelFilter = inferFootwearLabelFilter(filters.hintCorpus);
+  if (!labelFilter) {
+    return null;
+  }
+
+  const basePool = (BY_CATEGORY.footwear ?? []).filter((entry) =>
+    labelFilter.test(entry.label),
+  );
+  if (basePool.length === 0) {
+    return null;
+  }
+
+  const genderPool = filterPoolByGender(basePool, filters.gender);
+  const categoryPool = filterPoolByCategory(genderPool, "footwear", filters);
   const pickFlags = pickFilterFlags(filters);
 
   return (
@@ -941,6 +984,10 @@ function shouldPickAccentLayer(
   filters: ClothingPickFilters,
   coreLayerCount: number,
 ): boolean {
+  if (filters.lockPrimaryGarment) {
+    return false;
+  }
+
   if (filters.swimwearOnly) {
     return false;
   }
@@ -1230,7 +1277,11 @@ export function pickRandomCharacterOutfit(
   let footwear =
     useIntimateFootwear || filters.swimwearOnly
       ? null
-      : pickFromCategory("footwear", workingFilters);
+      : filters.lockPrimaryGarment && hintsSpecifyFootwear(workingFilters.hintCorpus)
+        ? pickFootwearFromHints(workingFilters)
+        : filters.lockPrimaryGarment
+          ? null
+          : pickFromCategory("footwear", workingFilters);
 
   const deduped = dedupeWardrobeLayers(wardrobe, bottom, footwear);
   const coreLayerCount = [deduped.wardrobe, deduped.bottom, deduped.footwear].filter(
@@ -1266,10 +1317,14 @@ export function pickRandomCharacterOutfit(
   }
 
   const labels = layers.map((entry) => entry.label);
-  const summary =
+  let summary =
     filters.athleticSport === "cycling"
       ? appendCyclingHelmetToSummary(labels.join(", "), filters.hintCorpus)
       : labels.join(", ");
+
+  if (!summary.trim() && filters.lockPrimaryGarment) {
+    summary = extractBriefGarmentPhrases(filters.hintCorpus).join(", ");
+  }
 
   return {
     wardrobeId: deduped.wardrobe?.id ?? null,

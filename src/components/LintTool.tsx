@@ -169,6 +169,7 @@ export default function LintTool() {
         reformatStatus={actions.reformatStatus}
         pipelineStatus={actions.pipelineStatus}
         comfyUiStatus={actions.comfyUiStatus}
+        comfyUiJob={actions.comfyUiJob}
         comfyUiPreviewUrl={actions.comfyUiPreviewUrl}
         pairCopied={actions.pairCopied}
       />

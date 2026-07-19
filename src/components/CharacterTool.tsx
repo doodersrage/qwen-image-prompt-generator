@@ -445,6 +445,7 @@ export default function CharacterTool() {
         reformatStatus={actions.reformatStatus}
         pipelineStatus={actions.pipelineStatus}
         comfyUiStatus={actions.comfyUiStatus}
+        comfyUiJob={actions.comfyUiJob}
         comfyUiPreviewUrl={actions.comfyUiPreviewUrl}
         historySaved={actions.historySaved}
         pairCopied={actions.pairCopied}
