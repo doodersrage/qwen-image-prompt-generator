@@ -88,6 +88,7 @@ export async function generateRandomScene(
           prompt,
           wardrobeAssignments,
           maxChars,
+          seed,
         );
       }
     : undefined;
@@ -105,6 +106,7 @@ export async function generateRandomScene(
       result.prompt,
       wardrobeAssignments,
       maxChars,
+      seed,
     );
   };
 

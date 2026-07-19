@@ -594,7 +594,7 @@ export const CHARACTER_BODY_TYPE_OPTIONS: SelectOption<CharacterBodyType>[] = [
     value: "athletic",
     label: "Athletic / cyclist",
     script:
-      "an athletic individual with a lean, cyclist-toned physique and natural posture,",
+      "an athletic individual with a lean, endurance-toned physique and natural posture,",
   },
   {
     value: "slender",

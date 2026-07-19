@@ -25,6 +25,11 @@ import {
   buildSinglePersonUserDirective,
 } from "../single-person";
 import {
+  buildDistinctPeopleUserDirective,
+  ensureDistinctPeoplePrompt,
+  parsePeopleConstraint,
+} from "../distinct-people";
+import {
   buildClothingCoherenceUserDirective,
   buildClothingPickFilters,
   subjectGenderToClothingGender,
@@ -34,6 +39,12 @@ import {
   buildGenerateWardrobeUserDirective,
   mergeGenerateWardrobeIntoPrompt,
 } from "../generate-wardrobe";
+import { inferAthleticSport } from "../athletic-sport-profiles";
+import {
+  formatSportActionInstructions,
+  getSportActionInstructions,
+  stripIncompatibleSportActionsFromPrompt,
+} from "../athletic-sport-actions";
 import { DEFAULT_GENERATION_SETTINGS } from "../generation-settings";
 import {
   hasWardrobeCatalogSelection,
@@ -68,7 +79,9 @@ export async function generateCharacterPrompt(
   const presetOptions = normalizeCharacterPresetOptions(options.presetOptions, {
     clothingGender: subjectGenderToClothingGender(parsed.gender),
   });
-  const duoMode = isDuoHeadcount(presetOptions);
+  const peopleConstraint = parsePeopleConstraint(options.hints ?? "");
+  const duoFromHints = (peopleConstraint.count ?? 0) >= 2;
+  const duoMode = isDuoHeadcount(presetOptions) || duoFromHints;
   const settingHint = parseSettingHint(options.hints);
   const { seed, location: sceneLocation } = buildRandomCharacterSeed(
     options.hints,
@@ -101,7 +114,11 @@ export async function generateCharacterPrompt(
           assumePeople: true,
           forcedCount: duoMode ? 2 : 1,
           forcedDistinctPeople: duoMode,
-          forcedGender: duoMode ? "mixed" : undefined,
+          forcedGender: duoMode
+            ? peopleConstraint.gender === "women" || peopleConstraint.gender === "men"
+              ? peopleConstraint.gender
+              : "mixed"
+            : undefined,
           recentClothing: options.recentClothing,
         },
       )
@@ -120,6 +137,8 @@ export async function generateCharacterPrompt(
       : presetWardrobeSummary
         ? `${seed}, wearing ${presetWardrobeSummary}`
         : seed;
+  const intentCorpus = [options.hints, seed, environmentSeed].filter(Boolean).join(", ");
+  const intentSport = inferAthleticSport(intentCorpus);
   const identitySeed = pickCharacterIdentitySeed(parsed);
   const mandatoryBlock = buildCharacterMandatoryBlock(parsed);
   const locationBlock = buildMandatoryLocationBlock(settingHint.location);
@@ -134,7 +153,9 @@ export async function generateCharacterPrompt(
 
   const actionBlock =
     portraitStyle === "action" && !hasPoseAnchor(presetOptions)
-      ? `\n${ACTION_INSTRUCTIONS}`
+      ? intentSport
+        ? `\n${formatSportActionInstructions(intentSport)}`
+        : `\n${ACTION_INSTRUCTIONS}`
       : "";
 
   const framingInstruction = hasPoseAnchor(presetOptions)
@@ -182,37 +203,51 @@ ${soloRules}
     hasPresets ||
     hasPoseAnchor(presetOptions);
 
-  const postProcessPrompt = needsWardrobePostProcess
-    ? (prompt: string) => {
-        const { maxChars } = getDetailLimits(detail, options.model);
-        let result = prompt;
-        if (wardrobeAssignments?.length) {
-          result = mergeGenerateWardrobeIntoPrompt(
-            result,
-            wardrobeAssignments,
-            maxChars,
-          );
-        } else if (presetWardrobeSummary) {
-          result = mergeGenerateWardrobeIntoPrompt(
-            result,
-            [
-              {
-                summary: presetWardrobeSummary,
-                filters: clothingFilters,
-                wardrobeId: presetOptions.wardrobeCatalog,
-                footwearId: presetOptions.footwearCatalog,
-                accessoriesId: presetOptions.accessoriesCatalog,
-              },
-            ],
-            maxChars,
-          );
-        }
-        if (hasPresets || hasPoseAnchor(presetOptions)) {
-          result = mergeCharacterPresetsIntoPrompt(result, presetOptions);
-        }
-        return result;
-      }
-    : undefined;
+  const finalizeCharacterPrompt = (prompt: string): string => {
+    const { maxChars } = getDetailLimits(detail, options.model);
+    let result = prompt;
+    if (duoMode) {
+      result = ensureDistinctPeoplePrompt(result, options.hints ?? "", {
+        ...DEFAULT_GENERATION_SETTINGS,
+        distinctPeople: true,
+      });
+    }
+    if (wardrobeAssignments?.length) {
+      result = mergeGenerateWardrobeIntoPrompt(
+        result,
+        wardrobeAssignments,
+        maxChars,
+        options.hints,
+      );
+    } else if (presetWardrobeSummary) {
+      result = mergeGenerateWardrobeIntoPrompt(
+        result,
+        [
+          {
+            summary: presetWardrobeSummary,
+            filters: clothingFilters,
+            wardrobeId: presetOptions.wardrobeCatalog,
+            footwearId: presetOptions.footwearCatalog,
+            accessoriesId: presetOptions.accessoriesCatalog,
+          },
+        ],
+        maxChars,
+        options.hints,
+      );
+    }
+    if (hasPresets || hasPoseAnchor(presetOptions)) {
+      result = mergeCharacterPresetsIntoPrompt(result, presetOptions);
+    }
+    if (intentSport) {
+      result = stripIncompatibleSportActionsFromPrompt(result, intentSport);
+    }
+    return result;
+  };
+
+  const postProcessPrompt =
+    needsWardrobePostProcess || duoMode || intentSport
+      ? finalizeCharacterPrompt
+      : undefined;
 
   const userParts = [
     presetBlock,
@@ -231,11 +266,14 @@ ${soloRules}
       ? "Pose anchor preset is active—prioritize it over default portrait/action framing."
       : `Framing: ${portraitStyle}`,
     portraitStyle === "action" && !hasPoseAnchor(presetOptions)
-      ? "The character must be actively doing something—not posing for a portrait."
+      ? intentSport
+        ? getSportActionInstructions(intentSport)
+        : "The character must be actively doing something—not posing for a portrait."
       : null,
     duoMode
       ? "DUO MODE (mandatory): exactly two interacting people in frame. No third person, crowd, or background faces."
       : buildSinglePersonUserDirective(),
+    duoFromHints ? buildDistinctPeopleUserDirective(options.hints ?? "") : null,
     "Write one model-ready character prompt.",
   ].filter(Boolean);
 
@@ -256,6 +294,7 @@ ${soloRules}
         portraitStyle,
         identitySeed,
         presetOptions,
+        duoMode,
       );
       const { maxChars } = getDetailLimits(detail, options.model);
       if (wardrobeAssignments?.length) {
@@ -263,13 +302,18 @@ ${soloRules}
           prompt,
           wardrobeAssignments,
           maxChars,
+          options.hints,
         );
       } else if (presetWardrobeSummary) {
         prompt = mergeGenerateWardrobeIntoPrompt(
           prompt,
           [{ summary: presetWardrobeSummary, filters: clothingFilters }],
           maxChars,
+          options.hints,
         );
+      }
+      if (intentSport) {
+        prompt = stripIncompatibleSportActionsFromPrompt(prompt, intentSport);
       }
       return prompt;
     },
@@ -304,6 +348,7 @@ function buildCharacterTemplate(
   portraitStyle: NonNullable<CharacterOptions["portraitStyle"]>,
   identitySeed: string | null,
   presetOptions: ReturnType<typeof normalizeCharacterPresetOptions>,
+  duoMode = false,
 ): string {
   const base = (() => {
     const subject = hints.trim() || identitySeed || "a distinctive original person";
@@ -313,7 +358,7 @@ function buildCharacterTemplate(
     const hairNote = parsed.wantsMinimalHair
       ? "Head and scalp read exactly as described."
       : "Hair is visible and specific—color, length, and texture read clearly—not bald or shaved unless requested.";
-    const soloNote = isDuoHeadcount(presetOptions)
+    const soloNote = duoMode
       ? "Both subjects read as distinct individuals with balanced visual weight."
       : "No other people appear anywhere in the frame.";
 

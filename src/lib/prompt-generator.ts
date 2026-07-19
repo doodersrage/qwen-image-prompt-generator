@@ -252,6 +252,7 @@ function finalizePrompt(
     formatted,
     wardrobeAssignments,
     maxChars,
+    input,
   );
   const profile = getComfyModelDefinition(settings.model).profile;
   return trimPromptToMaxChars(compactPromptForProfile(merged, profile), maxChars);

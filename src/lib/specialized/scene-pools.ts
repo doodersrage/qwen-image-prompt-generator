@@ -4,6 +4,14 @@ import {
 } from "./location-composer";
 import { ALL_EXTRA_SCENE_LOCATIONS } from "../location-catalog-batches";
 import { parseSettingHint } from "../hint-location";
+import { parsePeopleConstraint } from "../distinct-people";
+import { inferAthleticSport } from "../athletic-sport-profiles";
+import {
+  buildSportPoseIncompatibilities,
+  getSportDuoCompetitionLine,
+  pickSportActionPose,
+  pickSportActionSetting,
+} from "../athletic-sport-actions";
 
 const LOCATIONS = [
   "abandoned observatory on a windy cliff",
@@ -629,6 +637,27 @@ const CHARACTER_ACTION_POSES = [
   "swinging on a rope over a gap between buildings",
 ];
 
+const ACTION_POSE_INCOMPATIBILITIES = buildSportPoseIncompatibilities();
+
+function pickCharacterActionPose(hints?: string): string {
+  const sport = inferAthleticSport(hints);
+  if (sport) {
+    return pickSportActionPose(sport);
+  }
+
+  const normalized = hints?.trim() ?? "";
+  const eligible = CHARACTER_ACTION_POSES.filter((pose) => {
+    for (const rule of ACTION_POSE_INCOMPATIBILITIES) {
+      if (rule.subject.test(normalized) && rule.incompatiblePose.test(pose)) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  return pick(eligible.length > 0 ? eligible : CHARACTER_ACTION_POSES);
+}
+
 const CHARACTER_ACTION_SETTINGS = [
   "a wind-swept rooftop with loose papers and fabric in the air",
   "a rain-soaked alley with puddle splashes and neon reflections",
@@ -838,7 +867,15 @@ function pickCharacterSetting(exclude: readonly string[] = []): string {
   return `${pickSceneLocation(exclude)}${SOLO_LOCATION_SUFFIX}`;
 }
 
-function pickCharacterActionSetting(exclude: readonly string[] = []): string {
+function pickCharacterActionSetting(
+  hints?: string,
+  exclude: readonly string[] = [],
+): string {
+  const sport = inferAthleticSport(hints);
+  if (sport) {
+    return pickSportActionSetting(sport);
+  }
+
   const roll = randomInt(100);
 
   if (roll < 18) {
@@ -1042,7 +1079,7 @@ function pickCharacterEnvironmentSetting(
   }
 
   return portraitStyle === "action"
-    ? pickCharacterActionSetting(recentLocations)
+    ? pickCharacterActionSetting(undefined, recentLocations)
     : pickCharacterSetting(recentLocations);
 }
 
@@ -1120,16 +1157,34 @@ export function buildRandomCharacterSeed(
     recentLocations,
   );
   const location = explicitLocation || environmentSetting.replace(SOLO_LOCATION_SUFFIX, "").replace(/,\s*empty except the moving subject$/i, "").trim();
-  const parts = ["solo subject only, no other people anywhere"];
+  const people = parsePeopleConstraint(hints ?? "");
+  const duoSeed = (people.count ?? 0) >= 2;
+  const parts = duoSeed
+    ? [
+        "two subjects only, balanced duo framing, no crowd or extras",
+        ...(people.gender === "women"
+          ? ["two women"]
+          : people.gender === "men"
+            ? ["two men"]
+            : []),
+      ]
+    : ["solo subject only, no other people anywhere"];
 
   if (portraitStyle === "action") {
     parts.push(
-      environmentSetting,
-      pick(CHARACTER_ACTION_POSES),
+      pickCharacterActionSetting(hints, recentLocations),
+      pickCharacterActionPose(hints),
       pick(CHARACTER_ACTION_MOTION),
       pick(LIGHTING),
       pick(MOODS),
     );
+    const intentSport = inferAthleticSport(hints);
+    if (duoSeed && intentSport) {
+      const competitionLine = getSportDuoCompetitionLine(intentSport, hints ?? "");
+      if (competitionLine) {
+        parts.push(competitionLine);
+      }
+    }
   } else {
     parts.push(
       environmentSetting,

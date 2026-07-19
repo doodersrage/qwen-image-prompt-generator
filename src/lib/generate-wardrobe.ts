@@ -5,6 +5,15 @@ import {
   type ClothingPickFilters,
 } from "./clothing-tags";
 import {
+  inferAthleticSport,
+  promptContainsSportWardrobeConflict,
+  summaryMatchesSportWardrobe,
+} from "./athletic-sport-profiles";
+import {
+  resolveAthleticSportForWardrobe,
+  stripIncompatibleSportActionsFromPrompt,
+} from "./athletic-sport-actions";
+import {
   mergeWardrobeAssignmentsIntoPrompt,
   mergeWardrobeRespectingLimits,
   pickRandomCharacterOutfit,
@@ -220,10 +229,82 @@ export function buildGenerateWardrobeUserDirective(
   ].join(" ");
 }
 
+export function refreshSportWardrobeAssignmentForPrompt(
+  prompt: string,
+  assignment: GenerateWardrobeAssignment,
+  intentHints?: string,
+): GenerateWardrobeAssignment {
+  const intentCorpus = [intentHints, assignment.filters.athleticSport]
+    .filter(Boolean)
+    .join(" ");
+  const sport = resolveAthleticSportForWardrobe(
+    intentCorpus,
+    prompt,
+    assignment.filters.athleticSport ?? null,
+  );
+  if (!sport) {
+    return assignment;
+  }
+
+  const needsRefresh =
+    assignment.filters.athleticSport !== sport ||
+    !summaryMatchesSportWardrobe(sport, assignment.summary) ||
+    promptContainsSportWardrobeConflict(prompt, sport, assignment.summary);
+
+  if (!needsRefresh) {
+    return { ...assignment, filters: { ...assignment.filters, athleticSport: sport } };
+  }
+
+  const filters = buildClothingPickFilters({
+    gender:
+      assignment.filters.gender === "women"
+        ? "women"
+        : assignment.filters.gender === "men"
+          ? "men"
+          : undefined,
+    hints: intentHints,
+    environmentSeed: [intentHints, prompt].filter(Boolean).join(" "),
+    excludeIds: assignment.filters.excludeIds,
+  });
+
+  const outfit = pickRandomCharacterOutfit({
+    ...filters,
+    athleticSport: sport,
+    athleticActivity: true,
+    gender: assignment.filters.gender,
+  });
+
+  if (!outfit.summary.trim()) {
+    return assignment;
+  }
+
+  return {
+    ...assignment,
+    summary: outfit.summary,
+    filters: outfit.filters,
+    wardrobeId: outfit.wardrobeId,
+    bottomId: outfit.bottomId,
+    footwearId: outfit.footwearId,
+    accessoriesId: outfit.accessoriesId,
+  };
+}
+
 export function mergeGenerateWardrobeIntoPrompt(
   prompt: string,
   assignments: GenerateWardrobeAssignment[],
   maxChars?: number,
+  intentHints?: string,
 ): string {
-  return mergeWardrobeAssignmentsIntoPrompt(prompt, assignments, maxChars);
+  const sport = resolveAthleticSportForWardrobe(
+    intentHints ?? "",
+    prompt,
+    assignments[0]?.filters.athleticSport ?? null,
+  );
+  const working = sport
+    ? stripIncompatibleSportActionsFromPrompt(prompt, sport)
+    : prompt;
+  const refreshed = assignments.map((assignment) =>
+    refreshSportWardrobeAssignmentForPrompt(working, assignment, intentHints),
+  );
+  return mergeWardrobeAssignmentsIntoPrompt(working, refreshed, maxChars);
 }

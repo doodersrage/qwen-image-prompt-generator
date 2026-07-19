@@ -1,4 +1,12 @@
 import { ALL_CLOTHING_CATALOG_ENTRIES } from "./clothing-catalog-batches";
+import {
+  getAthleticSportProfile,
+  labelMatchesAnyPattern,
+  labelMatchesExcludePatterns,
+  promptContainsSportWardrobeConflict,
+  type AthleticSport,
+} from "./athletic-sport-profiles";
+import { sentenceContainsExcludedWardrobe } from "./athletic-sport-actions";
 import { hasDistinctPeopleStructure } from "./distinct-people";
 import { splitSentences } from "./prompt-shape";
 import {
@@ -636,9 +644,16 @@ function pickWardrobeLayers(
   }
 
   if (filters.athleticActivity || filters.contexts.includes("athletic")) {
-    const athletic = pickAthleticWardrobeLayers(filters);
-    if (athletic.wardrobe || athletic.bottom) {
-      return athletic;
+    if (filters.athleticSport) {
+      const sportLayers = pickSportWardrobeLayers(filters);
+      if (sportLayers.wardrobe || sportLayers.bottom) {
+        return sportLayers;
+      }
+    } else {
+      const athletic = pickAthleticWardrobeLayers(filters);
+      if (athletic.wardrobe || athletic.bottom) {
+        return athletic;
+      }
     }
   }
 
@@ -684,7 +699,14 @@ function pickWardrobeLayers(
   }
 
   if (filters.athleticActivity) {
+    if (filters.athleticSport) {
+      return pickSportWardrobeLayers(filters);
+    }
     return pickAthleticWardrobeLayers(filters);
+  }
+
+  if (filters.athleticSport) {
+    return pickSportWardrobeLayers(filters);
   }
 
   if (shouldPreferOutfitBundle(filters)) {
@@ -713,7 +735,9 @@ function filterPoolByCategory(
   let working = [...pool];
 
   if (category === "footwear") {
-    if (filters.athleticActivity || contexts.includes("athletic")) {
+    if (filters.athleticSport) {
+      working = [...applyAthleticSportCategoryFilter(working, filters.athleticSport, "footwear")];
+    } else if (filters.athleticActivity || contexts.includes("athletic")) {
       const athletic = working.filter(
         (entry) =>
           entry.contexts.includes("athletic") ||
@@ -788,7 +812,15 @@ function filterPoolByCategory(
     }
   }
 
-  if (category === "bottom" && contexts.includes("swimwear")) {
+  if (filters.athleticSport) {
+    working = [...applyAthleticSportCategoryFilter(working, filters.athleticSport, category)];
+  }
+
+  if (
+    category === "bottom" &&
+    contexts.includes("swimwear") &&
+    filters.athleticSport !== "cycling"
+  ) {
     const swim = working.filter(
       (entry) =>
         entry.contexts.includes("swimwear") ||
@@ -927,6 +959,168 @@ function pickFromCategory(
   }
 
   return picked;
+}
+
+function pickFromCategoryMatchingLabel(
+  category: ClothingCategory,
+  filters: ClothingPickFilters,
+  labelPattern: RegExp,
+): EnrichedClothingEntry | null {
+  return pickFromCategoryMatchingAnyLabel(category, filters, [labelPattern]);
+}
+
+function pickFromCategoryMatchingAnyLabel(
+  category: ClothingCategory,
+  filters: ClothingPickFilters,
+  labelPatterns: readonly RegExp[],
+): EnrichedClothingEntry | null {
+  if (labelPatterns.length === 0) {
+    return null;
+  }
+
+  const basePool = BY_CATEGORY[category] ?? [];
+  if (basePool.length === 0) {
+    return null;
+  }
+
+  const genderPool = filterPoolByGender(basePool, filters.gender);
+  const categoryPool = filterPoolByCategory(genderPool, category, filters);
+  const matched = categoryPool.filter((entry) =>
+    labelMatchesAnyPattern(entry.label, labelPatterns),
+  );
+  if (matched.length === 0) {
+    return null;
+  }
+
+  return pickScoredEntry(
+    matched,
+    filters.contexts,
+    filters.excludeIds,
+    pickFilterFlags(filters),
+  );
+}
+
+function applyAthleticSportCategoryFilter(
+  pool: readonly EnrichedClothingEntry[],
+  sport: AthleticSport,
+  category: ClothingCategory,
+): readonly EnrichedClothingEntry[] {
+  const profile = getAthleticSportProfile(sport);
+  if (!profile) {
+    return pool;
+  }
+
+  let patterns: readonly RegExp[] = [];
+  if (category === "footwear") {
+    patterns = profile.footwearLabels;
+  } else if (category === "top" && profile.topLabels?.length) {
+    patterns = profile.topLabels;
+  } else if (category === "bottom" && profile.bottomLabels?.length) {
+    patterns = profile.bottomLabels;
+  } else if (category === "outfit" && profile.outfitLabels.length > 0) {
+    patterns = profile.outfitLabels;
+  } else if (category === "outerwear" && profile.outerwearLabels?.length) {
+    patterns = profile.outerwearLabels;
+  } else {
+    return pool.filter(
+      (entry) => !labelMatchesExcludePatterns(entry.label, profile.excludeLabels),
+    );
+  }
+
+  const matched = pool.filter((entry) => {
+    if (!labelMatchesAnyPattern(entry.label, patterns)) {
+      return false;
+    }
+
+    if (labelMatchesExcludePatterns(entry.label, profile.excludeLabels)) {
+      return false;
+    }
+
+    if (
+      sport === "cycling" &&
+      category === "footwear" &&
+      /\bcleats\b/i.test(entry.label) &&
+      /\bsoccer cleats\b/i.test(entry.label)
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+  if (matched.length > 0) {
+    return matched;
+  }
+
+  if (category === "footwear") {
+    const footwearFallback = pool.filter(
+      (entry) =>
+        !labelMatchesExcludePatterns(entry.label, profile.excludeLabels) &&
+        !(
+          sport === "cycling" &&
+          /\b(?:running shoes|soccer cleats)\b/i.test(entry.label)
+        ),
+    );
+    if (footwearFallback.length > 0) {
+      return footwearFallback;
+    }
+  }
+
+  const excluded = pool.filter(
+    (entry) => !labelMatchesExcludePatterns(entry.label, profile.excludeLabels),
+  );
+  return excluded.length > 0 ? excluded : pool;
+}
+
+function pickSportWardrobeLayers(
+  filters: ClothingPickFilters,
+): {
+  wardrobe: EnrichedClothingEntry | null;
+  bottom: EnrichedClothingEntry | null;
+} {
+  const profile = getAthleticSportProfile(filters.athleticSport ?? null);
+  if (!profile) {
+    return { wardrobe: null, bottom: null };
+  }
+
+  if (profile.outfitLabels.length > 0) {
+    const outfit = pickFromCategoryMatchingAnyLabel("outfit", filters, profile.outfitLabels);
+    if (outfit) {
+      return { wardrobe: outfit, bottom: null };
+    }
+  }
+
+  if (profile.outerwearLabels?.length) {
+    const outerwear = pickFromCategoryMatchingAnyLabel(
+      "outerwear",
+      filters,
+      profile.outerwearLabels,
+    );
+    if (outerwear) {
+      const bottom = profile.bottomLabels?.length
+        ? pickFromCategoryMatchingAnyLabel("bottom", filters, profile.bottomLabels)
+        : pickFromCategory("bottom", filters);
+      return { wardrobe: outerwear, bottom };
+    }
+  }
+
+  const top = profile.topLabels?.length
+    ? pickFromCategoryMatchingAnyLabel("top", filters, profile.topLabels)
+    : null;
+  const bottom = profile.bottomLabels?.length
+    ? pickFromCategoryMatchingAnyLabel("bottom", filters, profile.bottomLabels)
+    : null;
+  if (top || bottom) {
+    return { wardrobe: top, bottom };
+  }
+
+  if (profile.outfitLabels.length > 0) {
+    const outfit = pickFromCategoryMatchingAnyLabel("outfit", filters, profile.outfitLabels);
+    if (outfit) {
+      return { wardrobe: outfit, bottom: null };
+    }
+  }
+
+  return { wardrobe: null, bottom: null };
 }
 
 function pickAthleticWardrobeLayers(
@@ -1188,6 +1382,160 @@ function injectWardrobeIntoSentence(sentence: string, wardrobe: string): string 
   return `${trimmed}, wearing ${compact}.`;
 }
 
+function stripSportConflictGarments(prompt: string, sport: AthleticSport): string {
+  const profile = getAthleticSportProfile(sport);
+  if (!profile) {
+    return prompt;
+  }
+
+  let result = prompt;
+  const stripPatterns = [
+    ...profile.excludeLabels,
+    /\b(?:fleece mesh jersey|mesh jersey|compression top|yoga pants)\b/i,
+  ];
+
+  for (const pattern of stripPatterns) {
+    result = result.replace(new RegExp(pattern.source, "gi"), "");
+  }
+
+  return result
+    .replace(/\b(?:her|his|their)\s+[\w-]+\s+and\s+[\w-]+\s*,/gi, "")
+    .replace(/\b(?:her|his|their)\s+and\s+/gi, "")
+    .replace(/,\s*,/g, ",")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+,/g, ",")
+    .replace(/,\s*\./g, ".")
+    .trim();
+}
+
+function cleanSportStripArtifacts(prompt: string): string {
+  return prompt
+    .split(/(?<=[.!?])\s+/)
+    .filter((sentence) => {
+      const lower = sentence.toLowerCase();
+      if (/\billuminates clinging\b/.test(lower)) {
+        return false;
+      }
+      if (/\b(?:her|his|their)\s+\w+\s+grip the\b/.test(lower)) {
+        return false;
+      }
+      return sentence.trim().length > 0;
+    })
+    .join(" ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function replaceSportGarmentsInSentence(
+  sentence: string,
+  summary: string,
+  sport: AthleticSport,
+): string {
+  const cleaned = stripSportConflictGarments(sentence, sport);
+
+  if (/\bwearing\b/i.test(cleaned)) {
+    return cleaned.replace(
+      /\bwearing\b[^,.]*(?:,\s*[^,.]*)*(?=[,.])/i,
+      `wearing ${summary.replace(/\.$/, "")}`,
+    );
+  }
+
+  return injectWardrobeIntoSentence(cleaned, summary);
+}
+
+function stripDuplicateWardrobeSentences(
+  prompt: string,
+  assignment: WardrobeAssignmentLike & { filters?: ClothingPickFilters },
+): string {
+  const sport = assignment.filters?.athleticSport;
+  const sentences = splitSentences(prompt);
+  let keptPrimaryWardrobe = false;
+
+  const filtered = sentences.filter((sentence) => {
+    const isExtraWardrobeSentence =
+      /\b(?:dressed for|is dressed|outfit)\b/i.test(sentence) ||
+      (/\bwearing\b/i.test(sentence) &&
+        /\b(?:jacket|nylon|bib shorts|climbing shoes|track pants|singlet)\b/i.test(
+          sentence,
+        ));
+
+    if (isExtraWardrobeSentence) {
+      if (keptPrimaryWardrobe) {
+        return false;
+      }
+      keptPrimaryWardrobe = true;
+    }
+
+    if (sport && sentenceContainsExcludedWardrobe(sport, sentence)) {
+      return false;
+    }
+
+    return true;
+  });
+
+  return filtered.join(" ");
+}
+
+function finalizeSportWardrobePrompt(
+  prompt: string,
+  assignment: WardrobeAssignmentLike & { filters?: ClothingPickFilters },
+): string {
+  return stripDuplicateWardrobeSentences(
+    enforceSportWardrobeInPrompt(prompt, assignment),
+    assignment,
+  );
+}
+
+function enforceSportWardrobeInPrompt(
+  prompt: string,
+  assignment: WardrobeAssignmentLike & { filters?: ClothingPickFilters },
+): string {
+  const sport = assignment.filters?.athleticSport;
+  if (!sport || !assignment.summary.trim()) {
+    return prompt;
+  }
+
+  const hasConflict = promptContainsSportWardrobeConflict(
+    prompt,
+    sport,
+    assignment.summary,
+  );
+
+  if (!hasConflict) {
+    if (wardrobeSummaryPresent(prompt, assignment.summary)) {
+      return stripDuplicateWardrobeSentences(prompt, assignment);
+    }
+
+    const integrated =
+      integrateSinglePersonWardrobe(prompt, assignment.summary) ??
+      mergeAssignedWardrobeIntoPrompt(prompt, assignment.summary, {
+        entryIds: collectWardrobeEntryIds(assignment),
+      });
+    return stripDuplicateWardrobeSentences(integrated, assignment);
+  }
+
+  const stripped = cleanSportStripArtifacts(stripSportConflictGarments(prompt, sport));
+  const sentences = splitSentences(stripped);
+  if (sentences.length === 0) {
+    return mergeAssignedWardrobeIntoPrompt(stripped, assignment.summary, {
+      entryIds: collectWardrobeEntryIds(assignment),
+    });
+  }
+
+  const personPattern =
+    /\b(man|woman|person|girl|boy|figure|subject|couple|pair|they|he|she|cyclist)\b/i;
+  const targetIndex = sentences.findIndex((sentence) => personPattern.test(sentence));
+  const index = targetIndex >= 0 ? targetIndex : 0;
+  const updated = [...sentences];
+  updated[index] = replaceSportGarmentsInSentence(
+    updated[index]!,
+    assignment.summary,
+    sport,
+  );
+
+  return stripDuplicateWardrobeSentences(updated.join(" "), assignment);
+}
+
 function integrateSinglePersonWardrobe(
   prompt: string,
   summary: string,
@@ -1290,15 +1638,24 @@ export function mergeWardrobeAssignmentsIntoPrompt(
       wardrobeSummaryPresent(trimmed, assignment.summary),
     )
   ) {
+    if (assignments.length === 1) {
+      const enforced = finalizeSportWardrobePrompt(
+        trimmed,
+        assignments[0] as WardrobeAssignmentLike & { filters?: ClothingPickFilters },
+      );
+      return sanitize(enforced);
+    }
     return sanitize(trimmed);
   }
 
   if (assignments.length === 1 && !assignments[0]?.label) {
-    const summary = assignments[0]!.summary;
-    const merged = maxChars
+    const assignment = assignments[0]!;
+    const summary = assignment.summary;
+    let merged = maxChars
       ? fitWardrobeIntoPrompt(trimmed, summary, maxChars, 1)
       : integrateSinglePersonWardrobe(trimmed, summary) ??
           mergeAssignedWardrobeIntoPrompt(trimmed, summary);
+    merged = finalizeSportWardrobePrompt(merged, assignment);
     return sanitize(merged);
   }
 

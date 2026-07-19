@@ -1,5 +1,14 @@
 import type { SubjectGender } from "./variation-seed";
 import { inferSubjectGenderFromHints } from "./distinct-people";
+import type { AthleticSport } from "./athletic-sport-profiles";
+import {
+  getAthleticSportGuardrail,
+  hintsDescribeCyclingActivity,
+  inferAthleticSport,
+} from "./athletic-sport-profiles";
+
+export type { AthleticSport } from "./athletic-sport-profiles";
+export { hintsDescribeCyclingActivity, inferAthleticSport };
 
 export type ClothingScenePresetHints = {
   atmosphere?: string;
@@ -634,6 +643,7 @@ export type ClothingPickFilters = {
   lockPrimaryGarment?: boolean;
   skipWardrobeRolls?: boolean;
   athleticActivity?: boolean;
+  athleticSport?: AthleticSport | null;
   intimateWardrobe?: boolean;
   workWardrobe?: boolean;
   workProfession?: WorkProfession | null;
@@ -666,6 +676,7 @@ export function buildClothingPickFilters(input: {
     contexts,
     excludeIds: input.excludeIds,
     athleticActivity: hintsDescribeAthleticActivity(hintCorpus),
+    athleticSport: inferAthleticSport(hintCorpus),
     intimateWardrobe: hintsIntimateWardrobeAllowed(hintCorpus),
     workWardrobe: hintsWorkWardrobeAllowed(hintCorpus),
     workProfession: inferWorkProfession(hintCorpus),
@@ -829,9 +840,11 @@ export function buildClothingGuardrailLines(
   filters: ClothingPickFilters,
 ): string[] {
   return [
-    filters.athleticActivity
-      ? "Athletic activity is happening—use practical sport or training attire (singlet, shorts, running shoes, jersey, track gear). No costumes, wizard robes, formalwear, or unrelated uniforms."
-      : null,
+    filters.athleticSport
+      ? getAthleticSportGuardrail(filters.athleticSport)
+      : filters.athleticActivity
+        ? "Athletic activity is happening—use practical sport or training attire matched to the activity. No costumes, wizard robes, formalwear, or unrelated uniforms."
+        : null,
     filters.workWardrobe
       ? filters.workProfession
         ? `Work context applies—keep assigned ${filters.workProfession} workwear or uniform coherent with the job and setting.`

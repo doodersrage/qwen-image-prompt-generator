@@ -3,6 +3,8 @@ import { describe, it } from "node:test";
 import {
   buildGenerateWardrobeAssignments,
   buildGenerateWardrobeUserDirective,
+  mergeGenerateWardrobeIntoPrompt,
+  refreshSportWardrobeAssignmentForPrompt,
 } from "./generate-wardrobe";
 import {
   collectWardrobeEntryIds,
@@ -12,11 +14,21 @@ import {
 } from "./clothing-catalog";
 import {
   buildClothingGuardrailLines,
+  buildClothingPickFilters,
+  hintsDescribeCyclingActivity,
   hintsLockPrimaryGarment,
   hintsSwimwearOnlyMode,
   hintsWorkWardrobeAllowed,
+  inferAthleticSport,
   inferWorkProfession,
 } from "./clothing-tags";
+import { summaryMatchesSportWardrobe } from "./athletic-sport-profiles";
+import {
+  resolveAthleticSportForWardrobe,
+  stripForeignSportActionsFromPrompt,
+} from "./athletic-sport-actions";
+import { buildRandomCharacterSeed } from "./specialized/scene-pools";
+import { pickRandomCharacterOutfit } from "./clothing-catalog";
 import { DEFAULT_GENERATION_SETTINGS } from "./generation-settings";
 
 describe("hintsLockPrimaryGarment", () => {
@@ -91,6 +103,203 @@ describe("merge and sanitize", () => {
     );
     assert.match(sanitized, new RegExp(entry!.label, "i"));
     assert.doesNotMatch(sanitized, /natural fabric creases/);
+  });
+});
+
+describe("sport-specific wardrobe", () => {
+  it("detects cycling activity from cyclist cues", () => {
+    const corpus =
+      "fierce female cyclist dives sideways during a competitive race on a dirt track";
+    assert.equal(inferAthleticSport(corpus), "cycling");
+    assert.equal(hintsDescribeCyclingActivity(corpus), true);
+  });
+
+  it("picks cycling kit pieces instead of track pants or soccer cleats", () => {
+    const filters = buildClothingPickFilters({
+      hints:
+        "fierce female cyclist competitive race dirt track cleats ahead",
+      environmentSeed: "female cyclist competitive race",
+    });
+    assert.equal(filters.athleticSport, "cycling");
+
+    const outfit = pickRandomCharacterOutfit(filters);
+    const summary = outfit.summary.toLowerCase();
+    assert.doesNotMatch(summary, /track pants/);
+    assert.doesNotMatch(summary, /soccer cleats/);
+    assert.match(
+      summary,
+      /\b(?:cycling jersey|cycling kit|cycling bib shorts|bib shorts|cycling shoes)\b/,
+    );
+  });
+
+  it("picks basketball jersey sets for basketball scenes", () => {
+    const filters = buildClothingPickFilters({
+      hints: "point guard driving to the hoop during an nba game",
+      environmentSeed: "basketball player indoor court",
+    });
+    assert.equal(filters.athleticSport, "basketball");
+
+    const outfit = pickRandomCharacterOutfit(filters);
+    const summary = outfit.summary.toLowerCase();
+    assert.match(summary, /\bbasketball jersey set\b/);
+    assert.doesNotMatch(summary, /cycling kit/);
+    assert.doesNotMatch(summary, /soccer cleats/);
+  });
+
+  it("picks judogi for martial arts scenes", () => {
+    const filters = buildClothingPickFilters({
+      hints: "karate student bowing in the dojo before sparring",
+      environmentSeed: "martial arts dojo",
+    });
+    assert.equal(filters.athleticSport, "martial_arts");
+
+    const outfit = pickRandomCharacterOutfit(filters);
+    const summary = outfit.summary.toLowerCase();
+    assert.match(summary, /\b(?:judogi|karate gi|dobok)\b/);
+    assert.doesNotMatch(summary, /cycling bib shorts/);
+    assert.doesNotMatch(summary, /track pants/);
+  });
+
+  it("picks climbing shoes for bouldering scenes", () => {
+    const filters = buildClothingPickFilters({
+      hints: "climber dynoing on an overhang during a bouldering session",
+      environmentSeed: "indoor climbing wall",
+    });
+    assert.equal(filters.athleticSport, "climbing");
+
+    const outfit = pickRandomCharacterOutfit(filters);
+    const summary = outfit.summary.toLowerCase();
+    assert.match(summary, /\bclimbing shoes\b/);
+    assert.doesNotMatch(summary, /soccer cleats/);
+    assert.doesNotMatch(summary, /cycling shoes/);
+  });
+
+  it("picks cycling kit for on-bike competition scenes without the word cyclist", () => {
+    const filters = buildClothingPickFilters({
+      hints: "woman on bike fierce competition solo race wet pavement",
+      environmentSeed: "woman on bike fierce competition solo race wet pavement",
+      gender: "women",
+    });
+    assert.equal(filters.athleticSport, "cycling");
+
+    const outfit = pickRandomCharacterOutfit(filters);
+    const summary = outfit.summary.toLowerCase();
+    assert.doesNotMatch(summary, /track pants/);
+    assert.doesNotMatch(summary, /running shoes/);
+    assert.match(
+      summary,
+      /\b(?:cycling jersey|cycling kit|cycling bib shorts|bib shorts|cycling shoes|cleats)\b/,
+    );
+  });
+
+  it("refreshes wrong generic athletic assignment when prompt clearly describes cycling", () => {
+    const wrongAssignment = {
+      summary: "mustard fleece mesh jersey, sepia track pants, oatmeal running shoes",
+      filters: buildClothingPickFilters({
+        hints: "fierce competition sprint race wet pavement snow",
+        gender: "women",
+      }),
+    };
+    const prompt =
+      "A woman cyclist in a fierce competition sprints across the wet pavement. She wears a mustard fleece mesh jersey and sepia track pants. Her oatmeal running shoes grip the wet surface as she leans forward on the bike.";
+
+    const refreshed = refreshSportWardrobeAssignmentForPrompt(prompt, wrongAssignment as never);
+    assert.equal(refreshed.filters.athleticSport, "cycling");
+    assert.equal(summaryMatchesSportWardrobe("cycling", refreshed.summary), true);
+  });
+
+  it("prefers track and field over cycling when javelin throw is in the scene", () => {
+    const corpus =
+      "fierce competition scene intense woman cyclist hurling a javelin mid-motion body rotating";
+    assert.equal(inferAthleticSport(corpus), "track_field");
+
+    const filters = buildClothingPickFilters({
+      hints: corpus,
+      environmentSeed: corpus,
+      gender: "women",
+    });
+    assert.equal(filters.athleticSport, "track_field");
+
+    const outfit = pickRandomCharacterOutfit(filters);
+    const summary = outfit.summary.toLowerCase();
+    assert.doesNotMatch(summary, /cycling kit/);
+    assert.doesNotMatch(summary, /cycling bib shorts/);
+    assert.doesNotMatch(summary, /climbing shoes/);
+    assert.match(summary, /\b(?:running singlet|singlet|running shorts|track pants|running shoes)\b/);
+  });
+
+  it("does not treat endurance physique preset copy as cycling activity", () => {
+    assert.equal(
+      inferAthleticSport("athletic individual lean endurance-toned physique hurling javelin"),
+      "track_field",
+    );
+    assert.equal(
+      inferAthleticSport("athletic individual lean cyclist-toned physique portrait"),
+      null,
+    );
+  });
+
+  it("includes sport-specific guardrails in directives", () => {
+    const lines = buildClothingGuardrailLines({
+      gender: "women",
+      contexts: ["athletic"],
+      athleticActivity: true,
+      athleticSport: "cycling",
+    });
+    assert.ok(lines.some((line) => line.includes("bib shorts")));
+    assert.ok(lines.some((line) => line.includes("No track pants")));
+  });
+});
+
+describe("character action seeds", () => {
+  it("builds duo cycling competition seeds from two-cyclist hints", () => {
+    const { seed } = buildRandomCharacterSeed(
+      "two female cyclists in a fierce competition",
+      "action",
+    );
+    assert.match(seed, /two subjects only/i);
+    assert.match(seed, /two women/i);
+    assert.match(seed, /wheel-to-wheel competition/i);
+    assert.doesNotMatch(seed, /solo subject only/i);
+    assert.doesNotMatch(seed, /javelin/i);
+  });
+
+  it("strips foreign actions from basketball prompts", () => {
+    const prompt =
+      "Two players battle on court as one hurls a javelin across the hardwood while wearing a navy jersey.";
+    const cleaned = stripForeignSportActionsFromPrompt(prompt, "basketball");
+    assert.doesNotMatch(cleaned, /javelin/i);
+    assert.match(cleaned, /jump shot|basketball|hardwood|court/i);
+  });
+
+  it("strips foreign actions from soccer prompts", () => {
+    const prompt =
+      "A midfielder pedaling hard on handlebars through the penalty area in full kit.";
+    const cleaned = stripForeignSportActionsFromPrompt(prompt, "soccer");
+    assert.doesNotMatch(cleaned, /pedaling|handlebars/i);
+    assert.match(cleaned, /ball|kit|soccer|pitch|follow-through/i);
+  });
+
+  it("keeps cycling intent when the model hallucinates a javelin throw", () => {
+    const intent = "two female cyclists in a fierce competition";
+    const polluted =
+      "A fierce competition scene with an intense woman cyclist hurling a javelin mid-motion, wearing cropped ivory cycling kit, rose cycling shoes.";
+    assert.equal(
+      resolveAthleticSportForWardrobe(intent, polluted, "cycling"),
+      "cycling",
+    );
+    const assignment = {
+      summary: "cropped ivory cycling kit, rose cycling shoes",
+      filters: buildClothingPickFilters({ hints: intent, gender: "women" }),
+    };
+    const merged = mergeGenerateWardrobeIntoPrompt(
+      polluted,
+      [assignment],
+      undefined,
+      intent,
+    );
+    assert.doesNotMatch(merged, /javelin/i);
+    assert.match(merged, /cycling kit/i);
   });
 });
 

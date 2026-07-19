@@ -1,0 +1,527 @@
+import type { AthleticSport } from "./athletic-sport-profiles";
+import {
+  ATHLETIC_SPORT_PROFILES,
+  getAthleticSportProfile,
+  inferAthleticSport,
+} from "./athletic-sport-profiles";
+
+export type SportActionBundle = {
+  instructions: string;
+  rewriteDefault: string;
+  poses: readonly string[];
+  settings: readonly string[];
+  /** Tokens from other sports that should not appear in this sport's scene */
+  foreignTokens: readonly string[];
+};
+
+const GENERIC_STUNT_TOKENS = [
+  "hurling a spear",
+  "hurling a javelin",
+  "leaping from the edge of a wooden dock",
+  "flip off a dock",
+  "backflip off",
+  "mounting a horse",
+  "surfacing from water",
+  "rappelling down",
+  "vaulting a railing",
+  "breaking through a paper door",
+  "swinging on a rope over a gap",
+] as const;
+
+const SPORT_ACTION_BUNDLES: Record<AthleticSport, SportActionBundle> = {
+  triathlon: {
+    instructions:
+      "Show swim-bike-run race action: running transition, cycling on aerobars, or stride off the bike. Stay in triathlon context—no unrelated stunts.",
+    rewriteDefault: "pushing through a triathlon transition at race pace",
+    poses: [
+      "running through transition with cycling shoes and race number",
+      "aero tuck on the bike leg with focused forward lean",
+      "sprinting off the bike toward the run segment",
+    ],
+    settings: [
+      "a triathlon transition zone with racks and race tape",
+      "an open road bike leg with crosswind and long shadows",
+      "a lakeside run segment with wet pavement reflections",
+    ],
+    foreignTokens: ["javelin", "dunk", "soccer kick", "golf swing", "downward dog"],
+  },
+  track_field: {
+    instructions:
+      "Show track and field action: javelin throw, discus spin, shot put, pole vault, or sprint start. Athlete on foot—no bicycles or unrelated sports.",
+    rewriteDefault: "launching a javelin with full-body rotation",
+    poses: [
+      "hurling a javelin with full body rotation at release",
+      "spinning into a discus throw with coiled torque",
+      "exploding out of starting blocks on the track",
+    ],
+    settings: [
+      "an empty stadium track lane under floodlights",
+      "a field event sector with chalk lines and measured arc",
+      "a rain-darkened track surface with starting blocks",
+    ],
+    foreignTokens: ["cyclist", "pedaling", "handlebars", "bicycle", "dunk", "soccer", "golf swing"],
+  },
+  cycling: {
+    instructions:
+      "Show cycling race action: pedaling hard, out-of-saddle sprinting, leaning through a corner, or drafting wheel-to-wheel. Every subject stays on a racing bicycle. No javelin, spear, dock dives, backflips, or unrelated stunts.",
+    rewriteDefault: "sprinting on a racing bicycle",
+    poses: [
+      "sprinting out of the saddle on a road bike with aerodynamic forward lean",
+      "leaning hard into a wet corner on a racing bicycle, tires spraying water",
+      "driving the pedals in a fierce criterium sprint shoulder to shoulder",
+      "charging through a velodrome banking turn at full speed",
+    ],
+    settings: [
+      "a rain-soaked city circuit with wet pavement and neon reflections",
+      "a velodrome banking turn under harsh floodlights",
+      "a cobblestone race sector with mud spray flying from tires",
+    ],
+    foreignTokens: [
+      "javelin",
+      "spear",
+      "discus",
+      "shot put",
+      "dunk",
+      "downward dog",
+      "golf swing",
+      "climbing dyno",
+      "fencing lunge",
+    ],
+  },
+  martial_arts: {
+    instructions:
+      "Show martial arts action: a committed strike, block, kick, or throw in gi or dobok on a dojo floor. No bicycles, balls, or unrelated sports gear.",
+    rewriteDefault: "delivering a committed martial arts strike in the dojo",
+    poses: [
+      "throwing a high roundhouse kick with hips fully rotated",
+      "blocking a strike with forearm chambered and rooted stance",
+      "sweeping into a controlled throw on the tatami",
+    ],
+    settings: [
+      "a dojo floor with tatami mats and soft side light",
+      "an empty training hall with dust motes in sunbeams",
+      "a sparring ring with taped boundary lines",
+    ],
+    foreignTokens: ["cyclist", "javelin", "basketball", "soccer cleats", "golf swing", "ski slope"],
+  },
+  fencing: {
+    instructions:
+      "Show fencing action: lunge, parry, or riposte in full fencing uniform with blade extended. No unrelated sports or stunts.",
+    rewriteDefault: "lunging into a fencing attack with blade extended",
+    poses: [
+      "lunging into an attack with foil extended and back foot anchored",
+      "parrying with blade engaged and en garde stance low",
+      "recovering from a riposte with quick footwork on the piste",
+    ],
+    settings: [
+      "a fencing piste under cool overhead sport lights",
+      "an indoor salle with metallic floor reflections",
+      "a competition strip with electronic scoring box nearby",
+    ],
+    foreignTokens: ["cyclist", "javelin", "dunk", "soccer", "climbing", "golf swing"],
+  },
+  gymnastics: {
+    instructions:
+      "Show gymnastics action: leap, handstand, tumbling pass, or apparatus work in a leotard. No street clothes, cleats, or unrelated sports.",
+    rewriteDefault: "extending through a gymnastics tumbling pass",
+    poses: [
+      "launching into a tumbling pass with tight body alignment",
+      "holding a handstand line on the floor exercise mat",
+      "extending through a split leap with toes pointed",
+    ],
+    settings: [
+      "a competition floor exercise mat under arena lights",
+      "a balance beam in a quiet training gym",
+      "a chalk-dusted apparatus hall with soft bounce light",
+    ],
+    foreignTokens: ["cyclist", "javelin", "soccer cleats", "golf swing", "mounting a horse"],
+  },
+  climbing: {
+    instructions:
+      "Show climbing action: dyno, reach, or heel hook on a boulder or wall in climbing shoes and harness-ready kit. No ball sports or track throws.",
+    rewriteDefault: "dynoing to a hold on the overhang",
+    poses: [
+      "dynoing to a hold on an overhang with hips driving upward",
+      "heel hooking on a steep boulder with chalk dust in the air",
+      "reaching for a crimp on a competition wall",
+    ],
+    settings: [
+      "an indoor climbing wall with colored holds and dramatic shadows",
+      "a sunlit outdoor boulder with chalk marks on rock",
+      "a competition route with crowd blur far below",
+    ],
+    foreignTokens: ["javelin", "cyclist", "dunk", "soccer kick", "golf swing", "downward dog"],
+  },
+  yoga: {
+    instructions:
+      "Show yoga or pilates action: held pose, transition, or balance on a mat—calm controlled movement. No cleats, balls, or high-impact stunts.",
+    rewriteDefault: "flowing through a controlled yoga transition on the mat",
+    poses: [
+      "holding warrior two with arms extended and grounded stance",
+      "transitioning through downward dog with long spine",
+      "balancing in tree pose on a studio mat",
+    ],
+    settings: [
+      "a quiet yoga studio with warm morning light",
+      "a minimalist mat space with soft bounce light",
+      "a rooftop class at golden hour with open sky",
+    ],
+    foreignTokens: ["javelin", "cyclist", "dunk", "soccer cleats", "sprint finish", "golf swing"],
+  },
+  tennis: {
+    instructions:
+      "Show tennis action: serve toss, forehand drive, backhand slice, or court sprint in tennis whites. Stay on court—no unrelated sports.",
+    rewriteDefault: "driving a forehand with full shoulder rotation",
+    poses: [
+      "uncoiling into a forehand with racket head lagging then whipping through",
+      "tossing into a serve with knee bend and upward extension",
+      "split-stepping before a volley at the net",
+    ],
+    settings: [
+      "a hard court with crisp white lines and afternoon sun",
+      "a clay court with burnt-orange surface and sliding footwork",
+      "an indoor tennis court with even sport lighting",
+    ],
+    foreignTokens: ["cyclist", "javelin", "dunk", "soccer goal", "golf swing", "climbing dyno"],
+  },
+  basketball: {
+    instructions:
+      "Show basketball action: drive, jump shot, dunk, or defensive slide on court in jersey and shorts. No cycling, javelin, or unrelated sports.",
+    rewriteDefault: "elevating into a jump shot on the hardwood",
+    poses: [
+      "elevating into a jump shot with elbow aligned and wrist snapping",
+      "driving hard to the rim with defender trailing",
+      "planting for a crossover dribble with low center of gravity",
+    ],
+    settings: [
+      "a polished indoor court under bright gymnasium lights",
+      "an outdoor blacktop court at dusk with long shadows",
+      "a half-court setup with scuffed key lines",
+    ],
+    foreignTokens: ["cyclist", "javelin", "soccer cleats", "golf swing", "ski slope", "pedaling"],
+  },
+  hockey: {
+    instructions:
+      "Show hockey action: skating stride, stickhandling, or wrist shot on ice in hockey jersey gear. No bicycles, track throws, or unrelated sports.",
+    rewriteDefault: "winding up for a wrist shot on the ice",
+    poses: [
+      "winding up for a wrist shot with weight on the back skate",
+      "stickhandling through a defender with low knee bend",
+      "accelerating with powerful skating strides on the ice",
+    ],
+    settings: [
+      "an ice rink with scuffed surface and arena boards",
+      "a frozen outdoor pond with muted winter light",
+      "a practice rink with breath visible in cold air",
+    ],
+    foreignTokens: ["cyclist", "javelin", "dunk", "soccer pitch", "golf fairway", "downward dog"],
+  },
+  baseball: {
+    instructions:
+      "Show baseball action: pitch windup, swing, slide, or fielding in uniform and cleats. No cycling, javelin, or unrelated sports.",
+    rewriteDefault: "unloading into a baseball swing through the zone",
+    poses: [
+      "unloading into a swing with hips rotating through the zone",
+      "delivering a pitch from the windup with leg kick high",
+      "sliding into base with dirt kicking up",
+    ],
+    settings: [
+      "a sunlit infield diamond with chalked baselines",
+      "a batter's box with clay footing and stadium lights",
+      "an empty bullpen mound with chain-link backdrop",
+    ],
+    foreignTokens: ["cyclist", "javelin", "dunk", "soccer goal", "golf swing", "climbing"],
+  },
+  rugby: {
+    instructions:
+      "Show rugby action: tackle, pass, sprint with ball, or scrum push in rugby shirt and shorts. No cycling, javelin, or unrelated sports.",
+    rewriteDefault: "sprinting with the rugby ball tucked",
+    poses: [
+      "sprinting with the ball tucked and fending with a stiff arm",
+      "diving to ground the ball over the try line",
+      "driving low into a tackle with shoulder engagement",
+    ],
+    settings: [
+      "a muddy rugby pitch under overcast skies",
+      "a stadium field with painted try lines and worn turf",
+      "a rainy training pitch with spray from footwork",
+    ],
+    foreignTokens: ["cyclist", "javelin", "dunk", "golf swing", "downward dog", "basketball hoop"],
+  },
+  soccer: {
+    instructions:
+      "Show soccer action: strike, dribble, slide tackle, or header on pitch in kit and cleats. No cycling, javelin, or unrelated sports.",
+    rewriteDefault: "striking the ball with full follow-through",
+    poses: [
+      "striking the ball with full follow-through and planted foot",
+      "dribbling at pace with close touches and low center of gravity",
+      "rising for a header with eyes on the ball",
+    ],
+    settings: [
+      "a rain-soaked pitch with reflected floodlights",
+      "a green field with white touchlines and empty stands",
+      "a tight urban pitch with chain-link fences",
+    ],
+    foreignTokens: ["cyclist", "javelin", "dunk", "golf swing", "climbing dyno", "handlebars"],
+  },
+  ski: {
+    instructions:
+      "Show skiing or snowboarding action: carve, jump, or slalom in ski jacket and bib on snow. No court, pitch, or unrelated sports.",
+    rewriteDefault: "carving through a slalom turn with snow spraying",
+    poses: [
+      "carving through a slalom turn with snow spraying from the edge",
+      "absorbing moguls with knees compressed and poles planted",
+      "launching off a small kicker with skis parallel",
+    ],
+    settings: [
+      "a groomed ski slope with blue shadows in the troughs",
+      "a slalom course with red and blue gates blurring past",
+      "a powder field with sun glitter on fresh snow",
+    ],
+    foreignTokens: ["cyclist", "javelin", "dunk", "soccer pitch", "tennis court", "downward dog"],
+  },
+  golf: {
+    instructions:
+      "Show golf action: full swing, follow-through, or putting stroke in polo and tailored pants on course. No cycling, javelin, or unrelated sports.",
+    rewriteDefault: "unwinding through a golf swing with balanced finish",
+    poses: [
+      "unwinding through a driver swing with balanced finish",
+      "rolling a putt with quiet shoulders and steady head",
+      "chipping from rough with wrists firm through contact",
+    ],
+    settings: [
+      "a fairway at golden hour with long grass fringe",
+      "a putting green with dew and soft morning light",
+      "a driving range with scattered balls and open sky",
+    ],
+    foreignTokens: ["cyclist", "javelin", "dunk", "soccer goal", "climbing dyno", "fencing lunge"],
+  },
+  running: {
+    instructions:
+      "Show running action: sprint drive, mid-stride form, or hurdle clearance in singlet and shorts. On foot—no bicycles or unrelated sports.",
+    rewriteDefault: "driving knees in a full sprint stride",
+    poses: [
+      "exploding out of starting blocks with forward drive",
+      "mid-sprint with high knee lift and pumping arms",
+      "clearing a hurdle with lead leg extended",
+    ],
+    settings: [
+      "a stadium track lane with rubber surface and lane numbers",
+      "a rain-soaked city road with reflective asphalt",
+      "a trail path with kicked gravel behind the stride",
+    ],
+    foreignTokens: ["cyclist", "pedaling", "handlebars", "dunk", "golf swing", "climbing dyno"],
+  },
+};
+
+function bundleFor(sport: AthleticSport | null | undefined): SportActionBundle | null {
+  if (!sport) {
+    return null;
+  }
+  return SPORT_ACTION_BUNDLES[sport] ?? null;
+}
+
+function foreignActionPattern(sport: AthleticSport): RegExp | null {
+  const bundle = SPORT_ACTION_BUNDLES[sport];
+  if (!bundle) {
+    return null;
+  }
+
+  const tokens = [...GENERIC_STUNT_TOKENS, ...bundle.foreignTokens];
+  if (tokens.length === 0) {
+    return null;
+  }
+
+  const escaped = tokens.map((token) =>
+    token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+"),
+  );
+  return new RegExp(`\\b(?:${escaped.join("|")})\\b`, "i");
+}
+
+export function getSportActionBundle(
+  sport: AthleticSport | null | undefined,
+): SportActionBundle | null {
+  return bundleFor(sport);
+}
+
+export function getSportActionInstructions(sport: AthleticSport): string {
+  return SPORT_ACTION_BUNDLES[sport]?.instructions ?? "";
+}
+
+export function formatSportActionInstructions(sport: AthleticSport): string {
+  const instructions = getSportActionInstructions(sport);
+  if (!instructions.trim()) {
+    return "";
+  }
+
+  return instructions
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => `- ${sentence.trim()}`)
+    .join("\n");
+}
+
+const DUO_COMPETITION_LINES: Partial<Record<AthleticSport, string>> = {
+  cycling: "two cyclists in fierce wheel-to-wheel competition",
+  running: "two runners in fierce shoulder-to-shoulder competition",
+  basketball: "two players in fierce one-on-one competition on the court",
+  soccer: "two players in fierce competition for the ball",
+  tennis: "two players in fierce baseline rally competition",
+  hockey: "two players in fierce competition for the puck",
+  rugby: "two players in fierce open-field competition",
+  martial_arts: "two martial artists in fierce sparring competition",
+  fencing: "two fencers in fierce en garde competition",
+  triathlon: "two triathletes in fierce race competition",
+  track_field: "two athletes in fierce track competition",
+};
+
+export function getSportDuoCompetitionLine(
+  sport: AthleticSport,
+  hints: string,
+): string | null {
+  if (
+    !/\b(?:competition|competing|race|racing|fierce|match|versus|vs\.?)\b/i.test(hints)
+  ) {
+    return null;
+  }
+
+  return DUO_COMPETITION_LINES[sport] ?? null;
+}
+
+export function pickSportActionPose(sport: AthleticSport): string {
+  const poses = SPORT_ACTION_BUNDLES[sport]?.poses ?? [];
+  if (poses.length === 0) {
+    return "committed mid-action with readable momentum";
+  }
+  return poses[Math.floor(Math.random() * poses.length)]!;
+}
+
+export function pickSportActionSetting(sport: AthleticSport): string {
+  const settings = SPORT_ACTION_BUNDLES[sport]?.settings ?? [];
+  if (settings.length === 0) {
+    return "an athletic venue matched to the sport";
+  }
+  return settings[Math.floor(Math.random() * settings.length)]!;
+}
+
+export function buildSportPoseIncompatibilities(): ReadonlyArray<{
+  subject: RegExp;
+  incompatiblePose: RegExp;
+}> {
+  return ATHLETIC_SPORT_PROFILES.flatMap((profile) => {
+    const bundle = SPORT_ACTION_BUNDLES[profile.id];
+    if (!bundle || bundle.foreignTokens.length === 0) {
+      return [];
+    }
+
+    const escaped = bundle.foreignTokens.map((token) =>
+      token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+    );
+    return [
+      {
+        subject: profile.hint,
+        incompatiblePose: new RegExp(`\\b(?:${escaped.join("|")})\\b`, "i"),
+      },
+    ];
+  });
+}
+
+export function promptContainsForeignSportActions(
+  sport: AthleticSport,
+  prompt: string,
+): boolean {
+  const pattern = foreignActionPattern(sport);
+  return pattern ? pattern.test(prompt) : false;
+}
+
+export function stripForeignSportActionsFromPrompt(
+  prompt: string,
+  sport: AthleticSport,
+): string {
+  const bundle = SPORT_ACTION_BUNDLES[sport];
+  const pattern = foreignActionPattern(sport);
+  if (!bundle || !pattern || !pattern.test(prompt)) {
+    return prompt;
+  }
+
+  const globalPattern = new RegExp(
+    pattern.source,
+    pattern.flags.includes("i") ? "gi" : "g",
+  );
+
+  return prompt
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => {
+      if (!pattern.test(sentence)) {
+        return sentence;
+      }
+
+      const wardrobeMatch = sentence.match(
+        /\b(?:,\s*)?(?:wearing|dressed in|outfit includes)\b[^]*$/i,
+      );
+      if (wardrobeMatch?.index != null) {
+        const wardrobeTail = wardrobeMatch[0];
+        const actionPart = sentence
+          .slice(0, wardrobeMatch.index)
+          .replace(globalPattern, " ")
+          .replace(/\s{2,}/g, " ")
+          .replace(/\s+,/g, ",")
+          .trim();
+
+        if (!actionPart || pattern.test(actionPart)) {
+          const lead = bundle.rewriteDefault.replace(/\.$/, "");
+          const tail = wardrobeTail.replace(/^,\s*/, "");
+          return `${lead}, ${tail}`;
+        }
+
+        return `${actionPart}${wardrobeTail.startsWith(",") ? wardrobeTail : `, ${wardrobeTail}`}`;
+      }
+
+      return bundle.rewriteDefault;
+    })
+    .join(" ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+export function sentenceContainsExcludedWardrobe(
+  sport: AthleticSport,
+  sentence: string,
+): boolean {
+  const profile = getAthleticSportProfile(sport);
+  if (!profile) {
+    return false;
+  }
+
+  return (
+    profile.excludeLabels.some((pattern) => pattern.test(sentence)) ||
+    /\b(?:dressed for cold weather|quilted nylon)\b/i.test(sentence)
+  );
+}
+
+export function resolveAthleticSportForWardrobe(
+  intentCorpus: string,
+  promptCorpus: string,
+  assignedSport?: AthleticSport | null,
+): AthleticSport | null {
+  const fromIntent = inferAthleticSport(intentCorpus) ?? assignedSport ?? null;
+  if (fromIntent) {
+    return fromIntent;
+  }
+
+  return inferAthleticSport(promptCorpus);
+}
+
+/** @deprecated Use stripForeignSportActionsFromPrompt */
+export function stripIncompatibleSportActionsFromPrompt(
+  prompt: string,
+  sport: AthleticSport,
+): string {
+  return stripForeignSportActionsFromPrompt(prompt, sport);
+}
+
+export function promptContainsIncompatibleSportAction(
+  sport: AthleticSport,
+  prompt: string,
+): boolean {
+  return promptContainsForeignSportActions(sport, prompt);
+}
