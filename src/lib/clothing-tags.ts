@@ -113,6 +113,10 @@ const ATHLETIC_ACTIVITY_HINT =
 const EXPLICIT_COSTUME_HINT =
   /\b(?:wizard robe|knight armor|plate armor|chain mail|cosplay|costume party|in costume|wearing a costume|nun habit|monk robes|ballerina tutu|superhero suit|vampire cape|renaissance faire|halloween costume|elven gown|dwarven armor|circus ringmaster|magician cape|dressed as a wizard|dressed as a knight|dressed as a|dressed as the)\b/i;
 
+/** Fantasy characters and settings warrant medieval/fantasy costume rolls—not modern street clothes. */
+const FANTASY_WARDROBE_HINT =
+  /\b(?:fantasy|high fantasy|dark fantasy|epic fantasy|mythic|legendary|enchanted|arcane|otherworldly|sorcer(?:y|er|ess)|spellcaster|warlock|wizard|mage|witch|necromancer|druid|cleric|priestess|oracle|paladin|knight|crusader|elf|elven|elvish|dwarven|dwarf|ranger|rogue|barbarian|adventurer|adventuring party|medieval|ancient armor|ornate armor|plate armor|chain mail|chainmail|leather armor|wizard robe|knight armor|cuirass|ritual garment|ritual robes|ritual garments|enchanted forest|floating citadel|ancient ruin|enchanted kingdom|fairy realm|celestial realm|underworld throne|runed armor|tabard|travel cloak|battlegear|war gear|hero gear|fantasy hero|fantasy knight|fantasy character|prophetic oracle|robed spellcaster|elven ranger|mythic beast|spellbound)\b/i;
+
 /** Scene/setting cues for literal costumes—not art-direction words like fantasy or stage lighting. */
 const SCENE_COSTUME_SETTING_HINT =
   /\b(?:cosplay|larp|renaissance faire|medieval faire|halloween costume|amusement park|circus tent|circus ring|on stage in costume|performance costume|theater costume|costume party|gothic lolita)\b/i;
@@ -217,6 +221,10 @@ export function hintsSceneSuggestsCostume(hints?: string): boolean {
   return SCENE_COSTUME_SETTING_HINT.test(hints?.trim() ?? "");
 }
 
+export function hintsFantasyWardrobe(hints?: string): boolean {
+  return FANTASY_WARDROBE_HINT.test(hints?.trim() ?? "");
+}
+
 export function hintsExplicitUniform(hints?: string): boolean {
   return EXPLICIT_UNIFORM_HINT.test(hints?.trim() ?? "");
 }
@@ -306,10 +314,19 @@ function resolveClothingContextConflicts(
   corpus: string,
 ): void {
   const athletic = hintsDescribeAthleticActivity(corpus);
+  const fantasyWardrobe = hintsFantasyWardrobe(corpus);
   const explicitCostume =
-    hintsExplicitCostume(corpus) || hintsSceneSuggestsCostume(corpus);
+    hintsExplicitCostume(corpus) ||
+    hintsSceneSuggestsCostume(corpus) ||
+    fantasyWardrobe;
   const workWardrobe = hintsWorkWardrobeAllowed(corpus);
   const intimateWardrobe = hintsIntimateWardrobeAllowed(corpus);
+
+  if (fantasyWardrobe) {
+    tags.add("costume");
+    tags.delete("casual");
+    tags.delete("urban");
+  }
 
   if (!explicitCostume) {
     tags.delete("costume");
@@ -785,6 +802,7 @@ export type ClothingPickFilters = {
   workProfession?: WorkProfession | null;
   swimwearOnly?: boolean;
   explicitCostume?: boolean;
+  fantasyWardrobe?: boolean;
   hintCorpus?: string;
 };
 
@@ -795,18 +813,27 @@ export function buildClothingPickFilters(input: {
   hints?: string;
   presetOptions?: ClothingScenePresetHints;
   excludeIds?: readonly string[];
+  fantasyWardrobe?: boolean;
 }): ClothingPickFilters {
   const hintCorpus = [input.hints, input.environmentSeed].filter(Boolean).join(" ");
   const resolvedGender =
     input.gender === "women" || input.gender === "men"
       ? input.gender
       : inferSubjectGenderFromHints(hintCorpus) ?? input.gender;
-  const contexts = inferSceneClothingContexts({
+  const fantasyWardrobe =
+    input.fantasyWardrobe === true || hintsFantasyWardrobe(hintCorpus);
+  let contexts = inferSceneClothingContexts({
     sceneLocation: input.sceneLocation,
     environmentSeed: input.environmentSeed,
     hints: input.hints,
     presetOptions: input.presetOptions,
   });
+  if (fantasyWardrobe) {
+    if (!contexts.includes("costume")) {
+      contexts = [...contexts, "costume"];
+    }
+    contexts = contexts.filter((tag) => tag !== "casual" && tag !== "urban");
+  }
 
   return {
     gender: subjectGenderToClothingGender(resolvedGender),
@@ -822,7 +849,10 @@ export function buildClothingPickFilters(input: {
       !hintsLockPrimaryGarment(input.hints) &&
       hintsSwimwearOnlyMode(hintCorpus, contexts),
     explicitCostume:
-      hintsExplicitCostume(hintCorpus) || hintsSceneSuggestsCostume(hintCorpus),
+      hintsExplicitCostume(hintCorpus) ||
+      hintsSceneSuggestsCostume(hintCorpus) ||
+      fantasyWardrobe,
+    fantasyWardrobe,
     skipWardrobeRolls: hintsSkipWardrobeRolls(input.hints),
     lockPrimaryGarment:
       hintsLockPrimaryGarment(input.hints) &&
@@ -987,6 +1017,9 @@ export function buildClothingGuardrailLines(
         : null,
     filters.athleticSport === "running" || filters.athleticSport === "track_field"
       ? "Runners must wear visible shorts or track pants—never a topless or bottomless look."
+      : null,
+    filters.fantasyWardrobe
+      ? "Fantasy setting—use medieval or mythic attire only (robes, armor, leather, cloaks, enchanted garments). No modern jeans, t-shirts, sneakers, hoodies, or contemporary streetwear."
       : null,
     filters.workWardrobe
       ? filters.workProfession

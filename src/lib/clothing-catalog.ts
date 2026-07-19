@@ -1,4 +1,5 @@
 import { ALL_CLOTHING_CATALOG_ENTRIES } from "./clothing-catalog-batches";
+import { CLOTHING_CATALOG_FANTASY } from "./clothing-catalog-fantasy";
 import {
   getAthleticSportProfile,
   labelMatchesAnyPattern,
@@ -85,9 +86,10 @@ export type EnrichedClothingEntry = ClothingCatalogEntry & {
   contexts: ClothingContextTag[];
 };
 
-const CATALOG: EnrichedClothingEntry[] = (
-  ALL_CLOTHING_CATALOG_ENTRIES as ClothingCatalogEntry[]
-).map(enrichEntry);
+const CATALOG: EnrichedClothingEntry[] = [
+  ...(ALL_CLOTHING_CATALOG_ENTRIES as ClothingCatalogEntry[]),
+  ...(CLOTHING_CATALOG_FANTASY as ClothingCatalogEntry[]),
+].map(enrichEntry);
 
 const BY_ID = new Map(CATALOG.map((entry) => [entry.id, entry]));
 
@@ -420,18 +422,97 @@ function filterPoolByGender(
   return [];
 }
 
+const FANTASY_WARDROBE_LABEL =
+  /\b(?:wizard|knight|armor|armour|robe|robes|cuirass|chainmail|chain mail|plate|elven|elvish|dwarven|medieval|enchanted|sorcer|warlock|witch|oracle|druid|paladin|ranger|rogue|barbarian|leather armor|mail hauberk|tabard|tunic|cloak|greaves|gauntlets|scale mail|battle mage|ritual robe|arcane vestments|adventurer|necromancer|shaman|priestess|monk robe|fur cloak|travel cloak|enchanted gown|mythic|fantasy|bracers|sabatons|dragonscale|heraldic|spell sigil|cuirass look|ringmaster|magician tailcoat|renaissance faire)\b/i;
+
+const MODERN_STREETWEAR_LABEL =
+  /\b(?:jeans|t-shirt|graphic tee|sneaker|hoodie|chinos|loafer|cargo pants|denim jacket|baseball cap|snapback|skater outfit|farmer chore|compression top|palazzo pants|mock-neck sweater|henley|chinos|oxford dress|twinset|pencil skirt)\b/i;
+
+const FANTASY_ROLE_LABEL_HINTS: Array<{ pattern: RegExp; label: RegExp }> = [
+  {
+    pattern: /\b(?:knight|paladin|crusader)\b/i,
+    label: /\b(?:knight|armor|cuirass|plate|mail|paladin|tabard|greaves)\b/i,
+  },
+  {
+    pattern: /\b(?:wizard|sorcer|mage|warlock|spellcaster)\b/i,
+    label: /\b(?:wizard|robe|mage|spell|sorcer)\b/i,
+  },
+  {
+    pattern: /\b(?:elf|elven|elvish|ranger)\b/i,
+    label: /\b(?:elven|elf|ranger|leather|cloak|tunic|gown)\b/i,
+  },
+  {
+    pattern: /\b(?:witch|necromancer)\b/i,
+    label: /\b(?:witch|ritual|robe|necromancer|dark)\b/i,
+  },
+  {
+    pattern: /\b(?:oracle|priestess|druid|cleric|prophetic)\b/i,
+    label: /\b(?:oracle|ritual|robe|vestments|druid|cleric|ceremonial|shawl)\b/i,
+  },
+  {
+    pattern: /\b(?:barbarian|warrior|rogue|adventurer)\b/i,
+    label: /\b(?:leather|fur|armor|bracers|adventurer|warrior|rogue|barbarian)\b/i,
+  },
+  {
+    pattern: /\b(?:dwarf|dwarven)\b/i,
+    label: /\b(?:dwarven|dwarf|mail|hauberk|bronze)\b/i,
+  },
+];
+
+function inferFantasyGarmentLabelHint(hintCorpus?: string): RegExp | null {
+  const value = hintCorpus?.trim() ?? "";
+  if (!value) {
+    return null;
+  }
+
+  for (const { pattern, label } of FANTASY_ROLE_LABEL_HINTS) {
+    if (pattern.test(value)) {
+      return label;
+    }
+  }
+
+  return FANTASY_WARDROBE_LABEL;
+}
+
 function filterPoolByScene(
   pool: readonly EnrichedClothingEntry[],
   sceneContexts: readonly ClothingContextTag[],
   filters?: Pick<
     ClothingPickFilters,
-    "athleticActivity" | "workWardrobe" | "explicitCostume"
+    "athleticActivity" | "workWardrobe" | "explicitCostume" | "fantasyWardrobe"
   >,
 ): EnrichedClothingEntry[] {
   let working = [...pool];
   const athleticActivity = filters?.athleticActivity;
   const workWardrobe = filters?.workWardrobe;
   const explicitCostume = filters?.explicitCostume;
+  const fantasyWardrobe = filters?.fantasyWardrobe;
+
+  if (fantasyWardrobe) {
+    const fantasyPool = working.filter(
+      (entry) =>
+        entry.id.startsWith("fantasy-") ||
+        (entry.contexts.includes("costume") &&
+          FANTASY_WARDROBE_LABEL.test(entry.label)),
+    );
+    if (fantasyPool.length > 0) {
+      working = fantasyPool;
+    } else {
+      const costumeOnly = working.filter((entry) =>
+        entry.contexts.includes("costume"),
+      );
+      if (costumeOnly.length > 0) {
+        working = costumeOnly;
+      }
+    }
+
+    const withoutModern = working.filter(
+      (entry) => !MODERN_STREETWEAR_LABEL.test(entry.label),
+    );
+    if (withoutModern.length > 0) {
+      working = withoutModern;
+    }
+  }
 
   if (!explicitCostume) {
     const withoutCostume = working.filter(
@@ -495,7 +576,7 @@ function pickScoredEntry(
   exclude: readonly string[] = [],
   filters?: Pick<
     ClothingPickFilters,
-    "athleticActivity" | "workWardrobe" | "explicitCostume"
+    "athleticActivity" | "workWardrobe" | "explicitCostume" | "fantasyWardrobe"
   >,
 ): EnrichedClothingEntry | null {
   if (pool.length === 0) {
@@ -543,12 +624,13 @@ function pickFilterFlags(
   filters: ClothingPickFilters,
 ): Pick<
   ClothingPickFilters,
-  "athleticActivity" | "workWardrobe" | "explicitCostume"
+  "athleticActivity" | "workWardrobe" | "explicitCostume" | "fantasyWardrobe"
 > {
   return {
     athleticActivity: filters.athleticActivity,
     workWardrobe: filters.workWardrobe,
     explicitCostume: filters.explicitCostume,
+    fantasyWardrobe: filters.fantasyWardrobe,
   };
 }
 
@@ -598,6 +680,60 @@ function pickProfessionGarment(
     const genderPool = filterPoolByGender(basePool, filters.gender);
     const categoryPool = filterPoolByCategory(genderPool, category, filters);
     const pickFlags = pickFilterFlags(filters);
+    const picked =
+      pickScoredEntry(
+        categoryPool,
+        filters.contexts,
+        filters.excludeIds,
+        pickFlags,
+      ) ??
+      pickScoredEntry(
+        genderPool,
+        filters.contexts,
+        filters.excludeIds,
+        pickFlags,
+      );
+
+    if (picked) {
+      return picked;
+    }
+  }
+
+  return null;
+}
+
+function pickFantasyGarment(
+  filters: ClothingPickFilters,
+): EnrichedClothingEntry | null {
+  if (!filters.fantasyWardrobe) {
+    return null;
+  }
+
+  const labelHint = inferFantasyGarmentLabelHint(filters.hintCorpus);
+  const categories: ClothingCategory[] = ["outfit", "outerwear", "top"];
+  const pickFlags = pickFilterFlags(filters);
+
+  for (const category of categories) {
+    let basePool = (BY_CATEGORY[category] ?? []).filter(
+      (entry) =>
+        entry.id.startsWith("fantasy-") ||
+        (entry.contexts.includes("costume") &&
+          FANTASY_WARDROBE_LABEL.test(entry.label)),
+    );
+
+    if (labelHint) {
+      const rolePool = basePool.filter((entry) => labelHint.test(entry.label));
+      if (rolePool.length > 0) {
+        basePool = rolePool;
+      }
+    }
+
+    if (basePool.length === 0) {
+      continue;
+    }
+
+    const genderPool = filterPoolByGender(basePool, filters.gender);
+    const categoryPool = filterPoolByCategory(genderPool, category, filters);
     const picked =
       pickScoredEntry(
         categoryPool,
@@ -698,6 +834,13 @@ function pickWardrobeLayers(
       }
     }
     return { wardrobe: null, bottom: null };
+  }
+
+  if (filters.fantasyWardrobe) {
+    const fantasyGarment = pickFantasyGarment(filters);
+    if (fantasyGarment) {
+      return { wardrobe: fantasyGarment, bottom: null };
+    }
   }
 
   if (filters.workWardrobe && filters.workProfession) {
@@ -816,7 +959,24 @@ function filterPoolByCategory(
   let working = [...pool];
 
   if (category === "footwear") {
-    if (filters.athleticSport) {
+    if (filters.fantasyWardrobe) {
+      const fantasyFootwear = working.filter(
+        (entry) =>
+          entry.id.startsWith("fantasy-") ||
+          entry.contexts.includes("costume") ||
+          /\b(?:boot|greave|sabatons?|riding boot|war boot|leather boot)\b/i.test(
+            entry.label,
+          ),
+      );
+      if (fantasyFootwear.length > 0) {
+        working = fantasyFootwear.filter(
+          (entry) => !MODERN_STREETWEAR_LABEL.test(entry.label),
+        );
+        if (working.length === 0) {
+          working = fantasyFootwear;
+        }
+      }
+    } else if (filters.athleticSport) {
       working = [...applyAthleticSportCategoryFilter(working, filters.athleticSport, "footwear")];
     } else if (filters.athleticActivity || contexts.includes("athletic")) {
       const athletic = working.filter(

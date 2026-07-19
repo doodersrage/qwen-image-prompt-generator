@@ -154,6 +154,7 @@ export function buildGenerateWardrobeAssignments(
     forcedGender?: SubjectGender;
     teamKit?: boolean;
     lockedWardrobeId?: string;
+    fantasyWardrobe?: boolean;
   },
 ): GenerateWardrobeAssignment[] | null {
   if (
@@ -194,6 +195,7 @@ export function buildGenerateWardrobeAssignments(
       environmentSeed: trimmed,
       hints: trimmed,
       excludeIds,
+      fantasyWardrobe: options?.fantasyWardrobe,
     });
     const outfit =
       options?.lockedWardrobeId && index === 0

@@ -73,6 +73,7 @@ export async function generateFantasyPrompt(
           assumePeople: true,
           recentClothing: options.recentClothing,
           lockedWardrobeId: options.lockedWardrobeId,
+          fantasyWardrobe: true,
         })
       : null;
   const clothingDirective = wardrobeAssignments?.length

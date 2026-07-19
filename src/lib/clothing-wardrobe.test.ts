@@ -27,6 +27,7 @@ import {
   hintsWorkWardrobeAllowed,
   inferAthleticSport,
   inferWorkProfession,
+  hintsFantasyWardrobe,
 } from "./clothing-tags";
 import { summaryMatchesSportWardrobe } from "./athletic-sport-profiles";
 import {
@@ -548,5 +549,72 @@ describe("buildClothingGuardrailLines", () => {
       athleticActivity: true,
     });
     assert.ok(lines.some((line) => line.includes("Athletic activity")));
+  });
+
+  it("includes fantasy guardrails when fantasy wardrobe is active", () => {
+    const lines = buildClothingGuardrailLines({
+      gender: "any",
+      contexts: ["costume"],
+      fantasyWardrobe: true,
+    });
+    assert.ok(lines.some((line) => line.includes("Fantasy setting")));
+  });
+});
+
+describe("fantasy wardrobe", () => {
+  it("detects fantasy hints for wardrobe mode", () => {
+    assert.equal(hintsFantasyWardrobe("an elven ranger in an enchanted forest"), true);
+    assert.equal(hintsFantasyWardrobe("neon alley, rain, black cat"), false);
+  });
+
+  it("builds costume filters for fantasy scenes", () => {
+    const filters = buildClothingPickFilters({
+      hints: "a fantasy knight in ornate armor, ancient ruin",
+      fantasyWardrobe: true,
+    });
+    assert.equal(filters.fantasyWardrobe, true);
+    assert.equal(filters.explicitCostume, true);
+    assert.ok(filters.contexts.includes("costume"));
+    assert.equal(filters.contexts.includes("casual"), false);
+  });
+
+  it("picks fantasy garments instead of modern streetwear", () => {
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const outfit = pickRandomCharacterOutfit(
+        buildClothingPickFilters({
+          hints: "an elven ranger with elegant gear in an enchanted forest",
+          fantasyWardrobe: true,
+        }),
+      );
+      if (!outfit.summary.trim()) {
+        continue;
+      }
+      assert.match(
+        outfit.summary,
+        /\b(?:wizard|knight|armor|armour|robe|robes|cuirass|elven|elf|ranger|leather|cloak|enchanted|druid|paladin|witch|oracle|mail|tabard|bracers|greaves|boot|fantasy|vestments|sorcer|warlock|dwarven|barbarian|necromancer|cleric|dragonscale|heraldic|travel cloak)\b/i,
+        `expected fantasy garment, got: ${outfit.summary}`,
+      );
+      assert.doesNotMatch(
+        outfit.summary,
+        /\b(?:jeans|t-shirt|graphic tee|sneaker|hoodie|chinos|loafer|cargo pants|skater outfit)\b/i,
+        `modern streetwear leaked: ${outfit.summary}`,
+      );
+      return;
+    }
+    assert.fail("failed to pick a fantasy outfit after 12 attempts");
+  });
+
+  it("assigns fantasy wardrobe through generate helper", () => {
+    const assignments = buildGenerateWardrobeAssignments(
+      "an elven ranger with elegant gear, enchanted forest, legendary wonder",
+      { ...DEFAULT_GENERATION_SETTINGS, alwaysIncludeClothing: true },
+      { assumePeople: true, fantasyWardrobe: true },
+    );
+    assert.ok(assignments?.length);
+    assert.equal(assignments?.[0]?.filters.fantasyWardrobe, true);
+    assert.match(
+      assignments?.[0]?.summary ?? "",
+      /\b(?:elven|elf|ranger|leather|cloak|armor|robe|enchanted|wizard|knight|fantasy|vestments|boot|bracers|cuirass|mail|tabard)\b/i,
+    );
   });
 });
