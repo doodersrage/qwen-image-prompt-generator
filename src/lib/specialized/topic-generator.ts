@@ -8,7 +8,7 @@ import {
   isLlmEnabled,
 } from "../llm-client";
 import { stripPromptArtifacts } from "../prompt-cleanup";
-import { buildTemplateTopicList } from "./scene-pools";
+import { buildTemplateTopicList, normalizeTopicPhrase } from "./scene-pools";
 import { mergeLocationExclusions } from "../location-exclusions";
 import type { TopicGenerateResult, TopicOptions } from "./types";
 
@@ -32,13 +32,14 @@ function parseTopicLines(raw: string, count: number): string[] {
   const seen = new Set<string>();
 
   for (const line of lines) {
-    const key = line.toLowerCase();
+    const normalized = normalizeTopicPhrase(line);
+    const key = normalized.toLowerCase();
     if (seen.has(key)) {
       continue;
     }
 
     seen.add(key);
-    unique.push(line);
+    unique.push(normalized);
 
     if (unique.length >= count) {
       break;

@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useState } from "react";
 import PromptResultPanel from "@/components/PromptResultPanel";
 import PromptDiagnosticsPanel from "@/components/PromptDiagnosticsPanel";
 import WorkflowPreviewPanel from "@/components/WorkflowPreviewPanel";
@@ -7,10 +8,35 @@ import ComfyWorkflowSelector from "@/components/ComfyWorkflowSelector";
 import { useComfyWorkflowSelection } from "@/hooks/useComfyWorkflowSelection";
 import {
   ActionButtonBar,
+  ToolBlockGroup,
   ToolSection,
 } from "@/components/ui/ToolPageShell";
 import { Button } from "@/components/ui/Button";
+import {
+  BatchPromptCard,
+  type BatchPromptCrossLinks,
+} from "@/components/ui/BatchPromptCard";
 import type { GenerationDiagnostics } from "@/lib/generation-diagnostics";
+
+export type BatchPromptItem = {
+  prompt: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type BatchPromptItemActions = {
+  onQueueComfyUi?: (prompt: string, index: number) => void | Promise<void>;
+  onSaveHistory?: (input: {
+    prompt: string;
+    index: number;
+    metadata?: Record<string, unknown>;
+  }) => void;
+  onCopyPair?: (prompt: string, index: number) => void | Promise<void>;
+  onExportSidecar?: (
+    prompt: string,
+    index: number,
+    metadata?: Record<string, unknown>,
+  ) => void | Promise<void>;
+};
 
 type EnhancedPromptResultProps = {
   output: string;
@@ -68,6 +94,9 @@ type EnhancedPromptResultProps = {
   historySaved?: boolean;
   pairCopied?: boolean;
   batchOutputs?: string[];
+  batchItems?: BatchPromptItem[];
+  batchCrossLinks?: BatchPromptCrossLinks;
+  batchPromptActions?: BatchPromptItemActions;
 };
 
 export default function EnhancedPromptResult({
@@ -99,14 +128,55 @@ export default function EnhancedPromptResult({
   historySaved,
   pairCopied,
   batchOutputs,
+  batchItems,
+  batchCrossLinks,
+  batchPromptActions,
   ...panelProps
 }: EnhancedPromptResultProps) {
   const workflowSelection = useComfyWorkflowSelection();
   const showComfyActions = Boolean(onSendComfyUi || onQueueBatchComfyUi || onPreviewWorkflow);
+  const [copiedBatchIndex, setCopiedBatchIndex] = useState<number | null>(null);
+  const [savedBatchIndices, setSavedBatchIndices] = useState<Set<number>>(
+    () => new Set(),
+  );
+  const [pairCopiedBatchIndex, setPairCopiedBatchIndex] = useState<number | null>(
+    null,
+  );
 
-  if (!panelProps.output && (!batchOutputs || batchOutputs.length === 0)) {
+  const resolvedBatchItems: BatchPromptItem[] =
+    batchItems ??
+    batchOutputs?.map((prompt) => ({ prompt })) ??
+    [];
+
+  const copyBatchPrompt = useCallback(async (prompt: string, index: number) => {
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setCopiedBatchIndex(index);
+      window.setTimeout(() => setCopiedBatchIndex(null), 2000);
+    } catch {
+      // Parent surfaces clipboard errors when using the main copy action.
+    }
+  }, []);
+
+  if (!panelProps.output && resolvedBatchItems.length === 0) {
     return null;
   }
+
+  const showBatchCards = resolvedBatchItems.length > 0;
+  const showSingleActions = Boolean(
+    panelProps.output &&
+      !showBatchCards &&
+      (onSaveHistory ||
+        onSendComfyUi ||
+        onFixPrompt ||
+        onCopyPair ||
+        onLockSeed ||
+        onCompact ||
+        onReformat ||
+        onRunPipeline ||
+        onExportSidecar ||
+        onPreviewWorkflow),
+  );
 
   return (
     <div className="space-y-6">
@@ -119,23 +189,25 @@ export default function EnhancedPromptResult({
         </section>
       )}
 
-      {batchOutputs && batchOutputs.length > 0 ? (
-        <section className="ui-card space-y-4 p-[var(--card-padding)]">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="type-heading">
-              Batch results ({batchOutputs.length})
-            </h2>
+      {showBatchCards ? (
+        <ToolSection title={`Batch results (${resolvedBatchItems.length})`}>
+          <div className="mb-[var(--group-gap)] flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             {onExportBatch && (
-              <Button variant="secondary" onClick={onExportBatch}>
+              <Button variant="secondary" className="w-full sm:w-auto" onClick={onExportBatch}>
                 Export batch
               </Button>
             )}
             {onQueueBatchComfyUi && (
-              <Button variant="accent-outline" onClick={onQueueBatchComfyUi}>
+              <Button
+                variant="accent-outline"
+                className="w-full sm:w-auto"
+                onClick={onQueueBatchComfyUi}
+              >
                 Queue batch to ComfyUI
               </Button>
             )}
           </div>
+
           {workflowSelection.mounted && (
             <ComfyWorkflowSelector
               compact
@@ -146,17 +218,58 @@ export default function EnhancedPromptResult({
               onChange={workflowSelection.setSelectedId}
             />
           )}
-          <div className="space-y-3">
-            {batchOutputs.map((prompt, index) => (
-              <pre
-                key={`batch-${index}`}
-                className="type-code overflow-x-auto whitespace-pre-wrap rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--bg-muted)] p-4 !text-[var(--tint-success-text)]"
-              >
-                {prompt}
-              </pre>
+
+          <ToolBlockGroup className="mt-[var(--group-gap)]">
+            {resolvedBatchItems.map((item, index) => (
+              <BatchPromptCard
+                key={`batch-${index}-${item.prompt.slice(0, 24)}`}
+                index={index}
+                prompt={item.prompt}
+                crossLinks={batchCrossLinks}
+                copied={copiedBatchIndex === index}
+                historySaved={savedBatchIndices.has(index)}
+                pairCopied={pairCopiedBatchIndex === index}
+                onCopy={() => void copyBatchPrompt(item.prompt, index)}
+                onQueueComfyUi={
+                  batchPromptActions?.onQueueComfyUi
+                    ? () => void batchPromptActions.onQueueComfyUi?.(item.prompt, index)
+                    : undefined
+                }
+                onSaveHistory={
+                  batchPromptActions?.onSaveHistory
+                    ? () => {
+                        batchPromptActions.onSaveHistory?.({
+                          prompt: item.prompt,
+                          index,
+                          metadata: item.metadata,
+                        });
+                        setSavedBatchIndices((previous) => new Set(previous).add(index));
+                      }
+                    : undefined
+                }
+                onCopyPair={
+                  batchPromptActions?.onCopyPair
+                    ? () => {
+                        void batchPromptActions.onCopyPair?.(item.prompt, index);
+                        setPairCopiedBatchIndex(index);
+                        window.setTimeout(() => setPairCopiedBatchIndex(null), 2000);
+                      }
+                    : undefined
+                }
+                onExportSidecar={
+                  batchPromptActions?.onExportSidecar
+                    ? () =>
+                        void batchPromptActions.onExportSidecar?.(
+                          item.prompt,
+                          index,
+                          item.metadata,
+                        )
+                    : undefined
+                }
+              />
             ))}
-          </div>
-        </section>
+          </ToolBlockGroup>
+        </ToolSection>
       ) : (
         <PromptResultPanel {...panelProps} />
       )}
@@ -173,7 +286,7 @@ export default function EnhancedPromptResult({
         onRunPipeline ||
         onExportSidecar ||
         onPreviewWorkflow) &&
-        panelProps.output && (
+        showSingleActions && (
         <ToolSection className="space-y-5">
           {showComfyActions && workflowSelection.mounted && (
             <ComfyWorkflowSelector

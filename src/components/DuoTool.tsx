@@ -21,7 +21,7 @@ import { useLocationBlocklist } from "@/hooks/useLocationBlocklist";
 import { getClothingLabel } from "@/lib/clothing-catalog";
 import { getSportPreset } from "@/lib/sport-presets";
 import { downloadTextFile } from "@/lib/prompt-pair";
-import { readVariationSeedFromResult } from "@/lib/variation-seed-metadata";
+import { readVariationSeedFromMetadata, readVariationSeedFromResult } from "@/lib/variation-seed-metadata";
 import { variationStrengthLabel } from "@/lib/variation-settings";
 import {
   applyShareableSceneParams,
@@ -47,7 +47,7 @@ export default function DuoTool() {
   const { getRecent: getRecentClothing, record: recordClothing } = useRecentClothing();
   const { getBlocklist } = useLocationBlocklist();
   const [output, setOutput] = useState("");
-  const [batchOutputs, setBatchOutputs] = useState<string[]>([]);
+  const [batchResults, setBatchResults] = useState<EnrichedToolGenerateResult[]>([]);
   const [result, setResult] = useState<EnrichedToolGenerateResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -112,7 +112,7 @@ export default function DuoTool() {
       setError(null);
       setCopied(false);
       actions.resetStatuses();
-      setBatchOutputs([]);
+      setBatchResults([]);
 
       try {
         await actions.runPreLint(toolSettings.hints);
@@ -160,9 +160,8 @@ export default function DuoTool() {
             recordLocation(readSceneLocationFromMetadata(entry.metadata));
             recordClothing(readClothingIdsFromMetadata(entry.metadata));
           }
-          const prompts = data.results.map((entry) => entry.prompt);
-          setBatchOutputs(prompts);
-          const firstPrompt = prompts[0] ?? "";
+          setBatchResults(data.results);
+          const firstPrompt = data.results[0]?.prompt ?? "";
           const finalized = firstPrompt
             ? await actions.finalizePrompt(firstPrompt, toolSettings.hints)
             : "";
@@ -174,11 +173,12 @@ export default function DuoTool() {
           const prompt = await actions.finalizePrompt(data.prompt, toolSettings.hints);
           setOutput(prompt);
           setResult({ ...data, prompt });
+          setBatchResults([]);
         }
       } catch (err) {
         setOutput("");
         setResult(null);
-        setBatchOutputs([]);
+        setBatchResults([]);
         setError(err instanceof Error ? err.message : "Generation failed.");
       } finally {
         setLoading(false);
@@ -199,15 +199,19 @@ export default function DuoTool() {
   }, [output]);
 
   const exportBatch = useCallback(() => {
-    if (batchOutputs.length === 0) {
+    if (batchResults.length === 0) {
       return;
     }
 
     downloadTextFile(
       `duo-batch-${Date.now()}.txt`,
-      batchOutputs.map((prompt, index) => `# ${index + 1}\n${prompt}`).join("\n\n"),
+      batchResults
+        .map((entry, index) => `# ${index + 1}\n${entry.prompt}`)
+        .join("\n\n"),
     );
-  }, [batchOutputs]);
+  }, [batchResults]);
+
+  const batchPrompts = batchResults.map((entry) => entry.prompt);
 
   if (!mounted) {
     return null;
@@ -411,12 +415,41 @@ export default function DuoTool() {
             metadata: result?.metadata,
           })
         }
-        onExportBatch={batchOutputs.length > 1 ? exportBatch : undefined}
+        onExportBatch={batchResults.length > 1 ? exportBatch : undefined}
         onQueueBatchComfyUi={
-          batchOutputs.length > 1
-            ? () => void actions.sendBatchComfyUi(batchOutputs, inferredSport)
+          batchResults.length > 1
+            ? () => void actions.sendBatchComfyUi(batchPrompts, inferredSport)
             : undefined
         }
+        batchItems={
+          batchResults.length > 1
+            ? batchResults.map((entry) => ({
+                prompt: entry.prompt,
+                metadata: entry.metadata,
+              }))
+            : undefined
+        }
+        batchCrossLinks={{
+          hintsForDuo: toolSettings.hints,
+          hintsForCharacter: toolSettings.hints,
+        }}
+        batchPromptActions={{
+          onQueueComfyUi: (prompt) => void actions.sendComfyUi(prompt, inferredSport),
+          onSaveHistory: ({ prompt, metadata }) =>
+            actions.saveHistory({
+              prompt,
+              hints: toolSettings.hints,
+              metadata,
+            }),
+          onCopyPair: (prompt) => void actions.copyPromptPair(prompt, inferredSport),
+          onExportSidecar: (prompt, _index, metadata) =>
+            void actions.exportSidecar(prompt, {
+              comfyNode: result?.comfyNode ?? selectedModel.comfyNode,
+              metadata,
+              variationSeed:
+                readVariationSeedFromMetadata(metadata) ?? shared.lockedVariationSeed,
+            }),
+        }}
         onLockSeed={() => {
           if (variationSeed) {
             updateShared({ lockedVariationSeed: variationSeed });
@@ -438,7 +471,6 @@ export default function DuoTool() {
         comfyUiPreviewUrl={actions.comfyUiPreviewUrl}
         historySaved={actions.historySaved}
         pairCopied={actions.pairCopied}
-        batchOutputs={batchOutputs.length > 1 ? batchOutputs : undefined}
         extraMeta={
           toolSettings.sportPresetId
             ? getSportPreset(toolSettings.sportPresetId)?.label

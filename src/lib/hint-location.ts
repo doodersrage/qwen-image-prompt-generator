@@ -20,6 +20,9 @@ const GEOGRAPHIC_NAME =
 const AGE_ONLY =
   /^(?:\d{1,2}\s*(?:years?\s*old|yo|y\.o\.)|teen(?:age)?|elderly|middle-aged|young|old|aged|youthful|senior|child|kid|toddler|infant|in her twenties|in his twenties)$/i;
 
+const SUBJECT_SCENE_CUE =
+  /\b(?:woman|women|man|men|person|people|couple|duo|girl|boy|model|athlete|cyclist|runner|dressed|wearing|holding|competing|racing|portrait|subject|figure|character)\b/i;
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -38,15 +41,23 @@ function looksLikeLocation(text: string): boolean {
     return true;
   }
 
-  if (
-    /\b(?:in|at|on|inside|within|near|beside|under|overlooking|outside|through|along)\s+\S/i.test(
-      value,
-    )
-  ) {
+  return value.split(/\s+/).length >= 3 && value.length >= 14;
+}
+
+function shouldTreatRawHintAsLocation(raw: string): boolean {
+  if (AGE_ONLY.test(raw)) {
+    return false;
+  }
+
+  if (SUBJECT_SCENE_CUE.test(raw)) {
+    return false;
+  }
+
+  if (SETTING_NOUN.test(raw) || GEOGRAPHIC_NAME.test(raw)) {
     return true;
   }
 
-  return value.split(/\s+/).length >= 3 && value.length >= 14;
+  return looksLikeLocation(raw) && raw.split(/\s+/).length <= 6;
 }
 
 function stripExplicitPrefix(text: string): string | null {
@@ -145,7 +156,7 @@ export function parseSettingHint(text?: string): ParsedSettingHint {
     };
   }
 
-  if (looksLikeLocation(raw) && !AGE_ONLY.test(raw)) {
+  if (shouldTreatRawHintAsLocation(raw)) {
     return {
       raw,
       location: raw,

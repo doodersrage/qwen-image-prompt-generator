@@ -3,7 +3,6 @@
 import { useCallback, useState } from "react";
 import Link from "next/link";
 import SharedToolControls from "@/components/SharedToolControls";
-import EnhancedPromptResult from "@/components/EnhancedPromptResult";
 import { useCachedSettings } from "@/hooks/useCachedSettings";
 import { useRecentClothing } from "@/hooks/useRecentClothing";
 import { useLocationBlocklist } from "@/hooks/useLocationBlocklist";
@@ -18,6 +17,8 @@ import {
 import { scheduleComfyGalleryPoll } from "@/lib/comfyui-gallery-poller";
 import {
   ToolBadge,
+  ToolBlockGroup,
+  ToolContentPanel,
   ToolLayout,
   ToolMetaPanel,
   ToolSection,
@@ -27,11 +28,6 @@ import {
 } from "@/components/ui/ToolPageShell";
 import { FieldDivider, FieldError, FieldLabel, TextArea } from "@/components/ui/Field";
 import { Button, PrimaryButton } from "@/components/ui/Button";
-import {
-  DataList,
-  DataListActions,
-  DataListRow,
-} from "@/components/ui/DataList";
 
 const ACCENT = "violet" as const;
 
@@ -307,7 +303,7 @@ export default function TopicTool() {
       {topics.length > 0 && (
         <ToolSection title="Topics">
           <ToolMetaPanel>
-            <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               {provider ? (
                 <p className="type-caption">
                   {topics.length} ideas via {provider === "llm" ? "LLM" : "template"}
@@ -315,7 +311,7 @@ export default function TopicTool() {
               ) : (
                 <span />
               )}
-              <div className="ui-list-actions">
+              <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap lg:w-auto lg:justify-end">
                 <select
                   value={batchTarget}
                   onChange={(event) =>
@@ -323,13 +319,14 @@ export default function TopicTool() {
                       batchTarget: event.target.value as "generate" | "duo",
                     })
                   }
-                  className="ui-input px-3 py-[var(--input-padding-y)] type-caption"
+                  className="ui-input min-h-11 w-full px-3 py-[var(--input-padding-y)] type-body sm:min-w-[15rem] sm:flex-1 lg:w-auto lg:flex-none"
                 >
                   <option value="generate">Batch → Generate prompts</option>
                   <option value="duo">Batch → Duo prompts</option>
                 </select>
                 <Button
                   variant="secondary"
+                  className="w-full sm:w-auto"
                   loading={batchLoading}
                   loadingLabel="Building batch prompts"
                   onClick={() => void batchGenerate()}
@@ -338,6 +335,7 @@ export default function TopicTool() {
                 </Button>
                 <Button
                   variant="secondary"
+                  className="w-full sm:w-auto"
                   onClick={() => void copyTopics(topics.join("\n"), "all")}
                 >
                   {copiedIndex === "all" ? "Copied!" : "Copy all topics"}
@@ -353,54 +351,24 @@ export default function TopicTool() {
             )}
           </ToolMetaPanel>
 
-          <DataList scrollable={false} className="mt-[var(--block-gap)]">
+          <ToolBlockGroup className="mt-[var(--block-gap)]">
             {topics.map((topic, index) => (
-              <DataListRow key={`${index}-${topic}`} className="!items-start !py-4">
-                <button
-                  type="button"
-                  onClick={() => void copyTopics(topic, index)}
-                  className="ui-list-primary group text-left"
-                >
-                  <p className="type-overline mb-2 text-[var(--text-muted)] group-hover:text-[var(--accent-text)]">
-                    {String(index + 1).padStart(2, "0")}
-                  </p>
-                  <p className="type-body-lg ui-truncate-2 text-[var(--text-primary)]">
-                    {topic}
-                  </p>
-                  {batchResults[index] && (
-                    <pre className="type-code mt-3 max-h-32 overflow-auto whitespace-pre-wrap border border-[var(--tint-success-border)] bg-[var(--tint-success-bg)] p-3 !text-[var(--tint-success-text)]">
-                      {batchResults[index]?.prompt}
-                    </pre>
-                  )}
-                </button>
-                <DataListActions>
-                  <Link
-                    href={`/?input=${encodeURIComponent(topic)}`}
-                    className="ui-btn-ghost !min-h-8 px-3 type-caption"
-                  >
-                    Generate
-                  </Link>
-                  <Link
-                    href={`/duo?hints=${encodeURIComponent(topic)}`}
-                    className="ui-btn-ghost !min-h-8 px-3 type-caption"
-                  >
-                    Duo
-                  </Link>
-                  <Link
-                    href={`/character?hints=${encodeURIComponent(topic)}`}
-                    className="ui-btn-ghost !min-h-8 px-3 type-caption"
-                  >
-                    Character
-                  </Link>
-                </DataListActions>
-              </DataListRow>
+              <TopicCard
+                key={`${index}-${topic}`}
+                index={index}
+                topic={topic}
+                copied={copiedIndex === index}
+                batchPrompt={batchResults[index]?.prompt}
+                onCopy={() => void copyTopics(topic, index)}
+              />
             ))}
-          </DataList>
+          </ToolBlockGroup>
 
           {batchResults.length > 0 && (
-            <div className="ui-list-actions mt-[var(--group-gap)]">
+            <div className="mt-[var(--group-gap)] flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <Button
                 variant="secondary"
+                className="w-full sm:w-auto"
                 onClick={() =>
                   void copyTopics(
                     batchResults.map((entry) => entry.prompt).join("\n\n---\n\n"),
@@ -410,7 +378,11 @@ export default function TopicTool() {
               >
                 {copiedIndex === "batch" ? "Copied prompts!" : "Copy all prompts"}
               </Button>
-              <Button variant="accent-outline" onClick={() => void queueBatchComfyUi()}>
+              <Button
+                variant="accent-outline"
+                className="w-full sm:w-auto"
+                onClick={() => void queueBatchComfyUi()}
+              >
                 Queue batch to ComfyUI
               </Button>
             </div>
@@ -418,5 +390,61 @@ export default function TopicTool() {
         </ToolSection>
       )}
     </ToolLayout>
+  );
+}
+
+function TopicCard({
+  index,
+  topic,
+  copied,
+  batchPrompt,
+  onCopy,
+}: {
+  index: number;
+  topic: string;
+  copied: boolean;
+  batchPrompt?: string;
+  onCopy: () => void;
+}) {
+  return (
+    <ToolContentPanel className="space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <p className="type-overline text-[var(--text-muted)]">
+          Topic {String(index + 1).padStart(2, "0")}
+        </p>
+        <Button variant="ghost" className="!min-h-9 px-3 type-caption" onClick={onCopy}>
+          {copied ? "Copied!" : "Copy topic"}
+        </Button>
+      </div>
+
+      <p className="type-body-lg leading-relaxed text-[var(--text-primary)]">{topic}</p>
+
+      <div className="flex flex-wrap gap-2 border-t border-[var(--border-subtle)] pt-4">
+        <Link
+          href={`/?input=${encodeURIComponent(topic)}`}
+          className="ui-btn-ghost !min-h-9 px-4 type-caption"
+        >
+          Generate
+        </Link>
+        <Link
+          href={`/duo?hints=${encodeURIComponent(topic)}`}
+          className="ui-btn-ghost !min-h-9 px-4 type-caption"
+        >
+          Duo
+        </Link>
+        <Link
+          href={`/character?hints=${encodeURIComponent(topic)}`}
+          className="ui-btn-ghost !min-h-9 px-4 type-caption"
+        >
+          Character
+        </Link>
+      </div>
+
+      {batchPrompt ? (
+        <pre className="type-code max-h-48 overflow-auto whitespace-pre-wrap rounded-[var(--radius-md)] border border-[var(--tint-success-border)] bg-[var(--tint-success-bg)] p-4 !text-[var(--tint-success-text)]">
+          {batchPrompt}
+        </pre>
+      ) : null}
+    </ToolContentPanel>
   );
 }

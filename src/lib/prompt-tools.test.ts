@@ -39,6 +39,12 @@ import { createScenePreset } from "./scene-presets";
 import { createUserTemplate } from "./user-templates";
 import { diffPromptWords } from "./prompt-diff";
 import type { PromptHistoryEntry } from "@/hooks/usePromptHistory";
+import { parseSettingHint } from "./hint-location";
+import {
+  buildRandomTopicPhrase,
+  buildTemplateTopicList,
+  normalizeTopicPhrase,
+} from "./specialized/scene-pools";
 
 describe("lintPrompt", () => {
   it("flags gravel + velodrome conflicts", () => {
@@ -780,5 +786,66 @@ describe("history search filter", () => {
       filterHistoryEntries(sample, { query: "gravel" }).length,
       0,
     );
+  });
+});
+
+describe("topic phrase normalization", () => {
+  it("collapses duplicated dash phrases", () => {
+    assert.equal(
+      normalizeTopicPhrase(
+        "beautiful woman dressed for night on the town — beautiful woman dressed for night on the town",
+      ),
+      "beautiful woman dressed for night on the town",
+    );
+  });
+
+  it("collapses duplicated in phrases", () => {
+    assert.equal(
+      normalizeTopicPhrase("neon alley in neon alley"),
+      "neon alley",
+    );
+  });
+});
+
+describe("parseSettingHint for topic seeds", () => {
+  it("does not treat subject-led seeds as standalone locations", () => {
+    const parsed = parseSettingHint(
+      "beautiful woman dressed for night on the town",
+    );
+    assert.equal(parsed.location, null);
+    assert.equal(parsed.remainder, "beautiful woman dressed for night on the town");
+  });
+});
+
+describe("buildRandomTopicPhrase", () => {
+  it("never returns theme duplicated with an em dash", () => {
+    const seed = "beautiful woman dressed for night on the town";
+    const duplicatePattern = /^(.+)\s+[—–-]\s+\1$/i;
+    for (let index = 0; index < 40; index += 1) {
+      const { seed: phrase } = buildRandomTopicPhrase(seed, []);
+      assert.equal(duplicatePattern.test(phrase), false, `duplicate dash phrase: ${phrase}`);
+      assert.notEqual(
+        phrase.toLowerCase(),
+        `${seed.toLowerCase()} — ${seed.toLowerCase()}`,
+      );
+    }
+  });
+});
+
+describe("buildTemplateTopicList", () => {
+  it("returns unique normalized topics for subject seeds", () => {
+    const topics = buildTemplateTopicList({
+      seedTopic: "beautiful woman dressed for night on the town",
+      count: 8,
+    });
+    const duplicatePattern = /^(.+)\s+[—–-]\s+\1$/i;
+    assert.ok(topics.length >= 3);
+    assert.equal(
+      new Set(topics.map((topic) => topic.toLowerCase())).size,
+      topics.length,
+    );
+    for (const topic of topics) {
+      assert.equal(duplicatePattern.test(topic), false, `duplicate dash phrase: ${topic}`);
+    }
   });
 });

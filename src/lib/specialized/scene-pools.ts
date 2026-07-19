@@ -1232,6 +1232,33 @@ const SEED_TOPIC_ANGLES = [
   "in golden-hour warmth",
 ];
 
+export function normalizeTopicPhrase(phrase: string): string {
+  const trimmed = phrase.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+
+  const dashParts = trimmed.split(/\s+[—–-]\s+/);
+  if (dashParts.length === 2) {
+    const left = dashParts[0]!.trim();
+    const right = dashParts[1]!.trim();
+    if (left.toLowerCase() === right.toLowerCase()) {
+      return left;
+    }
+  }
+
+  const inMatch = trimmed.match(/^(.+?)\s+in\s+(.+)$/i);
+  if (inMatch) {
+    const left = inMatch[1]!.trim();
+    const right = inMatch[2]!.trim();
+    if (left.toLowerCase() === right.toLowerCase()) {
+      return left;
+    }
+  }
+
+  return trimmed;
+}
+
 export function buildRandomTopicPhrase(
   seed?: string,
   recentLocations: string[] = [],
@@ -1244,26 +1271,35 @@ export function buildRandomTopicPhrase(
 
   if (seed?.trim()) {
     const theme = settingHint.remainder || seed.trim();
-    const phrase = pick([
-      `${theme} — ${location}`,
+    const resolvedLocation = settingHint.location || location;
+    const themeKey = theme.toLowerCase();
+    const locationKey = resolvedLocation.toLowerCase();
+    const sameThemeAndLocation = themeKey === locationKey;
+    const templates = [
+      !sameThemeAndLocation ? `${theme} — ${resolvedLocation}` : null,
       `${theme}, ${pick(MOODS)}`,
       `${theme} under ${pick(LIGHTING)}`,
       `${pick(SUBJECTS)} in a ${theme} setting`,
       `${theme} ${pick(SEED_TOPIC_ANGLES)}`,
-      `${theme} meets ${pick(BACKDROP_TYPES)} at ${location}`,
-      settingHint.location ? `${theme} in ${settingHint.location}` : `${theme} — ${location}`,
-    ]);
+      `${theme} meets ${pick(BACKDROP_TYPES)} at ${resolvedLocation}`,
+      settingHint.location && !sameThemeAndLocation
+        ? `${theme} in ${settingHint.location}`
+        : null,
+    ].filter((entry): entry is string => Boolean(entry));
+    const phrase = normalizeTopicPhrase(pick(templates));
 
     return { seed: phrase, location: settingHint.location || location };
   }
 
-  const phrase = pick([
-    `${subject} in ${location}`,
-    `${location}, ${mood}`,
-    `${pick(BACKDROP_TYPES)}: ${location}, ${lighting}`,
-    `${subject}, ${pick(WEATHER)}, ${mood}`,
-    `${location} — ${subject}, ${lighting}`,
-  ]);
+  const phrase = normalizeTopicPhrase(
+    pick([
+      `${subject} in ${location}`,
+      `${location}, ${mood}`,
+      `${pick(BACKDROP_TYPES)}: ${location}, ${lighting}`,
+      `${subject}, ${pick(WEATHER)}, ${mood}`,
+      `${location} — ${subject}, ${lighting}`,
+    ]),
+  );
 
   return { seed: phrase, location };
 }

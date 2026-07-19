@@ -369,12 +369,24 @@ function GalleryCard({
   onDownloadError: (message: string | null) => void;
   onRequeue: (newSeed: boolean) => void;
 }) {
+  const [promptExpanded, setPromptExpanded] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
   const statusColor =
     entry.status === "completed"
       ? "text-emerald-400"
       : entry.status === "error"
         ? "text-rose-400"
         : "text-amber-300";
+
+  const copyPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(entry.prompt);
+      setPromptCopied(true);
+      window.setTimeout(() => setPromptCopied(false), 2000);
+    } catch {
+      onDownloadError("Could not copy prompt.");
+    }
+  };
 
   return (
     <article
@@ -429,9 +441,26 @@ function GalleryCard({
             <p className={`text-xs font-medium uppercase tracking-wide ${statusColor}`}>
               {entry.status}
             </p>
-            <p className="mt-1 line-clamp-2 text-xs text-zinc-400">
-              {entry.prompt}
-            </p>
+            {promptExpanded ? (
+              <div className="mt-2 space-y-3">
+                <div>
+                  <p className="type-overline mb-1 text-zinc-500">Positive prompt</p>
+                  <pre className="type-code max-h-56 overflow-auto whitespace-pre-wrap rounded-lg border border-zinc-800 bg-zinc-900/80 p-3 !text-zinc-300">
+                    {entry.prompt}
+                  </pre>
+                </div>
+                {entry.negativePrompt?.trim() ? (
+                  <div>
+                    <p className="type-overline mb-1 text-zinc-500">Negative prompt</p>
+                    <pre className="type-code max-h-40 overflow-auto whitespace-pre-wrap rounded-lg border border-zinc-800 bg-zinc-900/80 p-3 !text-zinc-400">
+                      {entry.negativePrompt}
+                    </pre>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mt-1 line-clamp-2 text-xs text-zinc-400">{entry.prompt}</p>
+            )}
           </div>
           <button
             type="button"
@@ -464,6 +493,22 @@ function GalleryCard({
         )}
 
         <div className="flex flex-wrap gap-2 text-xs">
+          <button
+            type="button"
+            onClick={() => setPromptExpanded((previous) => !previous)}
+            className="text-violet-300 hover:text-violet-200"
+          >
+            {promptExpanded ? "Show less" : "View full prompt"}
+          </button>
+          {promptExpanded && (
+            <button
+              type="button"
+              onClick={() => void copyPrompt()}
+              className="text-zinc-400 hover:text-zinc-200"
+            >
+              {promptCopied ? "Copied!" : "Copy prompt"}
+            </button>
+          )}
           {previewUrl && (
             <a
               href={previewUrl}
