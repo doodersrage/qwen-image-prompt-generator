@@ -155,6 +155,7 @@ export function buildGenerateWardrobeAssignments(
     teamKit?: boolean;
     lockedWardrobeId?: string;
     fantasyWardrobe?: boolean;
+    avoidedTokens?: readonly string[];
   },
 ): GenerateWardrobeAssignment[] | null {
   if (
@@ -196,6 +197,7 @@ export function buildGenerateWardrobeAssignments(
       hints: trimmed,
       excludeIds,
       fantasyWardrobe: options?.fantasyWardrobe,
+      avoidedTokens: options?.avoidedTokens,
     });
     const outfit =
       options?.lockedWardrobeId && index === 0
@@ -333,6 +335,7 @@ export function refreshSportWardrobeAssignmentForPrompt(
     hints: intentHints,
     environmentSeed: [intentHints, prompt].filter(Boolean).join(" "),
     excludeIds: assignment.filters.excludeIds,
+    avoidedTokens: assignment.filters.avoidedTokens,
   });
 
   const outfit = pickRandomCharacterOutfit({

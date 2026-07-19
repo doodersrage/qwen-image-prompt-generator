@@ -504,6 +504,17 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
         }
 
         const runtime = resolveRuntimeForModel(config.model);
+        const autoSaveEnabled = loadComfyUiSettings().autoSaveHistoryOnQueue !== false;
+        const batchHistoryId =
+          autoSaveEnabled && !historySaved && prepared[0]
+            ? saveHistory({
+                prompt: prepared[0],
+                hints: config.hints,
+                metadata: { batchSize: prepared.length },
+                parentHistoryId: resolveParentHistoryId(),
+              })
+            : undefined;
+
         const response = await fetch("/api/comfyui", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -545,6 +556,7 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
               negativePrompt,
               comfyUrl: result.comfyUrl ?? data.comfyUrl ?? "http://127.0.0.1:8188",
               queueParams: resolveQueueParams(),
+              historyId: index === 0 ? batchHistoryId : undefined,
             },
             false,
           );
@@ -574,7 +586,7 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
         setComfyUiStatus(err instanceof Error ? err.message : "ComfyUI batch failed.");
       }
     },
-    [config.model, fetchNegative, trackComfyUiJob],
+    [config.model, config.tool, config.hints, fetchNegative, trackComfyUiJob, saveHistory, historySaved],
   );
 
   const copyPromptPair = useCallback(

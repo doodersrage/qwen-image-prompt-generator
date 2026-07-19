@@ -15,7 +15,8 @@
     "clothing:generate": "node scripts/generate-clothing.mjs --add 500",
     "clothing:generate:dry": "node scripts/generate-clothing.mjs --add 500 --dry-run",
     "prompt:cli": "node scripts/qwen-prompt.mjs",
-    "test": "node --import tsx --test src/lib/clothing-wardrobe.test.ts src/lib/prompt-tools.test.ts"
+    "test": "node --import tsx --test src/lib/clothing-wardrobe.test.ts src/lib/prompt-tools.test.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "next": "16.2.10",
@@ -23,6 +24,7 @@
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

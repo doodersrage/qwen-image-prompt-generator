@@ -18,6 +18,7 @@ import {
   normalizeLockedLocation,
   normalizeVariationSeed,
 } from "@/lib/specialized/normalize";
+import { resolveAvoidanceOptions } from "@/lib/avoidance-options";
 import { composeScenePrompt, type ComposeSceneStyle } from "@/lib/scene-composer";
 import { apiError, apiJson, apiMethodNotAllowed } from "@/lib/api/response";
 import { NextResponse } from "next/server";
@@ -47,6 +48,8 @@ type ComposeRequestBody = {
   variationSeed?: string;
   alwaysIncludeClothing?: boolean;
   teamKit?: boolean;
+  avoidedTokens?: string[];
+  avoidedTokensInstruction?: string;
 };
 
 export async function GET() {
@@ -57,6 +60,7 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as ComposeRequestBody;
     const shared = normalizeSharedGenerationOptions(body);
+    const avoidance = resolveAvoidanceOptions(body);
     const subjectMode = body.subjectMode === "duo" ? "duo" : "character";
     const hints = body.hints?.trim() ?? "";
     const composeStyle = body.composeStyle === "inline" ? "inline" : "layered";
@@ -78,6 +82,7 @@ export async function POST(request: Request) {
     const [backgroundResult, subjectResult] = await Promise.all([
       generateBackgroundPrompt({
         ...shared,
+        ...avoidance,
         settingType: body.background?.settingType,
         timeOfDay: body.background?.timeOfDay,
         mood: body.background?.mood,
@@ -87,6 +92,7 @@ export async function POST(request: Request) {
       }),
       generateCharacterPrompt({
         ...shared,
+        ...avoidance,
         hints,
         portraitStyle,
         variationStrength:

@@ -14,6 +14,9 @@ import {
 import { hasDistinctPeopleStructure } from "./distinct-people";
 import { splitSentences } from "./prompt-shape";
 import {
+  promptContainsAvoidedTokensFromList,
+} from "./avoidance-options";
+import {
   clothingAllowedInScene,
   clothingMatchesGender,
   clothingMatchesGenderForPick,
@@ -570,20 +573,40 @@ function filterPoolByScene(
   return working.filter((entry) => !entryHasRestrictedContext(entry.contexts));
 }
 
+function filterPoolByAvoidedTokens(
+  pool: readonly EnrichedClothingEntry[],
+  avoidedTokens?: readonly string[],
+): readonly EnrichedClothingEntry[] {
+  if (!avoidedTokens?.length) {
+    return pool;
+  }
+  const filtered = pool.filter(
+    (entry) => !promptContainsAvoidedTokensFromList(entry.label, avoidedTokens),
+  );
+  return filtered.length > 0 ? filtered : pool;
+}
+
 function pickScoredEntry(
   pool: readonly EnrichedClothingEntry[],
   contexts: readonly ClothingContextTag[],
   exclude: readonly string[] = [],
   filters?: Pick<
     ClothingPickFilters,
-    "athleticActivity" | "workWardrobe" | "explicitCostume" | "fantasyWardrobe"
+    | "athleticActivity"
+    | "workWardrobe"
+    | "explicitCostume"
+    | "fantasyWardrobe"
+    | "avoidedTokens"
   >,
 ): EnrichedClothingEntry | null {
   if (pool.length === 0) {
     return null;
   }
 
-  const scenePool = filterPoolByScene(pool, contexts, filters);
+  const scenePool = filterPoolByAvoidedTokens(
+    filterPoolByScene(pool, contexts, filters),
+    filters?.avoidedTokens,
+  );
   if (scenePool.length === 0) {
     return null;
   }

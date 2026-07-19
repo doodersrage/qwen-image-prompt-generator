@@ -76,6 +76,7 @@ export async function POST(request: Request) {
       recentClothing: normalizeRecentClothing(body.recentClothing),
       lockedWardrobeId: normalizeLockedWardrobeId(body.lockedWardrobeId),
       variationSeed: normalizeVariationSeed(body.variationSeed),
+      avoidedTokens: avoidance.avoidedTokens,
       avoidedTokensInstruction: avoidance.avoidedTokensInstruction,
     });
 

@@ -804,6 +804,7 @@ export type ClothingPickFilters = {
   explicitCostume?: boolean;
   fantasyWardrobe?: boolean;
   hintCorpus?: string;
+  avoidedTokens?: readonly string[];
 };
 
 export function buildClothingPickFilters(input: {
@@ -814,6 +815,7 @@ export function buildClothingPickFilters(input: {
   presetOptions?: ClothingScenePresetHints;
   excludeIds?: readonly string[];
   fantasyWardrobe?: boolean;
+  avoidedTokens?: readonly string[];
 }): ClothingPickFilters {
   const hintCorpus = [input.hints, input.environmentSeed].filter(Boolean).join(" ");
   const resolvedGender =
@@ -858,6 +860,7 @@ export function buildClothingPickFilters(input: {
       hintsLockPrimaryGarment(input.hints) &&
       !hintsSkipWardrobeRolls(input.hints),
     hintCorpus: hintCorpus || undefined,
+    avoidedTokens: input.avoidedTokens,
   };
 }
 

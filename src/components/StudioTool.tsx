@@ -99,6 +99,9 @@ import {
   type ModelPortfolioItem,
 } from "@/lib/model-portfolio";
 import { studioHistoryUrl } from "@/lib/prompt-lineage";
+import { startRefineFromHistoryEntry } from "@/lib/improve-output";
+import { analyzeGalleryRatingTokens } from "@/lib/rating-token-analytics";
+import { loadComfyGallery } from "@/lib/comfyui-gallery";
 import type { EnrichedToolGenerateResult } from "@/lib/specialized/types";
 import {
   ToolBadge,
@@ -139,7 +142,8 @@ type StudioTab =
   | "diff"
   | "iteration"
   | "projects"
-  | "portfolio";
+  | "portfolio"
+  | "analytics";
 
 type CatalogClothing = {
   id: string;
@@ -236,6 +240,10 @@ export default function StudioTool() {
   const iterationForest = useMemo(
     () => buildPromptIterationForest(entries),
     [entries],
+  );
+  const ratingTokenStats = useMemo(
+    () => analyzeGalleryRatingTokens(loadComfyGallery()),
+    [tab],
   );
 
   const favoriteEntries = useMemo(
@@ -445,6 +453,7 @@ export default function StudioTool() {
     { id: "projects", label: "Projects" },
     { id: "compare", label: "Compare" },
     { id: "portfolio", label: "Portfolio" },
+    { id: "analytics", label: "Analytics" },
     { id: "catalog", label: "Catalog" },
     { id: "templates", label: "Templates" },
     { id: "presets", label: "Presets" },
@@ -865,8 +874,43 @@ export default function StudioTool() {
           ) : (
             <ToolBlockGroup className="mt-[var(--block-gap)]">
               {iterationForest.map((node) => (
-                <IterationTreeNodeCard key={node.entry.id} node={node} depth={0} />
+                <IterationTreeNodeCard
+                  key={node.entry.id}
+                  node={node}
+                  depth={0}
+                  onRequeueStatus={setBackupStatus}
+                />
               ))}
+            </ToolBlockGroup>
+          )}
+        </ToolSection>
+      )}
+
+      {tab === "analytics" && (
+        <ToolSection title="Gallery rating analytics">
+          <p className="text-sm text-zinc-400">
+            Tokens that correlate with high (4–5★) or low (1–2★) gallery ratings. Rate
+            outputs in Gallery review mode to grow this list.
+          </p>
+          {ratingTokenStats.length === 0 ? (
+            <EmptyState
+              icon="diff"
+              title="Not enough rated gallery entries"
+              description="Complete ComfyUI jobs, rate them in Gallery review mode, then return here."
+            />
+          ) : (
+            <ToolBlockGroup className="mt-[var(--block-gap)]">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {ratingTokenStats.map((stat) => (
+                  <ToolContentPanel key={stat.token} className="ui-block-group">
+                    <p className="type-title">{stat.token}</p>
+                    <p className="type-caption text-zinc-500">
+                      score {stat.score > 0 ? "+" : ""}
+                      {stat.score} · {stat.highCount} high · {stat.lowCount} low
+                    </p>
+                  </ToolContentPanel>
+                ))}
+              </div>
             </ToolBlockGroup>
           )}
         </ToolSection>
@@ -2051,10 +2095,14 @@ function HistoryCard({
 function IterationTreeNodeCard({
   node,
   depth,
+  onRequeueStatus,
 }: {
   node: IterationTreeNode;
   depth: number;
+  onRequeueStatus: (message: string) => void;
 }) {
+  const regenerateUrl = buildRegenerateUrl(node.entry);
+
   return (
     <div className="space-y-3" style={{ marginLeft: depth * 16 }}>
       <ToolContentPanel className="ui-block-group">
@@ -2065,15 +2113,66 @@ function IterationTreeNodeCard({
         <pre className="type-code max-h-32 overflow-auto whitespace-pre-wrap text-zinc-300">
           {node.entry.prompt}
         </pre>
-        <a
-          href={studioHistoryUrl(node.entry.id)}
-          className="type-caption text-sky-300 hover:text-sky-200"
-        >
-          Open in history
-        </a>
+        <div className="flex flex-wrap gap-2">
+          <a
+            href={regenerateUrl}
+            className="type-caption text-sky-300 hover:text-sky-200"
+          >
+            Regenerate
+          </a>
+          <button
+            type="button"
+            onClick={() => startRefineFromHistoryEntry(node.entry)}
+            className="type-caption text-violet-300 hover:text-violet-200"
+          >
+            Refine
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onRequeueStatus("Re-queueing from iteration tree…");
+              void requeueComfyJob({
+                prompt: node.entry.prompt,
+                tool: node.entry.tool,
+                model: node.entry.model,
+                hints: node.entry.hints,
+                newSeed: true,
+                onStatus: onRequeueStatus,
+              }).then((result) => {
+                if (!result.ok) {
+                  onRequeueStatus(result.error ?? "Re-queue failed.");
+                  return;
+                }
+                onRequeueStatus(
+                  [
+                    "queued from iteration tree",
+                    result.promptId ? `prompt_id ${result.promptId}` : null,
+                    "new seed",
+                  ]
+                    .filter(Boolean)
+                    .join(" · "),
+                );
+              });
+            }}
+            className="type-caption text-emerald-300 hover:text-emerald-200"
+          >
+            Queue (new seed)
+          </button>
+          <a
+            href={studioHistoryUrl(node.entry.id)}
+            className="type-caption text-zinc-400 hover:text-zinc-200"
+          >
+            Open in history
+          </a>
+        </div>
       </ToolContentPanel>
       {node.children.map((child) => (
-        <IterationTreeNodeCard key={child.entry.id} node={child} depth={depth + 1} />
+        <IterationTreeNodeCard
+          key={child.entry.id}
+          node={child}
+          depth={depth + 1}
+          onRequeueStatus={onRequeueStatus}
+        />
       ))}
     </div>
   );

@@ -112,6 +112,7 @@ export async function generateCharacterPrompt(
     hints: options.hints,
     presetOptions,
     excludeIds: options.recentClothing,
+    avoidedTokens: options.avoidedTokens,
   });
   const wardrobeCorpus = [options.hints, seed].filter(Boolean).join(", ");
   const wardrobeAssignments = shouldPickRandomCharacterOutfit({
@@ -138,6 +139,7 @@ export async function generateCharacterPrompt(
           recentClothing: options.recentClothing,
           teamKit: options.teamKit,
           lockedWardrobeId: options.lockedWardrobeId,
+          avoidedTokens: options.avoidedTokens,
         },
       )
     : null;

@@ -31,6 +31,7 @@ import {
   buildMatrixAxes,
   type MatrixAxisKind,
 } from "@/lib/variation-matrix";
+import { downloadMatrixCsv } from "@/lib/matrix-export-formats";
 import SidecarImportButton from "@/components/SidecarImportButton";
 import {
   SHOT_SCALE_LABEL,
@@ -803,6 +804,26 @@ export default function VariationGridTool() {
 
       {results.length > 0 && (
         <ToolSection title="Rolled prompts">
+          {gridMode === "matrix" ? (
+            <div className="mb-3">
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  downloadMatrixCsv(
+                    results.map((entry) => ({
+                      rowLabel: entry.rowLabel,
+                      colLabel: entry.colLabel,
+                      prompt: entry.prompt,
+                      seed: entry.seed,
+                      error: entry.error,
+                    })),
+                  )
+                }
+              >
+                Export matrix CSV
+              </Button>
+            </div>
+          ) : null}
           <ol className="space-y-3">
             {results.map((entry, index) => (
               <li

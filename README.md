@@ -34,7 +34,7 @@ Video, audio, and 3D-only architectures (WAN, Hunyuan Video, Stable Audio, etc.)
 | **Background** | `/background` | Environment-only prompt with no people |
 | **Image → Prompt** | `/image-prompt` | Upload an image; vision LLM writes the prompt |
 | **Negative** | `/negative` | Sport-aware negative/preserve prompts for SD models |
-| **Studio** | `/studio` | History, iteration tree, projects, compare, portfolio, catalog, templates |
+| **Studio** | `/studio` | History, iteration tree, projects, compare, portfolio, analytics, catalog, templates |
 | **Lint** | `/lint` | Paste prompts for diagnostics, fix, compact, reformat |
 | **Refine** | `/refine` | Refine an existing prompt with image + intent hints |
 | **Settings** | `/settings` | LLM/ComfyUI health, webhooks, scheduled batch, backup/reset |
@@ -78,7 +78,14 @@ Legacy URLs `/duo`, `/compose`, and `/random-scene` redirect to the merged Chara
 - **Sidecar import** — load sidecar JSON on Gallery, Lint, and Variations to restore prompts or re-queue
 - **Workflow dry-run** — preview injected workflow JSON in Settings (and from Lint result panels) before queueing
 - **Custom workflow tokens** — user-defined placeholders like `{{CHECKPOINT}}` and `{{LORA}}` with values in Settings
-- **Gallery bulk actions** — multi-select on `/gallery` for favorite, delete, re-queue, sidecar bundle export, and sequential image download
+- **Gallery compare panel** — pick winner, rate, favorite, mutate, or improve from 2–4 selected outputs; bulk **Seed experiment** queues same prompt with varied seeds
+- **Studio analytics** — Gallery rating token stats (high vs low motifs) on Studio Analytics tab
+- **Iteration tree actions** — Regenerate, Refine, and re-queue from iteration tree nodes
+- **Matrix CSV export** — Variations matrix mode exports row×column grid to CSV
+- **Portfolio CLI queue** — `npm run prompt:cli -- portfolio --input "..." --queue` formats and queues each model to ComfyUI
+- **Wardrobe avoided tokens** — low-rated motifs filter catalog wardrobe picks across generators
+- **Batch history auto-save** — batch ComfyUI queue saves one lineage history entry when auto-save is enabled
+- **ComfyUI avoided tokens** — optional `avoided_tokens` input on generator nodes passes motif avoidance to the API
 - **Preview workflow everywhere** — all ComfyUI-enabled result panels include a dry-run preview button
 - **Generate sport presets** — sport preset chips on Generate (positive mode) with shareable scene URLs
 - **Settings hub** — `/settings` for service health checks and local data backup/reset

@@ -96,6 +96,7 @@ export type GeneratePromptOptions = {
   lockedWardrobeId?: string;
   /** Pin environment/variation seed for reproducible Generate rolls. */
   variationSeed?: string;
+  avoidedTokens?: string[];
   avoidedTokensInstruction?: string;
 };
 
@@ -683,6 +684,7 @@ export async function generatePrompt(
       ? buildGenerateWardrobeAssignments(trimmed, settings, {
           recentClothing: options?.recentClothing,
           lockedWardrobeId: options?.lockedWardrobeId,
+          avoidedTokens: options?.avoidedTokens,
         })
       : null;
 

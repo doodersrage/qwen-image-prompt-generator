@@ -64,6 +64,31 @@ export function startRefineFromResult(input: {
   });
   window.location.href = galleryHandoffPath("refine");
 }
+export function startRefineFromHistoryEntry(entry: {
+  id: string;
+  prompt: string;
+  model?: string;
+  tool?: string;
+  hints?: string;
+}): void {
+  saveGalleryHandoff({
+    source: "history",
+    galleryEntryId: entry.id,
+    promptId: entry.id,
+    prompt: entry.prompt,
+    model: entry.model,
+    tool: entry.tool,
+    historyId: entry.id,
+    target: "refine",
+    savedAt: Date.now(),
+  });
+  setLineageParent({
+    parentHistoryId: entry.id,
+    sourcePrompt: entry.prompt,
+    sourceTool: entry.tool,
+  });
+  window.location.href = galleryHandoffPath("refine");
+}
 export function startImproveFromGalleryEntry(entry: ComfyGalleryEntry): void {
   saveGalleryHandoff({
     ...buildGalleryHandoff(entry, "refine"),

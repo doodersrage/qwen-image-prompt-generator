@@ -38,6 +38,30 @@ class PromptToolsBase:
         }
 
     @classmethod
+    def avoidance_inputs(cls):
+        return {
+            "avoided_tokens": ("STRING", {"default": "", "multiline": True}),
+        }
+
+    @staticmethod
+    def apply_avoidance(payload: dict, avoided_tokens: str) -> None:
+        raw = (avoided_tokens or "").strip()
+        if not raw:
+            return
+        tokens = [
+            token.strip().lower()
+            for token in raw.replace("\n", ",").split(",")
+            if token.strip()
+        ]
+        if not tokens:
+            return
+        payload["avoidedTokens"] = tokens[:80]
+        payload["avoidedTokensInstruction"] = (
+            "Avoid these overused or low-rated motifs: "
+            f"{', '.join(tokens[-20:])}."
+        )
+
+    @classmethod
     def model_detail_inputs(cls):
         return {
             "model": (MODEL_IDS, {"default": DEFAULT_MODEL}),
@@ -66,7 +90,7 @@ class PromptToolsGenerate(PromptToolsBase):
                     {"default": 65, "min": 0, "max": 100, "step": 1},
                 ),
             },
-            "optional": cls.api_input(),
+            "optional": {**cls.api_input(), **cls.avoidance_inputs()},
         }
 
     FUNCTION = "generate"
@@ -81,25 +105,28 @@ class PromptToolsGenerate(PromptToolsBase):
         variation_enabled: bool,
         variation_strength: int,
         api_base_url: str = "",
+        avoided_tokens: str = "",
     ):
         text = input.strip()
         if not text:
             raise RuntimeError("Input is required.")
 
+        payload = {
+            "input": text,
+            "model": model,
+            "detail": detail,
+            "mode": mode,
+            "distinctPeople": distinct_people,
+            "variation": {
+                "enabled": variation_enabled,
+                "strength": variation_strength,
+            },
+        }
+        self.apply_avoidance(payload, avoided_tokens)
         response = post_json(
             api_base_url,
             "/api/generate",
-            {
-                "input": text,
-                "model": model,
-                "detail": detail,
-                "mode": mode,
-                "distinctPeople": distinct_people,
-                "variation": {
-                    "enabled": variation_enabled,
-                    "strength": variation_strength,
-                },
-            },
+            payload,
         )
         return (extract_prompt(response),)
 
@@ -162,7 +189,7 @@ class PromptToolsRandomScene(PromptToolsBase):
                 "include_people": ("BOOLEAN", {"default": True}),
                 "wildness": ("INT", {"default": 65, "min": 0, "max": 100, "step": 1}),
             },
-            "optional": cls.api_input(),
+            "optional": {**cls.api_input(), **cls.avoidance_inputs()},
         }
 
     FUNCTION = "generate"
@@ -175,6 +202,7 @@ class PromptToolsRandomScene(PromptToolsBase):
         include_people: bool,
         wildness: int,
         api_base_url: str = "",
+        avoided_tokens: str = "",
     ):
         payload = {
             "model": model,
@@ -184,6 +212,7 @@ class PromptToolsRandomScene(PromptToolsBase):
         }
         if genre.strip():
             payload["genre"] = genre.strip()
+        self.apply_avoidance(payload, avoided_tokens)
 
         response = post_json(api_base_url, "/api/random-scene", payload)
         return (extract_prompt(response),)
@@ -205,7 +234,7 @@ class PromptToolsCharacter(PromptToolsBase):
                     {"default": 50, "min": 0, "max": 100, "step": 1},
                 ),
             },
-            "optional": cls.api_input(),
+            "optional": {**cls.api_input(), **cls.avoidance_inputs()},
         }
 
     FUNCTION = "generate"
@@ -218,6 +247,7 @@ class PromptToolsCharacter(PromptToolsBase):
         portrait_style: str,
         variation_strength: int,
         api_base_url: str = "",
+        avoided_tokens: str = "",
     ):
         payload = {
             "model": model,
@@ -227,6 +257,7 @@ class PromptToolsCharacter(PromptToolsBase):
         }
         if hints.strip():
             payload["hints"] = hints.strip()
+        self.apply_avoidance(payload, avoided_tokens)
 
         response = post_json(api_base_url, "/api/character", payload)
         return (extract_prompt(response), self.metadata_json(response))
@@ -248,7 +279,7 @@ class PromptToolsPet(PromptToolsBase):
                     {"default": 50, "min": 0, "max": 100, "step": 1},
                 ),
             },
-            "optional": cls.api_input(),
+            "optional": {**cls.api_input(), **cls.avoidance_inputs()},
         }
 
     FUNCTION = "generate"
@@ -261,6 +292,7 @@ class PromptToolsPet(PromptToolsBase):
         portrait_style: str,
         variation_strength: int,
         api_base_url: str = "",
+        avoided_tokens: str = "",
     ):
         payload = {
             "model": model,
@@ -270,6 +302,7 @@ class PromptToolsPet(PromptToolsBase):
         }
         if hints.strip():
             payload["hints"] = hints.strip()
+        self.apply_avoidance(payload, avoided_tokens)
 
         response = post_json(api_base_url, "/api/pet", payload)
         return (extract_prompt(response), self.metadata_json(response))
@@ -292,7 +325,7 @@ class PromptToolsFantasy(PromptToolsBase):
                     {"default": 50, "min": 0, "max": 100, "step": 1},
                 ),
             },
-            "optional": cls.api_input(),
+            "optional": {**cls.api_input(), **cls.avoidance_inputs()},
         }
 
     FUNCTION = "generate"
@@ -306,6 +339,7 @@ class PromptToolsFantasy(PromptToolsBase):
         wildness: int,
         variation_strength: int,
         api_base_url: str = "",
+        avoided_tokens: str = "",
     ):
         payload = {
             "model": model,
@@ -317,6 +351,7 @@ class PromptToolsFantasy(PromptToolsBase):
         }
         if hints.strip():
             payload["hints"] = hints.strip()
+        self.apply_avoidance(payload, avoided_tokens)
 
         response = post_json(api_base_url, "/api/fantasy", payload)
         return (extract_prompt(response), self.metadata_json(response))
@@ -332,7 +367,7 @@ class PromptToolsBackground(PromptToolsBase):
                 "time_of_day": ("STRING", {"default": "", "multiline": False}),
                 "mood": ("STRING", {"default": "", "multiline": False}),
             },
-            "optional": cls.api_input(),
+            "optional": {**cls.api_input(), **cls.avoidance_inputs()},
         }
 
     FUNCTION = "generate"
@@ -345,6 +380,7 @@ class PromptToolsBackground(PromptToolsBase):
         time_of_day: str,
         mood: str,
         api_base_url: str = "",
+        avoided_tokens: str = "",
     ):
         payload = {
             "model": model,
@@ -356,6 +392,7 @@ class PromptToolsBackground(PromptToolsBase):
             payload["timeOfDay"] = time_of_day.strip()
         if mood.strip():
             payload["mood"] = mood.strip()
+        self.apply_avoidance(payload, avoided_tokens)
 
         response = post_json(api_base_url, "/api/background", payload)
         return (extract_prompt(response),)
@@ -417,7 +454,7 @@ class PromptToolsDuo(PromptToolsBase):
                     {"default": 50, "min": 0, "max": 100, "step": 1},
                 ),
             },
-            "optional": cls.api_input(),
+            "optional": {**cls.api_input(), **cls.avoidance_inputs()},
         }
 
     FUNCTION = "generate"
@@ -431,6 +468,7 @@ class PromptToolsDuo(PromptToolsBase):
         team_kit: bool,
         variation_strength: int,
         api_base_url: str = "",
+        avoided_tokens: str = "",
     ):
         payload = {
             "model": model,
@@ -442,6 +480,7 @@ class PromptToolsDuo(PromptToolsBase):
         }
         if hints.strip():
             payload["hints"] = hints.strip()
+        self.apply_avoidance(payload, avoided_tokens)
 
         response = post_json(api_base_url, "/api/duo", payload)
         return (extract_prompt(response), self.metadata_json(response))
@@ -460,7 +499,7 @@ class PromptToolsBatch(PromptToolsBase):
                 "count": ("INT", {"default": 3, "min": 1, "max": 12, "step": 1}),
                 "team_kit": ("BOOLEAN", {"default": False}),
             },
-            "optional": cls.api_input(),
+            "optional": {**cls.api_input(), **cls.avoidance_inputs()},
         }
 
     FUNCTION = "generate"
@@ -473,6 +512,7 @@ class PromptToolsBatch(PromptToolsBase):
         count: int,
         team_kit: bool,
         api_base_url: str = "",
+        avoided_tokens: str = "",
     ):
         payload = {
             "model": model,
@@ -484,6 +524,7 @@ class PromptToolsBatch(PromptToolsBase):
         }
         if hints.strip():
             payload["hints"] = hints.strip()
+        self.apply_avoidance(payload, avoided_tokens)
 
         response = post_json(api_base_url, "/api/batch", payload)
         results = response.get("results")
@@ -593,7 +634,7 @@ class PromptToolsCompose(PromptToolsBase):
                 "subject_prompt": ("STRING", {"default": "", "multiline": True}),
                 "compose_style": (["layered", "inline"], {"default": "layered"}),
             },
-            "optional": cls.api_input(),
+            "optional": {**cls.api_input(), **cls.avoidance_inputs()},
         }
 
     FUNCTION = "compose"
@@ -606,6 +647,7 @@ class PromptToolsCompose(PromptToolsBase):
         subject_prompt: str,
         compose_style: str,
         api_base_url: str = "",
+        avoided_tokens: str = "",
     ):
         payload = {
             "model": model,
@@ -615,6 +657,7 @@ class PromptToolsCompose(PromptToolsBase):
             "hints": subject_prompt.strip(),
             "subjectMode": "duo",
         }
+        self.apply_avoidance(payload, avoided_tokens)
         response = post_json(api_base_url, "/api/compose", payload)
         return (extract_prompt(response),)
 

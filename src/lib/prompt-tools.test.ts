@@ -1452,3 +1452,54 @@ describe("avoidance options", () => {
     assert.match(instruction ?? "", /velodrome/);
   });
 });
+
+describe("matrix export formats", () => {
+  it("exports matrix rows as CSV with escaped prompts", async () => {
+    const { exportMatrixCsv } = await import("./matrix-export-formats");
+    const csv = exportMatrixCsv([
+      {
+        rowLabel: "sport",
+        colLabel: "lighting",
+        prompt: 'cyclist, "golden hour"',
+        seed: "123",
+      },
+    ]);
+    assert.match(csv, /^row,column,seed,prompt,error/);
+    assert.match(csv, /sport/);
+    assert.match(csv, /""golden hour""/);
+  });
+});
+
+describe("rating token analytics", () => {
+  it("ranks tokens by high vs low gallery ratings", async () => {
+    const { analyzeGalleryRatingTokens } = await import("./rating-token-analytics");
+    const stats = analyzeGalleryRatingTokens([
+      {
+        id: "a",
+        promptId: "p1",
+        prompt: "gravel cyclist in misty forest morning light",
+        status: "completed",
+        reviewRating: 5,
+        queuedAt: 1,
+        tool: "character",
+        model: "qwen-image-2512",
+        comfyUrl: "http://127.0.0.1:8188",
+      },
+      {
+        id: "b",
+        promptId: "p2",
+        prompt: "gravel cyclist in misty forest morning light",
+        status: "completed",
+        reviewRating: 1,
+        queuedAt: 2,
+        tool: "character",
+        model: "qwen-image-2512",
+        comfyUrl: "http://127.0.0.1:8188",
+      },
+    ] as import("./comfyui-gallery").ComfyGalleryEntry[]);
+    const gravel = stats.find((entry) => entry.token === "gravel");
+    assert.ok(gravel);
+    assert.equal(gravel?.highCount, 1);
+    assert.equal(gravel?.lowCount, 1);
+  });
+});

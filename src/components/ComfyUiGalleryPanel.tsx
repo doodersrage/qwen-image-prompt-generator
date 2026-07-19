@@ -18,6 +18,7 @@ import { recordCatalogBiasFromPrompt } from "@/lib/catalog-rating-bias";
 import GalleryComparePanel from "@/components/GalleryComparePanel";
 import { queueMutatedGalleryJobs } from "@/lib/gallery-mutations";
 import { queueNegativeAbTest } from "@/lib/negative-ab-queue";
+import { queueSeedExperiment } from "@/lib/seed-experiment-queue";
 import {
   galleryTopicsPath,
   galleryVariationsPath,
@@ -109,6 +110,7 @@ export default function ComfyUiGalleryPanel({
     useState<GallerySlideshowTransition>("slide");
   const [viewPrefsLoaded, setViewPrefsLoaded] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [compareStatus, setCompareStatus] = useState<string | null>(null);
 
   const bulkEnabled = showFilters && !compact;
   const paginationEnabled = showFilters && !compact && !limit;
@@ -599,6 +601,27 @@ export default function ComfyUiGalleryPanel({
             onClick={() => {
               const entry = selectedEntries[0];
               if (!entry) return;
+              setRequeueStatus("Queueing seed experiment…");
+              void queueSeedExperiment({
+                prompt: entry.prompt,
+                model: entry.model ?? "qwen-image-2512",
+                negativePrompt: entry.negativePrompt,
+                hints: entry.prompt.slice(0, 200),
+                count: 4,
+              }).then(({ queued, seeds }) =>
+                setRequeueStatus(`Seed experiment queued ${queued} jobs · seeds ${seeds.join(", ")}`),
+              );
+            }}
+            className="rounded-lg border border-violet-700/60 px-2 py-1 text-violet-200 hover:border-violet-500 disabled:opacity-40"
+          >
+            Seed experiment
+          </button>
+          <button
+            type="button"
+            disabled={selectedIds.length !== 1}
+            onClick={() => {
+              const entry = selectedEntries[0];
+              if (!entry) return;
               setRequeueStatus("Mutating winner…");
               void queueMutatedGalleryJobs({
                 entry,
@@ -716,7 +739,39 @@ export default function ComfyUiGalleryPanel({
       {compareOpen && selectedEntries.length >= 2 ? (
         <GalleryComparePanel
           entries={selectedEntries.slice(0, 4)}
-          onClose={() => setCompareOpen(false)}
+          onClose={() => {
+            setCompareOpen(false);
+            setCompareStatus(null);
+          }}
+          status={compareStatus}
+          onPickWinner={(entry) => {
+            const compareIds = selectedEntries.slice(0, 4).map((item) => item.id);
+            setFavorites(compareIds.filter((id) => id !== entry.id), false);
+            setFavorites([entry.id], true);
+            setReviewRating(entry.id, 5);
+            recordCatalogBiasFromPrompt(entry.prompt, 5);
+            setCompareStatus(`Winner: ${entry.model ?? "unknown"} · seed ${entry.queueParams?.seed ?? "?"}`);
+          }}
+          onRate={(entryId, rating) => {
+            setReviewRating(entryId, rating);
+            const entry = selectedEntries.find((item) => item.id === entryId);
+            if (entry && rating && rating <= 2) {
+              recordAvoidedTokensFromPrompt(entry.prompt);
+            }
+            if (entry) {
+              recordCatalogBiasFromPrompt(entry.prompt, rating);
+            }
+          }}
+          onFavorite={(entryId) => toggleFavorite(entryId)}
+          onMutate={(entry) => {
+            setCompareStatus("Queueing mutations…");
+            void queueMutatedGalleryJobs({
+              entry,
+              kinds: ["variation", "location", "wardrobe"],
+              count: 3,
+            }).then((queued) => setCompareStatus(`Queued ${queued} mutations.`));
+          }}
+          onImprove={(entry) => startImproveFromGalleryEntry(entry)}
         />
       ) : null}
 

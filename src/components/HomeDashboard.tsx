@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { loadComfyGallery } from "@/lib/comfyui-gallery";
+import { galleryEntryViewUrls, loadComfyGallery } from "@/lib/comfyui-gallery";
 import { loadScheduledBatchConfig } from "@/lib/scheduled-batch";
 import { loadActiveProjectId, loadPromptProjects } from "@/lib/prompt-projects";
 import { usePromptHistory } from "@/hooks/usePromptHistory";
@@ -79,15 +79,26 @@ export default function HomeDashboard() {
             Recent outputs
           </p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            {recentCompleted.map((entry) => (
-              <Link
-                key={entry.id}
-                href="/gallery"
-                className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-2 text-xs text-zinc-400 hover:border-zinc-600"
-              >
-                <p className="line-clamp-3">{entry.prompt}</p>
-              </Link>
-            ))}
+            {recentCompleted.map((entry) => {
+              const thumb = galleryEntryViewUrls(entry)[0];
+              return (
+                <Link
+                  key={entry.id}
+                  href="/gallery"
+                  className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900/60 hover:border-zinc-600"
+                >
+                  {thumb ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={thumb} alt="" className="aspect-square w-full object-cover" />
+                  ) : (
+                    <div className="flex aspect-square items-center justify-center p-2 text-xs text-zinc-500">
+                      No preview
+                    </div>
+                  )}
+                  <p className="line-clamp-2 p-2 text-[11px] text-zinc-400">{entry.prompt}</p>
+                </Link>
+              );
+            })}
           </div>
         </div>
       )}

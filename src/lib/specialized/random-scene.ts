@@ -58,6 +58,7 @@ export async function generateRandomScene(
           assumePeople: true,
           recentClothing: options.recentClothing,
           lockedWardrobeId: options.lockedWardrobeId,
+          avoidedTokens: options.avoidedTokens,
         })
       : null;
   const clothingDirective = wardrobeAssignments?.length

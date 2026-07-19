@@ -8,7 +8,7 @@ export const IMPROVE_INTENT_DEFAULT =
   "Improve fidelity, composition, and prompt alignment while preserving subject identity and scene intent.";
 
 export type GalleryHandoffPayload = {
-  source: "gallery";
+  source: "gallery" | "history";
   galleryEntryId: string;
   promptId: string;
   prompt: string;

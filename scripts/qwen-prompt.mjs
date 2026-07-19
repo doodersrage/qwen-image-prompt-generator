@@ -48,7 +48,8 @@ async function main() {
     console.log(`Usage: node scripts/qwen-prompt.mjs <tool> [options]
 
 Tools: duo, character, batch, lint, negative, catalog, compose, generate, format, fix, compact, comfyui, topics-batch, pet, fantasy, background, random-scene, refine, image-prompt, portfolio, webhook-test
-Env: PROMPT_API_URL (default ${BASE_URL})`);
+Env: PROMPT_API_URL (default ${BASE_URL})
+Portfolio: --input "draft" [--models a,b] [--queue] [--negative "..."]`);
     process.exit(0);
   }
 
@@ -121,6 +122,7 @@ Env: PROMPT_API_URL (default ${BASE_URL})`);
       console.error("portfolio requires --input or a draft argument");
       process.exit(1);
     }
+    const queue = args.queue === true;
     const models = String(args.models ?? "qwen-image-2512,flux-2-klein")
       .split(",")
       .map((entry) => entry.trim())
@@ -145,6 +147,25 @@ Env: PROMPT_API_URL (default ${BASE_URL})`);
       console.log(`--- ${model} ---`);
       console.log(data.prompt ?? "");
       console.log("");
+
+      if (queue && data.prompt?.trim()) {
+        const queueResponse = await fetch(`${BASE_URL}/api/comfyui`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: data.prompt,
+            ...(args.negative ? { negativePrompt: String(args.negative) } : {}),
+          }),
+        });
+        const queueData = await queueResponse.json();
+        if (!queueResponse.ok) {
+          console.error(`${model} queue: ${queueData.error ?? "ComfyUI queue failed."}`);
+        } else {
+          console.log(
+            `${model} queued · ${queueData.promptId ? `prompt_id ${queueData.promptId}` : "ok"}`,
+          );
+        }
+      }
     }
     return;
   }
