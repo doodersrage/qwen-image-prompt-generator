@@ -66,6 +66,7 @@ export type EnrichedToolGenerateResult = ToolGenerateResult & {
 };
 
 import type { BackgroundPresetOptions } from "../background-options";
+import type { FantasyPresetOptions } from "../fantasy-options";
 import type { PetPresetOptions } from "../pet-options";
 
 export type BackgroundOptions = SharedGenerationOptions & {
@@ -86,6 +87,20 @@ export type PetOptions = SharedGenerationOptions & {
   blockedLocations?: string[];
   lockedLocation?: string;
   variationSeed?: string;
+};
+
+export type FantasyOptions = SharedGenerationOptions & {
+  hints?: string;
+  wildness?: number;
+  variationStrength?: number;
+  presetOptions?: FantasyPresetOptions;
+  recentLocations?: string[];
+  recentClothing?: string[];
+  blockedLocations?: string[];
+  lockedLocation?: string;
+  lockedWardrobeId?: string;
+  variationSeed?: string;
+  alwaysIncludeClothing?: boolean;
 };
 
 export type ImagePromptFocus = "full" | "subject" | "background" | "style";

@@ -81,6 +81,7 @@ export const ROUTE_ACCENT: Record<string, ToolAccent> = {
   "/compose": "cyan",
   "/background": "teal",
   "/pet": "rose",
+  "/fantasy": "violet",
   "/random-scene": "amber",
   "/image-prompt": "fuchsia",
   "/refine": "fuchsia",

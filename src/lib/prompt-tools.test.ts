@@ -49,6 +49,17 @@ import {
 } from "./pet-options";
 import { getPetPreset, PET_PRESETS } from "./pet-presets";
 import { buildRandomPetSeed } from "./pet-scene-pools";
+import {
+  buildFantasyPresetBlock,
+  countFantasyPresetSelections,
+  normalizeFantasyPresetOptions,
+  resolveFantasyFocus,
+} from "./fantasy-options";
+import { getFantasyPreset, FANTASY_PRESETS } from "./fantasy-presets";
+import {
+  buildRandomFantasySeed,
+  fantasyFocusIncludesPeople,
+} from "./fantasy-scene-pools";
 import { listServerWorkflowPaths } from "./comfyui-server-workflows";
 import {
   DEFAULT_COMFYUI_SETTINGS,
@@ -890,6 +901,29 @@ describe("comfyui gallery outputs", () => {
     assert.ok(block?.includes("PET PRESET"));
     assert.match(block ?? "", /cat/i);
     assert.match(block ?? "", /windowsill/i);
+  });
+
+  it("builds fantasy scene seeds and presets", () => {
+    const options = normalizeFantasyPresetOptions({
+      focus: "environment",
+      subgenre: "dark-fantasy",
+      settingArchetype: "underdark",
+      magicElement: "necrotic-mist",
+    });
+    assert.equal(countFantasyPresetSelections(options), 4);
+    assert.equal(resolveFantasyFocus(options, ""), "environment");
+    assert.equal(fantasyFocusIncludesPeople(resolveFantasyFocus(options, "")), false);
+
+    const { seed } = buildRandomFantasySeed(undefined, [], options, 70);
+    assert.match(seed, /empty fantasy environment/i);
+    assert.match(seed, /underdark|bioluminescent|fungi/i);
+
+    const preset = getFantasyPreset("dragon-lair");
+    assert.ok(preset?.hints.includes("dragon"));
+    assert.ok(FANTASY_PRESETS.length >= 30);
+
+    const block = buildFantasyPresetBlock(options);
+    assert.ok(block?.includes("FANTASY PRESET"));
   });
 
   it("sorts gallery entries", () => {

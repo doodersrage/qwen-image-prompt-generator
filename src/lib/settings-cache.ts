@@ -59,6 +59,7 @@ export type BackgroundToolCache = {
   surfaceMaterials?: string;
 } & Partial<Omit<BackgroundPresetOptions, "surfaceMaterials">>;
 
+import type { FantasyPresetOptions } from "./fantasy-options";
 import type { PetPresetOptions } from "./pet-options";
 
 export type PetToolCache = {
@@ -68,6 +69,22 @@ export type PetToolCache = {
   petPresetId?: string;
   presetCategory?: "all" | "dog" | "cat" | "bird" | "rabbit" | "small";
 } & Partial<PetPresetOptions>;
+
+export type FantasyToolCache = {
+  hints?: string;
+  wildness?: number;
+  variationStrength?: number;
+  fantasyPresetId?: string;
+  presetCategory?:
+    | "all"
+    | "character"
+    | "creature"
+    | "environment"
+    | "epic"
+    | "dark"
+    | "fairy"
+    | "celestial";
+} & Partial<FantasyPresetOptions>;
 
 export type ImagePromptToolCache = {
   focus?: "full" | "subject" | "background" | "style";
@@ -134,6 +151,7 @@ export type ToolSettingsCache = {
   randomScene?: RandomSceneToolCache;
   background?: BackgroundToolCache;
   pet?: PetToolCache;
+  fantasy?: FantasyToolCache;
   character?: CharacterToolCache;
   imagePrompt?: ImagePromptToolCache;
   topics?: TopicToolCache;
@@ -189,6 +207,12 @@ export const DEFAULT_BACKGROUND_TOOL_CACHE: BackgroundToolCache = {
 export const DEFAULT_PET_TOOL_CACHE: PetToolCache = {
   hints: "",
   portraitStyle: "portrait",
+  variationStrength: 50,
+};
+
+export const DEFAULT_FANTASY_TOOL_CACHE: FantasyToolCache = {
+  hints: "",
+  wildness: 65,
   variationStrength: 50,
 };
 

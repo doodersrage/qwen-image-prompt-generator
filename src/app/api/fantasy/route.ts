@@ -1,0 +1,74 @@
+import { generateFantasyPrompt } from "@/lib/specialized/fantasy-generator";
+import {
+  normalizeFantasyPresetOptions,
+  type FantasyPresetOptions,
+} from "@/lib/fantasy-options";
+import {
+  normalizeBlockedLocations,
+  normalizeRecentLocations,
+  normalizeSharedGenerationOptions,
+} from "@/lib/specialized/normalize";
+import { apiError, apiJson, apiMethodNotAllowed } from "@/lib/api/response";
+import { NextResponse } from "next/server";
+
+export const runtime = "nodejs";
+
+type FantasyRequestBody = {
+  model?: string;
+  detail?: string;
+  hints?: string;
+  wildness?: number;
+  variationStrength?: number;
+  presetOptions?: Partial<Record<keyof FantasyPresetOptions, string>>;
+  recentLocations?: string[];
+  recentClothing?: string[];
+  blockedLocations?: string[];
+  lockedLocation?: string;
+  lockedWardrobeId?: string;
+  variationSeed?: string;
+  alwaysIncludeClothing?: boolean;
+};
+
+export async function GET() {
+  return apiMethodNotAllowed(["POST"], "/api/fantasy");
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = (await request.json()) as FantasyRequestBody;
+    const shared = normalizeSharedGenerationOptions(body);
+
+    const result = await generateFantasyPrompt({
+      ...shared,
+      hints: body.hints?.trim(),
+      wildness: body.wildness,
+      variationStrength: body.variationStrength,
+      presetOptions: normalizeFantasyPresetOptions(body.presetOptions),
+      recentLocations: normalizeRecentLocations(body.recentLocations),
+      recentClothing: body.recentClothing,
+      blockedLocations: normalizeBlockedLocations(body.blockedLocations),
+      lockedLocation: body.lockedLocation?.trim(),
+      lockedWardrobeId: body.lockedWardrobeId?.trim(),
+      variationSeed: body.variationSeed?.trim(),
+      alwaysIncludeClothing: body.alwaysIncludeClothing,
+    });
+
+    return apiJson(result);
+  } catch (error) {
+    return apiError(
+      error instanceof Error ? error.message : "Fantasy generation failed.",
+      500,
+    );
+  }
+}
+
+export function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
+  });
+}
