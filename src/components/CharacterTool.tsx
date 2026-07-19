@@ -19,8 +19,9 @@ import { getReformatTargetLabel, getReformatTargetModel } from "@/lib/reformat-t
 import { presetOptionsFromCache } from "@/lib/character-options";
 import { DEFAULT_CHARACTER_TOOL_CACHE } from "@/lib/settings-cache";
 import type { EnrichedToolGenerateResult } from "@/lib/specialized/types";
-import { readVariationSeedFromResult } from "@/lib/variation-seed-metadata";
+import { readVariationSeedFromMetadata, readVariationSeedFromResult } from "@/lib/variation-seed-metadata";
 import { variationStrengthLabel } from "@/lib/variation-settings";
+import { downloadTextFile } from "@/lib/prompt-pair";
 import {
   applyShareableSceneParams,
   parseScenePresetFromSearch,
@@ -35,9 +36,10 @@ import {
   accentRingClass,
 } from "@/components/ui/ToolPageShell";
 import { FieldDivider, FieldError, FieldLabel, TextArea } from "@/components/ui/Field";
-import { PrimaryButton } from "@/components/ui/Button";
+import { Button, PrimaryButton } from "@/components/ui/Button";
 
 const ACCENT = "sky" as const;
+const CHARACTER_BATCH_COUNT = 3;
 
 export default function CharacterTool() {
   const { mounted, shared, toolSettings, updateShared, updateToolSettings } =
@@ -46,6 +48,7 @@ export default function CharacterTool() {
   const { getRecent: getRecentClothing, record: recordClothing } = useRecentClothing();
   const { getBlocklist } = useLocationBlocklist();
   const [output, setOutput] = useState("");
+  const [batchResults, setBatchResults] = useState<EnrichedToolGenerateResult[]>([]);
   const [result, setResult] = useState<EnrichedToolGenerateResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -100,57 +103,94 @@ export default function CharacterTool() {
     }
   }, [updateShared, updateToolSettings]);
 
-  const generate = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setCopied(false);
-    actions.resetStatuses();
+  const generate = useCallback(
+    async (batch = false) => {
+      setLoading(true);
+      setError(null);
+      setCopied(false);
+      actions.resetStatuses();
+      setBatchResults([]);
 
-    try {
-      await actions.runPreLint(toolSettings.hints);
+      try {
+        await actions.runPreLint(toolSettings.hints);
 
-      const response = await fetch("/api/character", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: shared.model,
-          detail: shared.detail,
-          hints: toolSettings.hints,
-          portraitStyle: toolSettings.portraitStyle,
-          variationStrength: toolSettings.variationStrength,
-          presetOptions: presetOptionsFromCache(toolSettings),
-          recentLocations: getRecent(),
-          recentClothing: getRecentClothing(),
-          blockedLocations: getBlocklist(),
-          lockedWardrobeId: shared.lockedWardrobeId,
-          lockedLocation: shared.lockedLocation,
-          variationSeed: shared.lockedVariationSeed,
-          alwaysIncludeClothing: shared.alwaysIncludeClothing !== false,
-        }),
-      });
+        const endpoint = batch ? "/api/batch" : "/api/character";
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: shared.model,
+            detail: shared.detail,
+            hints: toolSettings.hints,
+            portraitStyle: toolSettings.portraitStyle,
+            variationStrength: toolSettings.variationStrength,
+            presetOptions: presetOptionsFromCache(toolSettings),
+            recentLocations: getRecent(),
+            recentClothing: getRecentClothing(),
+            blockedLocations: getBlocklist(),
+            lockedWardrobeId: shared.lockedWardrobeId,
+            lockedLocation: shared.lockedLocation,
+            variationSeed: shared.lockedVariationSeed,
+            alwaysIncludeClothing: shared.alwaysIncludeClothing !== false,
+            count: batch ? CHARACTER_BATCH_COUNT : undefined,
+          }),
+        });
 
-      const data = (await response.json()) as EnrichedToolGenerateResult & {
-        error?: string;
-      };
+        const data = (await response.json()) as EnrichedToolGenerateResult & {
+          error?: string;
+          results?: EnrichedToolGenerateResult[];
+        };
 
-      if (!response.ok) {
-        throw new Error(data.error ?? "Generation failed.");
+        if (!response.ok) {
+          throw new Error(data.error ?? "Generation failed.");
+        }
+
+        if (batch && data.results) {
+          for (const entry of data.results) {
+            recordLocation(readSceneLocationFromMetadata(entry.metadata));
+            recordClothing(readClothingIdsFromMetadata(entry.metadata));
+          }
+          setBatchResults(data.results);
+          const firstPrompt = data.results[0]?.prompt ?? "";
+          const finalized = firstPrompt
+            ? await actions.finalizePrompt(firstPrompt, toolSettings.hints)
+            : "";
+          setOutput(finalized || firstPrompt);
+          setResult(data.results[0] ?? null);
+        } else {
+          recordLocation(readSceneLocationFromMetadata(data.metadata));
+          recordClothing(readClothingIdsFromMetadata(data.metadata));
+          const prompt = await actions.finalizePrompt(data.prompt, toolSettings.hints);
+          setOutput(prompt);
+          setResult({ ...data, prompt });
+          setBatchResults([]);
+        }
+      } catch (err) {
+        setOutput("");
+        setResult(null);
+        setBatchResults([]);
+        setError(err instanceof Error ? err.message : "Generation failed.");
+      } finally {
+        setLoading(false);
       }
+    },
+    [shared, toolSettings, getRecent, recordLocation, getRecentClothing, recordClothing, getBlocklist, actions],
+  );
 
-      recordLocation(readSceneLocationFromMetadata(data.metadata));
-      recordClothing(readClothingIdsFromMetadata(data.metadata));
-
-      const prompt = await actions.finalizePrompt(data.prompt, toolSettings.hints);
-      setOutput(prompt);
-      setResult({ ...data, prompt });
-    } catch (err) {
-      setOutput("");
-      setResult(null);
-      setError(err instanceof Error ? err.message : "Generation failed.");
-    } finally {
-      setLoading(false);
+  const exportBatch = useCallback(() => {
+    if (batchResults.length === 0) {
+      return;
     }
-  }, [shared, toolSettings, getRecent, recordLocation, getRecentClothing, recordClothing, getBlocklist, actions]);
+
+    downloadTextFile(
+      `character-batch-${Date.now()}.txt`,
+      batchResults
+        .map((entry, index) => `# ${index + 1}\n${entry.prompt}`)
+        .join("\n\n"),
+    );
+  }, [batchResults]);
+
+  const batchPrompts = batchResults.map((entry) => entry.prompt);
 
   const copyOutput = useCallback(async () => {
     if (!output) return;
@@ -291,15 +331,26 @@ export default function CharacterTool() {
           className={`h-2 w-full ${accentRingClass(ACCENT)}`}
         />
 
-        <PrimaryButton
-          accentClassName={accentButtonClass(ACCENT)}
-          onClick={() => void generate()}
-          disabled={!mounted}
-          loading={loading}
-          loadingLabel="Generating character prompt"
-        >
-          Generate character prompt
-        </PrimaryButton>
+        <div className="flex flex-wrap gap-3">
+          <PrimaryButton
+            accentClassName={accentButtonClass(ACCENT)}
+            onClick={() => void generate(false)}
+            disabled={!mounted}
+            loading={loading}
+            loadingLabel="Generating character prompt"
+          >
+            Generate character prompt
+          </PrimaryButton>
+          <Button
+            variant="secondary"
+            disabled={!mounted}
+            loading={loading}
+            loadingLabel="Rolling character variations"
+            onClick={() => void generate(true)}
+          >
+            Roll {CHARACTER_BATCH_COUNT}
+          </Button>
+        </div>
 
         <FieldError>{error}</FieldError>
       </ToolSection>
@@ -342,6 +393,41 @@ export default function CharacterTool() {
             metadata: result?.metadata,
           })
         }
+        onExportBatch={batchResults.length > 1 ? exportBatch : undefined}
+        onQueueBatchComfyUi={
+          batchResults.length > 1
+            ? () => void actions.sendBatchComfyUi(batchPrompts, inferredSport)
+            : undefined
+        }
+        batchItems={
+          batchResults.length > 1
+            ? batchResults.map((entry) => ({
+                prompt: entry.prompt,
+                metadata: entry.metadata,
+              }))
+            : undefined
+        }
+        batchCrossLinks={{
+          hintsForDuo: toolSettings.hints,
+          hintsForCharacter: toolSettings.hints,
+        }}
+        batchPromptActions={{
+          onQueueComfyUi: (prompt) => void actions.sendComfyUi(prompt, inferredSport),
+          onSaveHistory: ({ prompt, metadata }) =>
+            actions.saveHistory({
+              prompt,
+              hints: toolSettings.hints,
+              metadata,
+            }),
+          onCopyPair: (prompt) => void actions.copyPromptPair(prompt, inferredSport),
+          onExportSidecar: (prompt, _index, metadata) =>
+            void actions.exportSidecar(prompt, {
+              comfyNode: result?.comfyNode ?? selectedModel.comfyNode,
+              metadata,
+              variationSeed:
+                readVariationSeedFromMetadata(metadata) ?? shared.lockedVariationSeed,
+            }),
+        }}
         onLockSeed={() => {
           if (variationSeed) {
             updateShared({ lockedVariationSeed: variationSeed });
