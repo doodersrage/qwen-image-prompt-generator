@@ -33,6 +33,8 @@ type SharedToolControlsProps = {
   autoFixRules?: boolean;
   onAutoFixRulesChange?: (value: boolean) => void;
   onWorkflowPresetChange?: (fileId: string | undefined) => void;
+  activeCharacterDescriptor?: string;
+  onActiveCharacterDescriptorChange?: (value: string) => void;
 };
 
 export default function SharedToolControls({
@@ -54,6 +56,8 @@ export default function SharedToolControls({
   autoFixRules = true,
   onAutoFixRulesChange,
   onWorkflowPresetChange,
+  activeCharacterDescriptor,
+  onActiveCharacterDescriptorChange,
 }: SharedToolControlsProps) {
   const selectedModel = getComfyModelDefinition(shared.model);
   const activeLimits = getDetailLimits(shared.detail, shared.model);
@@ -217,6 +221,23 @@ export default function SharedToolControls({
                 </span>
               </span>
             </label>
+          )}
+
+          {onActiveCharacterDescriptorChange && (
+            <div className="space-y-2">
+              <FieldLabel hint="Injected into Character generation as a mandatory descriptor.">
+                Active character descriptor
+              </FieldLabel>
+              <textarea
+                value={activeCharacterDescriptor ?? ""}
+                onChange={(event) =>
+                  onActiveCharacterDescriptorChange(event.target.value)
+                }
+                rows={3}
+                placeholder="e.g. athletic woman, mid-20s, short copper hair, green eyes"
+                className="ui-input w-full px-[var(--input-padding-x)] py-[var(--input-padding-y)] type-body"
+              />
+            </div>
           )}
         </CollapsibleSection>
       )}

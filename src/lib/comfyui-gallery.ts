@@ -1,5 +1,7 @@
 import type { ComfyOutputImage } from "./comfyui-outputs";
 import { buildComfyViewPath } from "./comfyui-outputs";
+import type { WorkflowParamValues } from "./comfyui-config";
+import { filterBySemanticQuery } from "./semantic-search";
 
 export const COMFYUI_GALLERY_KEY = "comfyui-gallery-v1";
 export const COMFYUI_GALLERY_UPDATED_EVENT = "comfyui-gallery-updated";
@@ -11,6 +13,9 @@ export type ComfyGalleryFilter = {
   favoritesOnly?: boolean;
   tool?: string;
   query?: string;
+  semanticSearch?: boolean;
+  reviewMode?: boolean;
+  unreviewedOnly?: boolean;
 };
 
 export type ComfyGallerySort =
@@ -164,6 +169,12 @@ export type ComfyGalleryEntry = {
   model?: string;
   /** Links back to Studio prompt history entry. */
   historyId?: string;
+  /** Resolved queue params (seed, width, cfg, etc.). */
+  queueParams?: WorkflowParamValues;
+  /** Quick review rating from gallery review mode. */
+  reviewRating?: 1 | 2 | 3 | 4 | 5;
+  /** Optional project/campaign id. */
+  projectId?: string;
   comfyUrl: string;
   status: ComfyGalleryJobStatus;
   statusMessage?: string;
@@ -217,9 +228,9 @@ export function filterComfyGalleryEntries(
   entries: ComfyGalleryEntry[],
   filter: ComfyGalleryFilter,
 ): ComfyGalleryEntry[] {
-  const query = filter.query?.trim().toLowerCase();
+  const query = filter.query?.trim();
 
-  return entries.filter((entry) => {
+  let filtered = entries.filter((entry) => {
     if (filter.favoritesOnly && !entry.favorite) {
       return false;
     }
@@ -229,7 +240,11 @@ export function filterComfyGalleryEntries(
     if (filter.tool?.trim() && entry.tool !== filter.tool.trim()) {
       return false;
     }
-    if (query) {
+    if (filter.unreviewedOnly && entry.reviewRating) {
+      return false;
+    }
+    if (query && !filter.semanticSearch) {
+      const needle = query.toLowerCase();
       const haystack = [
         entry.prompt,
         entry.negativePrompt,
@@ -242,12 +257,32 @@ export function filterComfyGalleryEntries(
         .join(" ")
         .toLowerCase();
 
-      if (!haystack.includes(query)) {
+      if (!haystack.includes(needle)) {
         return false;
       }
     }
     return true;
   });
+
+  if (query && filter.semanticSearch) {
+    filtered = filterBySemanticQuery(
+      filtered,
+      query,
+      (entry) =>
+        [
+          entry.prompt,
+          entry.negativePrompt,
+          entry.tool,
+          entry.model,
+          entry.promptId,
+          entry.statusMessage,
+        ]
+          .filter(Boolean)
+          .join(" "),
+    );
+  }
+
+  return filtered;
 }
 
 export function paginateGalleryEntries<T>(
@@ -387,6 +422,9 @@ export function updateComfyGalleryEntryById(
       | "favorite"
       | "historyId"
       | "negativePrompt"
+      | "queueParams"
+      | "reviewRating"
+      | "projectId"
     >
   >,
 ): ComfyGalleryEntry | null {
@@ -411,7 +449,7 @@ export function updateComfyGalleryByPromptId(
   patch: Partial<
     Pick<
       ComfyGalleryEntry,
-      "status" | "statusMessage" | "queuePosition" | "completedAt" | "images" | "comfyUrl" | "favorite" | "historyId"
+      "status" | "statusMessage" | "queuePosition" | "completedAt" | "images" | "comfyUrl" | "favorite" | "historyId" | "queueParams" | "reviewRating" | "projectId"
     >
   >,
 ): ComfyGalleryEntry | null {
@@ -436,6 +474,17 @@ export function toggleComfyGalleryFavorite(id: string): void {
   saveComfyGallery(
     loadComfyGallery().map((entry) =>
       entry.id === id ? { ...entry, favorite: !entry.favorite } : entry,
+    ),
+  );
+}
+
+export function setGalleryReviewRating(
+  id: string,
+  reviewRating: ComfyGalleryEntry["reviewRating"],
+): void {
+  saveComfyGallery(
+    loadComfyGallery().map((entry) =>
+      entry.id === id ? { ...entry, reviewRating, favorite: reviewRating === 5 ? true : entry.favorite } : entry,
     ),
   );
 }

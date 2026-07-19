@@ -1298,8 +1298,90 @@ describe("batch lint helpers", () => {
 
 describe("gallery handoff", () => {
   it("builds refine and image prompt paths", async () => {
-    const { galleryHandoffPath } = await import("./gallery-handoff");
+    const { galleryHandoffPath, galleryImprovePath } = await import("./gallery-handoff");
     assert.equal(galleryHandoffPath("refine"), "/refine?from=gallery");
     assert.equal(galleryHandoffPath("imagePrompt"), "/image-prompt?from=gallery");
+    assert.equal(galleryImprovePath(), "/refine?from=gallery&improve=1");
+  });
+});
+
+describe("semantic search", () => {
+  it("ranks overlapping tokens", async () => {
+    const { rankBySemanticQuery } = await import("./semantic-search");
+    const ranked = rankBySemanticQuery(
+      [{ text: "gravel cyclist muddy forest" }, { text: "neon city portrait" }],
+      "gravel forest",
+      (item) => item.text,
+    );
+    assert.equal(ranked[0]?.item.text.includes("gravel"), true);
+  });
+});
+
+describe("prompt iteration tree", () => {
+  it("builds parent child forest", async () => {
+    const { buildPromptIterationForest } = await import("./prompt-iteration-tree");
+    const forest = buildPromptIterationForest([
+      {
+        id: "a",
+        prompt: "root",
+        tool: "character",
+        model: "qwen-image-2512",
+        timestamp: 1,
+      },
+      {
+        id: "b",
+        prompt: "child",
+        tool: "character",
+        model: "qwen-image-2512",
+        timestamp: 2,
+        metadata: { parentHistoryId: "a" },
+      },
+    ] as import("@/hooks/usePromptHistory").PromptHistoryEntry[]);
+    assert.equal(forest.length, 1);
+    assert.equal(forest[0]?.children.length, 1);
+  });
+});
+
+describe("regional prompt builder", () => {
+  it("joins labeled segments", async () => {
+    const { buildRegionalPrompt } = await import("./regional-prompt-builder");
+    const prompt = buildRegionalPrompt([
+      { regionId: "subject", prompt: "cyclist" },
+      { regionId: "background", prompt: "misty forest" },
+    ]);
+    assert.match(prompt, /Subject: cyclist/);
+    assert.match(prompt, /Background: misty forest/);
+  });
+});
+
+describe("preset packs", () => {
+  it("round-trips pack json", async () => {
+    const { buildPresetPack, parsePresetPack } = await import("./preset-packs");
+    const pack = buildPresetPack({
+      name: "Night pack",
+      presets: [
+        {
+          id: "p1",
+          name: "Neon alley",
+          hints: "rain",
+          tool: "studio",
+          createdAt: 1,
+        },
+      ],
+    });
+    const parsed = parsePresetPack(JSON.stringify(pack));
+    assert.equal(parsed.name, "Night pack");
+    assert.equal(parsed.presets.length, 1);
+  });
+});
+
+describe("context negative profile", () => {
+  it("selects pet profile from tool context", async () => {
+    const { resolveContextNegativeProfile } = await import("./context-negative-profile");
+    const profile = resolveContextNegativeProfile(undefined, undefined, {
+      tool: "pet",
+      hints: "golden retriever in park",
+    });
+    assert.equal(profile?.id, "pet");
   });
 });

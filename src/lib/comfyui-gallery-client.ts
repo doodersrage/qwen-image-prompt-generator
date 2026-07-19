@@ -15,6 +15,8 @@ import { notifyComfyJobComplete } from "./comfyui-notifications";
 import { resolveComfyUiRuntime } from "./comfyui-runtime";
 import { loadComfyUiSettings } from "./comfyui-settings";
 import { subscribeComfyUiWebSocket } from "./comfyui-websocket";
+import { dispatchWebhook } from "./webhook-settings";
+import type { WorkflowParamValues } from "./comfyui-config";
 
 export type RegisterComfyGalleryJobInput = {
   promptId: string;
@@ -23,6 +25,8 @@ export type RegisterComfyGalleryJobInput = {
   tool?: string;
   model?: string;
   historyId?: string;
+  queueParams?: WorkflowParamValues;
+  projectId?: string;
   comfyUrl: string;
 };
 
@@ -61,6 +65,8 @@ export function registerComfyGalleryJob(
     tool: input.tool,
     model: input.model,
     historyId: input.historyId,
+    queueParams: input.queueParams,
+    projectId: input.projectId,
     comfyUrl: input.comfyUrl,
     status: "pending",
     statusMessage: "Queued",
@@ -200,13 +206,26 @@ function applyComfyJobStatus(
   }
 
   if (tracker.status === "error") {
-    return updateComfyGalleryByPromptId(promptId, {
+    const entry = updateComfyGalleryByPromptId(promptId, {
       status: "error",
       statusMessage: tracker.statusMessage,
       queuePosition: null,
       completedAt: Date.now(),
       comfyUrl: tracker.comfyUrl,
     });
+    if (entry) {
+      void dispatchWebhook({
+        event: "comfyui.job.error",
+        promptId,
+        prompt: entry.prompt,
+        negativePrompt: entry.negativePrompt,
+        model: entry.model,
+        tool: entry.tool,
+        status: entry.status,
+        completedAt: Date.now(),
+      });
+    }
+    return entry;
   }
 
   const entry = updateComfyGalleryByPromptId(promptId, {
@@ -219,6 +238,20 @@ function applyComfyJobStatus(
   });
   if (entry && loadComfyUiSettings().notifyOnComplete) {
     notifyComfyJobComplete(entry);
+  }
+  if (entry?.status === "completed") {
+    void dispatchWebhook({
+      event: "comfyui.job.completed",
+      promptId,
+      prompt: entry.prompt,
+      negativePrompt: entry.negativePrompt,
+      model: entry.model,
+      tool: entry.tool,
+      status: entry.status,
+      imageCount: entry.images.length,
+      queueParams: entry.queueParams,
+      completedAt: entry.completedAt ?? Date.now(),
+    });
   }
   return entry;
 }

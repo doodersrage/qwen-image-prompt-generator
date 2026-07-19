@@ -59,6 +59,8 @@ export type CharacterOptions = SharedGenerationOptions & {
   alwaysIncludeClothing?: boolean;
   /** Force identical kits for athletic duos (teammates vs rival accents). */
   teamKit?: boolean;
+  /** Pinned appearance descriptor injected into every character prompt. */
+  activeCharacterDescriptor?: string;
 };
 
 import type { GenerationDiagnostics } from "../generation-diagnostics";

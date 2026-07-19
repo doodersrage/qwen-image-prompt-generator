@@ -366,6 +366,8 @@ export default function FantasyTool() {
           })
         }
         onSendComfyUi={() => void actions.sendComfyUi(output)}
+        onImprove={() => actions.improveOutput(output, actions.comfyUiPreviewUrl)}
+        onRefine={() => actions.refineOutput(output, actions.comfyUiPreviewUrl)}
         {...promptResultPreviewProps(actions, output)}
         onFixPrompt={() => void actions.fixPrompt(output, setOutput, toolSettings.hints)}
         onCopyPair={() => void actions.copyPromptPair(output)}

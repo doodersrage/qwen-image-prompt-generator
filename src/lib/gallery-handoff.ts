@@ -1,7 +1,10 @@
 import type { ComfyGalleryEntry } from "./comfyui-gallery";
 import { buildComfyViewPath } from "./comfyui-outputs";
+import type { WorkflowParamValues } from "./comfyui-config";
 
 export const GALLERY_HANDOFF_KEY = "gallery-handoff-v1";
+export const IMPROVE_INTENT_DEFAULT =
+  "Improve fidelity, composition, and prompt alignment while preserving subject identity and scene intent.";
 
 export type GalleryHandoffPayload = {
   source: "gallery";
@@ -15,8 +18,20 @@ export type GalleryHandoffPayload = {
   imageUrl?: string;
   imageFilename?: string;
   target: "refine" | "imagePrompt";
+  improveIntent?: string;
   savedAt: number;
 };
+
+export function buildImproveGalleryHandoff(entry: ComfyGalleryEntry): GalleryHandoffPayload {
+  return {
+    ...buildGalleryHandoff(entry, "refine"),
+    improveIntent: IMPROVE_INTENT_DEFAULT,
+  };
+}
+
+export function galleryImprovePath(): string {
+  return "/refine?from=gallery&improve=1";
+}
 
 export function buildGalleryHandoff(
   entry: ComfyGalleryEntry,

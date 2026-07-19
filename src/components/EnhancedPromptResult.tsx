@@ -70,6 +70,8 @@ type EnhancedPromptResultProps = {
   onRunPipeline?: () => void;
   onExportSidecar?: () => void;
   onPreviewWorkflow?: () => void;
+  onImprove?: () => void;
+  onRefine?: () => void;
   workflowPreview?: {
     workflowSource?: string;
     replacements?: {
@@ -122,6 +124,8 @@ export default function EnhancedPromptResult({
   onRunPipeline,
   onExportSidecar,
   onPreviewWorkflow,
+  onImprove,
+  onRefine,
   workflowPreview,
   previewStatus,
   variationSeed,
@@ -200,7 +204,9 @@ export default function EnhancedPromptResult({
         onReformat ||
         onRunPipeline ||
         onExportSidecar ||
-        onPreviewWorkflow),
+        onPreviewWorkflow ||
+        onImprove ||
+        onRefine),
   );
 
   return (
@@ -319,7 +325,9 @@ export default function EnhancedPromptResult({
         onReformat ||
         onRunPipeline ||
         onExportSidecar ||
-        onPreviewWorkflow) &&
+        onPreviewWorkflow ||
+        onImprove ||
+        onRefine) &&
         showSingleActions && (
         <ToolSection className="space-y-5">
           {showComfyActions && workflowSelection.mounted && (
@@ -380,6 +388,16 @@ export default function EnhancedPromptResult({
           {onSendComfyUi && (
             <Button variant="accent-outline" fullWidth onClick={onSendComfyUi}>
               Send to ComfyUI
+            </Button>
+          )}
+          {onImprove && (
+            <Button variant="secondary" fullWidth onClick={onImprove}>
+              Improve output
+            </Button>
+          )}
+          {onRefine && (
+            <Button variant="secondary" fullWidth onClick={onRefine}>
+              Open in Refine
             </Button>
           )}
           {onExportSidecar && (

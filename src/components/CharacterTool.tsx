@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import BackgroundPresetControls from "@/components/BackgroundPresetControls";
 import CharacterPresetControls from "@/components/CharacterPresetControls";
 import EnhancedPromptResult from "@/components/EnhancedPromptResult";
+import RegionalPromptBuilderPanel from "@/components/RegionalPromptBuilderPanel";
 import { promptResultPreviewProps } from "@/lib/prompt-result-preview-props";
 import SharedToolControls from "@/components/SharedToolControls";
 import SportPresetChips from "@/components/SportPresetChips";
@@ -277,6 +278,7 @@ export default function CharacterTool() {
             lockedLocation: shared.lockedLocation,
             variationSeed: shared.lockedVariationSeed,
             alwaysIncludeClothing: shared.alwaysIncludeClothing !== false,
+            activeCharacterDescriptor: shared.activeCharacterDescriptor,
             teamKit: sceneMode === "duo" ? toolSettings.teamKit === true : undefined,
             sportPresetId:
               sceneMode === "duo" ? toolSettings.sportPresetId || undefined : undefined,
@@ -422,6 +424,10 @@ export default function CharacterTool() {
           }
           autoFixRules={shared.autoFixRules !== false}
           onAutoFixRulesChange={(value) => updateShared({ autoFixRules: value })}
+          activeCharacterDescriptor={shared.activeCharacterDescriptor}
+          onActiveCharacterDescriptorChange={(value) =>
+            updateShared({ activeCharacterDescriptor: value || undefined })
+          }
         />
       }
     >
@@ -558,6 +564,17 @@ export default function CharacterTool() {
           }
           rows={sceneMode === "duo" ? 4 : 3}
           className={accentFocusClass(accent)}
+        />
+
+        <RegionalPromptBuilderPanel
+          accentClassName={accentFocusClass(accent)}
+          onApply={(prompt) =>
+            updateToolSettings({
+              hints: toolSettings.hints?.trim()
+                ? `${toolSettings.hints.trim()}. ${prompt}`
+                : prompt,
+            })
+          }
         />
 
         {sceneMode === "duo" || sceneMode === "compose" ? (
@@ -728,6 +745,8 @@ export default function CharacterTool() {
           })
         }
         onSendComfyUi={() => void actions.sendComfyUi(output, inferredSport)}
+        onImprove={() => actions.improveOutput(output, actions.comfyUiPreviewUrl)}
+        onRefine={() => actions.refineOutput(output, actions.comfyUiPreviewUrl)}
         {...promptResultPreviewProps(actions, output, inferredSport)}
         onFixPrompt={() =>
           void actions.fixPrompt(output, setOutput, toolSettings.hints)

@@ -10,6 +10,7 @@ import {
   removeComfyGalleryEntries,
   removeComfyGalleryEntry,
   setComfyGalleryFavorites,
+  setGalleryReviewRating,
   toggleComfyGalleryFavorite,
   type ComfyGalleryEntry,
   type ComfyGalleryFilter,
@@ -95,6 +96,14 @@ export function useComfyUiGallery(initialFilter?: ComfyGalleryFilter) {
     refresh();
   }, [refresh]);
 
+  const setReviewRating = useCallback(
+    (id: string, rating: ComfyGalleryEntry["reviewRating"]) => {
+      setGalleryReviewRating(id, rating);
+      refresh();
+    },
+    [refresh],
+  );
+
   return {
     mounted,
     entries,
@@ -110,5 +119,6 @@ export function useComfyUiGallery(initialFilter?: ComfyGalleryFilter) {
     clearAll,
     refreshPending,
     primaryViewUrl: galleryEntryPrimaryViewUrl,
+    setReviewRating,
   };
 }

@@ -27,6 +27,7 @@ type DuoRequestBody = {
   lockedWardrobeId?: string;
   lockedLocation?: string;
   variationSeed?: string;
+  activeCharacterDescriptor?: string;
 };
 
 export async function GET() {
@@ -73,6 +74,7 @@ export async function POST(request: Request) {
       lockedWardrobeId: normalizeLockedWardrobeId(body.lockedWardrobeId),
       lockedLocation: normalizeLockedLocation(body.lockedLocation),
       variationSeed: normalizeVariationSeed(body.variationSeed),
+      activeCharacterDescriptor: body.activeCharacterDescriptor?.trim() || undefined,
     });
 
     return apiJson(

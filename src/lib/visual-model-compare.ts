@@ -2,7 +2,7 @@
 
 import { registerComfyGalleryJob } from "./comfyui-gallery-client";
 import { scheduleComfyGalleryPoll } from "./comfyui-gallery-poller";
-import { resolveComfyUiRuntime } from "./comfyui-runtime";
+import { resolveRuntimeForModel } from "./comfyui-runtime-for-model";
 import { resolveQueueNegativePrompt } from "./queue-negative";
 import type { ComfyImageModel } from "./comfy-models";
 import { galleryEntryPrimaryViewUrl } from "./comfyui-gallery";
@@ -25,12 +25,13 @@ export async function runVisualModelCompare(input: {
 }): Promise<{ a: VisualCompareResult; b: VisualCompareResult }> {
   const seed =
     input.seed?.trim() || String(Math.floor(Math.random() * 2 ** 32));
-  const runtime = resolveComfyUiRuntime();
 
   async function queueOne(model: ComfyImageModel): Promise<VisualCompareResult> {
+    const runtime = resolveRuntimeForModel(model);
     const negativePrompt = await resolveQueueNegativePrompt({
       model,
       hints: input.hints ?? input.prompt.slice(0, 200),
+      tool: "studio-compare",
     });
 
     const response = await fetch("/api/comfyui", {

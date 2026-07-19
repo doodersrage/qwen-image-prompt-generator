@@ -70,6 +70,29 @@ import {
   importStudioBackup,
   parseStudioBackupFile,
 } from "@/lib/studio-backup";
+import {
+  buildPromptIterationForest,
+  type IterationTreeNode,
+} from "@/lib/prompt-iteration-tree";
+import {
+  deletePromptProject,
+  loadActiveProjectId,
+  loadPromptProjects,
+  setActiveProjectId,
+  upsertPromptProject,
+  type PromptProject,
+} from "@/lib/prompt-projects";
+import {
+  buildPresetPack,
+  downloadPresetPack,
+  parsePresetPack,
+} from "@/lib/preset-packs";
+import {
+  generateModelPortfolio,
+  queueModelPortfolio,
+  type ModelPortfolioItem,
+} from "@/lib/model-portfolio";
+import { studioHistoryUrl } from "@/lib/prompt-lineage";
 import type { EnrichedToolGenerateResult } from "@/lib/specialized/types";
 import {
   ToolBadge,
@@ -101,7 +124,16 @@ import {
 
 const ACCENT = "violet" as const;
 
-type StudioTab = "history" | "compare" | "catalog" | "templates" | "presets" | "diff";
+type StudioTab =
+  | "history"
+  | "compare"
+  | "catalog"
+  | "templates"
+  | "presets"
+  | "diff"
+  | "iteration"
+  | "projects"
+  | "portfolio";
 
 type CatalogClothing = {
   id: string;
@@ -158,6 +190,19 @@ export default function StudioTool() {
   const [copiedPresetShareId, setCopiedPresetShareId] = useState<string | null>(
     null,
   );
+  const [highlightHistoryId, setHighlightHistoryId] = useState<string | null>(null);
+  const [projects, setProjects] = useState<PromptProject[]>([]);
+  const [activeProjectId, setActiveProjectIdState] = useState<string | undefined>();
+  const [projectName, setProjectName] = useState("");
+  const [projectNotes, setProjectNotes] = useState("");
+  const [presetPackName, setPresetPackName] = useState("");
+  const [portfolioDraft, setPortfolioDraft] = useState("");
+  const [portfolioModels, setPortfolioModels] = useState(
+    "qwen-image-2512, flux-2-klein, sdxl-base-1.0",
+  );
+  const [portfolioItems, setPortfolioItems] = useState<ModelPortfolioItem[]>([]);
+  const [portfolioStatus, setPortfolioStatus] = useState<string | null>(null);
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
 
   const actions = usePromptResultActions({
     tool: "studio",
@@ -165,9 +210,17 @@ export default function StudioTool() {
     detail: shared.detail,
   });
 
-  const filteredEntries = useMemo(
-    () => filterHistoryEntries(entries, historyFilter),
-    [entries, historyFilter],
+  const filteredEntries = useMemo(() => {
+    const base = filterHistoryEntries(entries, historyFilter);
+    if (!activeProjectId) {
+      return base;
+    }
+    return base.filter((entry) => entry.metadata?.projectId === activeProjectId);
+  }, [entries, historyFilter, activeProjectId]);
+
+  const iterationForest = useMemo(
+    () => buildPromptIterationForest(entries),
+    [entries],
   );
 
   const favoriteEntries = useMemo(
@@ -190,6 +243,19 @@ export default function StudioTool() {
     setBlocklist(loadLocationBlocklist());
     setScenePresets(loadScenePresets());
     setUserTemplates(loadUserTemplates());
+    setProjects(loadPromptProjects());
+    setActiveProjectIdState(loadActiveProjectId());
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const historyId = new URLSearchParams(window.location.search).get("history");
+    if (historyId) {
+      setTab("history");
+      setHighlightHistoryId(historyId);
+    }
   }, []);
 
   const loadCatalog = useCallback(async (query: string) => {
@@ -360,7 +426,10 @@ export default function StudioTool() {
 
   const tabs: { id: StudioTab; label: string }[] = [
     { id: "history", label: "History" },
+    { id: "iteration", label: "Iteration tree" },
+    { id: "projects", label: "Projects" },
     { id: "compare", label: "Compare" },
+    { id: "portfolio", label: "Portfolio" },
     { id: "catalog", label: "Catalog" },
     { id: "templates", label: "Templates" },
     { id: "presets", label: "Presets" },
@@ -555,6 +624,43 @@ export default function StudioTool() {
                 <label className="flex items-center gap-3 self-end pb-1 type-body">
                   <input
                     type="checkbox"
+                    checked={historyFilter.semanticSearch === true}
+                    onChange={(event) =>
+                      setHistoryFilter((previous) => ({
+                        ...previous,
+                        semanticSearch: event.target.checked || undefined,
+                      }))
+                    }
+                    className={`h-4 w-4 rounded-[var(--radius-sm)] ${accentFocusClass()}`}
+                  />
+                  Semantic search
+                </label>
+                {projects.length > 0 && (
+                  <div className="space-y-2">
+                    <FieldLabel htmlFor="history-project">Project</FieldLabel>
+                    <select
+                      id="history-project"
+                      value={activeProjectId ?? "all"}
+                      onChange={(event) => {
+                        const value =
+                          event.target.value === "all" ? undefined : event.target.value;
+                        setActiveProjectIdState(value);
+                        setActiveProjectId(value);
+                      }}
+                      className="ui-input px-3 py-[var(--input-padding-y)] type-body"
+                    >
+                      <option value="all">All projects</option>
+                      {projects.map((project) => (
+                        <option key={project.id} value={project.id}>
+                          {project.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <label className="flex items-center gap-3 self-end pb-1 type-body">
+                  <input
+                    type="checkbox"
                     checked={historyFilter.favoritesOnly === true}
                     onChange={(event) =>
                       setHistoryFilter((previous) => ({
@@ -635,6 +741,7 @@ export default function StudioTool() {
                 <HistoryCard
                   key={entry.id}
                   entry={entry}
+                  highlighted={highlightHistoryId === entry.id}
                   onCopy={() => copyText(entry.prompt)}
                   onToggleFavorite={() => toggleFavorite(entry.id)}
                   onRate={(rating) => setRating(entry.id, rating)}
@@ -700,6 +807,109 @@ export default function StudioTool() {
               ))}
             </ToolBlockGroup>
           )}
+        </ToolSection>
+      )}
+
+      {tab === "iteration" && (
+        <ToolSection title="Prompt iteration tree">
+          <p className="text-sm text-zinc-400">
+            Branches built from saved history entries linked by parent history ids.
+          </p>
+          {iterationForest.length === 0 ? (
+            <EmptyState
+              icon="diff"
+              title="No iteration branches yet"
+              description="Save refined prompts to history with lineage to see parent/child trees here."
+            />
+          ) : (
+            <ToolBlockGroup className="mt-[var(--block-gap)]">
+              {iterationForest.map((node) => (
+                <IterationTreeNodeCard key={node.entry.id} node={node} depth={0} />
+              ))}
+            </ToolBlockGroup>
+          )}
+        </ToolSection>
+      )}
+
+      {tab === "projects" && (
+        <ToolSection title="Prompt projects">
+          <p className="text-sm text-zinc-400">
+            Group history and gallery jobs under named campaigns. Set an active project to
+            filter Studio history.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <input
+              value={projectName}
+              onChange={(event) => setProjectName(event.target.value)}
+              placeholder="Project name"
+              className="ui-input px-[var(--input-padding-x)] py-[var(--input-padding-y)] type-body"
+            />
+            <input
+              value={projectNotes}
+              onChange={(event) => setProjectNotes(event.target.value)}
+              placeholder="Notes (optional)"
+              className="ui-input px-[var(--input-padding-x)] py-[var(--input-padding-y)] type-body"
+            />
+          </div>
+          <PrimaryButton
+            accentClassName={accentButtonClass(ACCENT)}
+            disabled={!projectName.trim()}
+            onClick={() => {
+              const project = upsertPromptProject({
+                id: `project-${Date.now().toString(36)}`,
+                name: projectName,
+                notes: projectNotes,
+              });
+              setProjects(loadPromptProjects());
+              setActiveProjectIdState(project.id);
+              setActiveProjectId(project.id);
+              setProjectName("");
+              setProjectNotes("");
+              setBackupStatus(`Created project “${project.name}”.`);
+            }}
+          >
+            Create project
+          </PrimaryButton>
+          <ToolBlockGroup className="mt-[var(--block-gap)]">
+            {projects.map((project) => (
+              <ToolContentPanel key={project.id} className="ui-block-group">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="type-heading">{project.name}</p>
+                    {project.notes ? (
+                      <p className="type-caption text-zinc-500">{project.notes}</p>
+                    ) : null}
+                  </div>
+                  <div className="ui-list-actions">
+                    <Button
+                      variant="ghost"
+                      className="!min-h-8 px-3 type-caption"
+                      onClick={() => {
+                        setActiveProjectIdState(project.id);
+                        setActiveProjectId(project.id);
+                        setTab("history");
+                      }}
+                    >
+                      {activeProjectId === project.id ? "Active" : "Set active"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="!min-h-8 px-3 type-caption"
+                      onClick={() => {
+                        deletePromptProject(project.id);
+                        setProjects(loadPromptProjects());
+                        if (activeProjectId === project.id) {
+                          setActiveProjectIdState(undefined);
+                        }
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              </ToolContentPanel>
+            ))}
+          </ToolBlockGroup>
         </ToolSection>
       )}
 
@@ -822,6 +1032,92 @@ export default function StudioTool() {
               ) : null}
             </div>
           )}
+        </ToolSection>
+      )}
+
+      {tab === "portfolio" && (
+        <ToolSection title="Multi-model portfolio">
+          <p className="text-sm text-zinc-400">
+            Format one draft for several models, then queue each variant to ComfyUI.
+          </p>
+          <TextArea
+            rows={4}
+            value={portfolioDraft}
+            onChange={(event) => setPortfolioDraft(event.target.value)}
+            placeholder="Shared scene draft to adapt per model…"
+            className={accentFocusClass(ACCENT)}
+          />
+          <FieldLabel hint="Comma-separated model ids">Models</FieldLabel>
+          <input
+            value={portfolioModels}
+            onChange={(event) => setPortfolioModels(event.target.value)}
+            className="ui-input w-full px-[var(--input-padding-x)] py-[var(--input-padding-y)] type-body"
+          />
+          <div className="flex flex-wrap gap-2">
+            <PrimaryButton
+              accentClassName={accentButtonClass(ACCENT)}
+              loading={portfolioLoading}
+              loadingLabel="Formatting portfolio"
+              disabled={!portfolioDraft.trim()}
+              onClick={() => {
+                void (async () => {
+                  setPortfolioLoading(true);
+                  setPortfolioStatus("Formatting…");
+                  try {
+                    const models = portfolioModels
+                      .split(",")
+                      .map((entry) => entry.trim())
+                      .filter(Boolean) as ComfyImageModel[];
+                    const items = await generateModelPortfolio({
+                      draft: portfolioDraft,
+                      models,
+                      detail: shared.detail,
+                    });
+                    setPortfolioItems(items);
+                    setPortfolioStatus(`Formatted ${items.filter((item) => item.prompt).length}/${models.length} prompts.`);
+                  } catch (err) {
+                    setPortfolioStatus(err instanceof Error ? err.message : "Portfolio failed.");
+                  } finally {
+                    setPortfolioLoading(false);
+                  }
+                })();
+              }}
+            >
+              Generate portfolio
+            </PrimaryButton>
+            <Button
+              variant="secondary"
+              disabled={portfolioItems.every((item) => !item.prompt.trim())}
+              onClick={() => {
+                void queueModelPortfolio({
+                  items: portfolioItems,
+                  hints: portfolioDraft,
+                  tool: "portfolio",
+                }).then((queued) => setPortfolioStatus(`Queued ${queued} jobs.`));
+              }}
+            >
+              Queue all to ComfyUI
+            </Button>
+          </div>
+          {portfolioStatus ? (
+            <p className="type-caption text-[var(--accent-text)]">{portfolioStatus}</p>
+          ) : null}
+          {portfolioItems.length > 0 ? (
+            <ToolBlockGroup className="mt-[var(--block-gap)]">
+              {portfolioItems.map((item) => (
+                <ToolContentPanel key={item.model} className="ui-block-group">
+                  <p className="type-caption text-zinc-500">{item.model}</p>
+                  {item.error ? (
+                    <p className="text-sm text-rose-300">{item.error}</p>
+                  ) : (
+                    <pre className="type-code max-h-40 overflow-auto whitespace-pre-wrap text-zinc-300">
+                      {item.prompt}
+                    </pre>
+                  )}
+                </ToolContentPanel>
+              ))}
+            </ToolBlockGroup>
+          ) : null}
         </ToolSection>
       )}
 
@@ -1200,6 +1496,64 @@ export default function StudioTool() {
           </PrimaryButton>
 
           <div className="space-y-3 border-t border-zinc-800 pt-4">
+            <p className="text-sm font-medium text-zinc-200">Preset packs</p>
+            <p className="text-xs text-zinc-500">
+              Export or import bundles of scene presets for sharing across machines.
+            </p>
+            <input
+              value={presetPackName}
+              onChange={(event) => setPresetPackName(event.target.value)}
+              placeholder="Pack name"
+              className="ui-input w-full px-[var(--input-padding-x)] py-[var(--input-padding-y)] type-body"
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                disabled={!presetPackName.trim() || scenePresets.length === 0}
+                onClick={() =>
+                  downloadPresetPack(
+                    buildPresetPack({
+                      name: presetPackName.trim(),
+                      presets: scenePresets,
+                    }),
+                  )
+                }
+              >
+                Export pack
+              </Button>
+              <label className="cursor-pointer rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:border-zinc-500">
+                Import pack
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (!file) {
+                      return;
+                    }
+                    void file
+                      .text()
+                      .then((raw) => {
+                        const pack = parsePresetPack(raw);
+                        for (const preset of pack.presets) {
+                          upsertScenePreset(preset);
+                        }
+                        setScenePresets(loadScenePresets());
+                        setBackupStatus(`Imported preset pack “${pack.name}”.`);
+                      })
+                      .catch((err) => {
+                        setBackupStatus(
+                          err instanceof Error ? err.message : "Import failed.",
+                        );
+                      });
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="space-y-3 border-t border-zinc-800 pt-4">
             <p className="text-sm font-medium text-zinc-200">Character identity bundles</p>
             <p className="text-xs text-zinc-500">
               Export/import reusable character sheets with locks, hints, and negative profile ids.
@@ -1484,6 +1838,7 @@ export default function StudioTool() {
 
 function HistoryCard({
   entry,
+  highlighted,
   onCopy,
   onToggleFavorite,
   onRate,
@@ -1496,6 +1851,7 @@ function HistoryCard({
   onRequeue,
 }: {
   entry: PromptHistoryEntry;
+  highlighted?: boolean;
   onCopy: () => void;
   onToggleFavorite: () => void;
   onRate: (rating: PromptHistoryEntry["rating"]) => void;
@@ -1514,7 +1870,9 @@ function HistoryCard({
     !entry.prompt.toLowerCase().includes(entry.hints.trim().slice(0, 40).toLowerCase());
 
   return (
-    <ToolContentPanel className="ui-block-group">
+    <ToolContentPanel
+      className={`ui-block-group ${highlighted ? "ring-2 ring-violet-500/40" : ""}`}
+    >
       <pre className="type-code max-h-56 overflow-auto whitespace-pre-wrap border border-[var(--border-subtle)] bg-[var(--bg-muted)] p-5 !text-[var(--tint-success-text)]">
         {entry.prompt}
       </pre>
@@ -1528,6 +1886,9 @@ function HistoryCard({
           <div className="ui-list-actions">
             <a href={regenerateUrl} className="ui-btn-ghost !min-h-8 px-3 type-caption">
               Regenerate
+            </a>
+            <a href={studioHistoryUrl(entry.id)} className="ui-btn-ghost !min-h-8 px-3 type-caption">
+              Link
             </a>
             <Button variant="ghost" className="!min-h-8 px-3 type-caption" onClick={onToggleFavorite}>
               {entry.favorite ? "★" : "☆"}
@@ -1615,6 +1976,37 @@ function HistoryCard({
         {entry.diagnostics && <PromptDiagnosticsPanel diagnostics={entry.diagnostics} />}
       </ToolMetaPanel>
     </ToolContentPanel>
+  );
+}
+
+function IterationTreeNodeCard({
+  node,
+  depth,
+}: {
+  node: IterationTreeNode;
+  depth: number;
+}) {
+  return (
+    <div className="space-y-3" style={{ marginLeft: depth * 16 }}>
+      <ToolContentPanel className="ui-block-group">
+        <p className="type-caption text-zinc-500">
+          {node.entry.tool} · {node.entry.model} ·{" "}
+          {new Date(node.entry.timestamp).toLocaleString()}
+        </p>
+        <pre className="type-code max-h-32 overflow-auto whitespace-pre-wrap text-zinc-300">
+          {node.entry.prompt}
+        </pre>
+        <a
+          href={studioHistoryUrl(node.entry.id)}
+          className="type-caption text-sky-300 hover:text-sky-200"
+        >
+          Open in history
+        </a>
+      </ToolContentPanel>
+      {node.children.map((child) => (
+        <IterationTreeNodeCard key={child.entry.id} node={child} depth={depth + 1} />
+      ))}
+    </div>
   );
 }
 

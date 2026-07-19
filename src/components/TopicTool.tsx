@@ -22,6 +22,7 @@ import {
   variationsPathFromTopics,
 } from "@/lib/topics-variations-handoff";
 import { resolveQueueNegativePrompt } from "@/lib/queue-negative";
+import { runWorkflowPreflight } from "@/lib/workflow-preflight";
 import { DEFAULT_TOPIC_TOOL_CACHE } from "@/lib/settings-cache";
 import type { BatchFromTopicsItem } from "@/lib/batch-from-topics";
 import type { TopicGenerateResult } from "@/lib/specialized/types";
@@ -178,7 +179,21 @@ export default function TopicTool() {
         const negativePrompt = await resolveQueueNegativePrompt({
           model: shared.model,
           hints: toolSettings.seedTopic ?? batchResults[0]?.topic,
+          tool: "topics",
         });
+        const preflight = await runWorkflowPreflight({
+          model: shared.model,
+          prompts,
+          negativePrompt,
+        });
+        if (!preflight.ok) {
+          throw new Error(
+            preflight.issues
+              .filter((issue) => issue.severity === "error")
+              .map((issue) => issue.message)
+              .join(" · ") || "Workflow pre-flight failed.",
+          );
+        }
         const runtime = resolveComfyUiRuntime();
         const response = await fetch("/api/comfyui", {
           method: "POST",

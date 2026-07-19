@@ -20,6 +20,7 @@ import {
   type BatchLintSummary,
 } from "@/lib/batch-lint-gate";
 import { resolveQueueNegativePrompt } from "@/lib/queue-negative";
+import { runWorkflowPreflight } from "@/lib/workflow-preflight";
 import { resolveComfyUiRuntime } from "@/lib/comfyui-runtime";
 import { DEFAULT_VARIATIONS_TOOL_CACHE } from "@/lib/settings-cache";
 import type { SharedToolSettings, VariationsToolCache } from "@/lib/settings-cache";
@@ -393,7 +394,21 @@ export default function VariationGridTool() {
         const negativePrompt = await resolveQueueNegativePrompt({
           model: shared.model,
           hints: toolSettings.hints?.trim(),
+          tool: "variations",
         });
+        const preflight = await runWorkflowPreflight({
+          model: shared.model,
+          prompts,
+          negativePrompt,
+        });
+        if (!preflight.ok) {
+          throw new Error(
+            preflight.issues
+              .filter((issue) => issue.severity === "error")
+              .map((issue) => issue.message)
+              .join(" · ") || "Workflow pre-flight failed.",
+          );
+        }
 
         const runtime = resolveComfyUiRuntime();
         const response = await fetch("/api/comfyui", {

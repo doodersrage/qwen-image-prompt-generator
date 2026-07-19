@@ -25,6 +25,8 @@ export type SharedToolSettings = {
   sessionLlmTemperature?: number;
   /** Session override for template fallback when LLM fails. */
   sessionAllowTemplateFallback?: boolean;
+  /** Pinned character appearance block injected into Character/Duo generations. */
+  activeCharacterDescriptor?: string;
   /** @deprecated Use selectedWorkflowFileId */
   selectedWorkflowPresetId?: string;
 };

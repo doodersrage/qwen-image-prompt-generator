@@ -14,6 +14,7 @@ export function useGalleryHandoff(
     prompt: string;
     negativePrompt?: string;
     model?: string;
+    improveIntent?: string;
     file: File | null;
     previewUrl: string | null;
     payload: GalleryHandoffPayload;
@@ -52,6 +53,7 @@ export function useGalleryHandoff(
         prompt: payload.prompt,
         negativePrompt: payload.negativePrompt,
         model: payload.model,
+        improveIntent: payload.improveIntent,
         file,
         previewUrl,
         payload,

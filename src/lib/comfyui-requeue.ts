@@ -5,6 +5,8 @@ import {
   registerComfyGalleryJob,
 } from "./comfyui-gallery-client";
 import { scheduleComfyGalleryPoll } from "./comfyui-gallery-poller";
+import type { WorkflowParamValues } from "./comfyui-config";
+import { resolveRuntimeForModel } from "./comfyui-runtime-for-model";
 import { resolveComfyUiRuntime } from "./comfyui-runtime";
 import { resolveQueueNegativePrompt } from "./queue-negative";
 
@@ -36,6 +38,8 @@ export type RequeueComfyJobInput = {
   hints?: string;
   /** When true, override seed with a new random value for this job. */
   newSeed?: boolean;
+  /** Recover width/steps/cfg from a prior gallery job when re-queueing. */
+  queueParams?: WorkflowParamValues;
   onStatus?: (message: string) => void;
 };
 
@@ -65,16 +69,20 @@ export async function requeueComfyJob(
     });
   }
 
-  const runtime = resolveComfyUiRuntime();
+  const runtime = resolveRuntimeForModel(model);
+  const params: WorkflowParamValues | undefined = input.newSeed
+    ? {
+        ...input.queueParams,
+        seed: String(Math.floor(Math.random() * 2 ** 32)),
+      }
+    : input.queueParams;
   const response = await fetch("/api/comfyui", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       prompt: input.prompt.trim(),
       negativePrompt,
-      params: input.newSeed
-        ? { seed: String(Math.floor(Math.random() * 2 ** 32)) }
-        : undefined,
+      ...(params ? { params } : {}),
       ...(runtime ? { comfy: runtime } : {}),
     }),
   });

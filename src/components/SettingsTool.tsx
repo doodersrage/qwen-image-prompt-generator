@@ -38,6 +38,18 @@ import {
   type SharedToolSettings,
 } from "@/lib/settings-cache";
 import {
+  DEFAULT_SCHEDULED_BATCH,
+  loadScheduledBatchConfig,
+  saveScheduledBatchConfig,
+  type ScheduledBatchConfig,
+} from "@/lib/scheduled-batch";
+import {
+  DEFAULT_WEBHOOK_SETTINGS,
+  loadWebhookSettings,
+  saveWebhookSettings,
+  type WebhookSettings,
+} from "@/lib/webhook-settings";
+import {
   isComfyNotificationSupported,
   requestComfyNotificationPermission,
 } from "@/lib/comfyui-notifications";
@@ -144,6 +156,12 @@ export default function SettingsTool() {
   const [workflowPreview, setWorkflowPreview] = useState<Awaited<
     ReturnType<typeof fetchWorkflowPreview>
   > | null>(null);
+  const [webhookSettings, setWebhookSettings] = useState<WebhookSettings>(
+    DEFAULT_WEBHOOK_SETTINGS,
+  );
+  const [scheduledBatch, setScheduledBatch] = useState<ScheduledBatchConfig>(
+    DEFAULT_SCHEDULED_BATCH,
+  );
 
   useEffect(() => {
     if (isComfyNotificationSupported()) {
@@ -158,6 +176,8 @@ export default function SettingsTool() {
     setSharedSettings(cache.shared);
     setModelWorkflowMapText(formatModelWorkflowMap(cache.shared.modelWorkflowMap));
     setSharedMounted(true);
+    setWebhookSettings(loadWebhookSettings());
+    setScheduledBatch(loadScheduledBatchConfig());
   }, []);
 
   const updateSharedSettings = useCallback((patch: Partial<SharedToolSettings>) => {
@@ -1039,6 +1059,168 @@ export default function SettingsTool() {
 
       <ToolSection>
         <ComfyUiGalleryPanel limit={6} compact showHeader />
+      </ToolSection>
+
+      <ToolSection title="Webhooks">
+        <p className="text-sm text-zinc-400">
+          POST ComfyUI job completion events to an external URL (via server proxy).
+        </p>
+        <label className="flex items-center gap-3 text-sm text-zinc-300">
+          <input
+            type="checkbox"
+            checked={webhookSettings.enabled}
+            onChange={(event) => {
+              const next = { ...webhookSettings, enabled: event.target.checked };
+              setWebhookSettings(next);
+              saveWebhookSettings(next);
+            }}
+            className={`h-4 w-4 rounded ${accentFocusClass()}`}
+          />
+          Enable webhooks
+        </label>
+        <FieldLabel htmlFor="webhook-url">Webhook URL</FieldLabel>
+        <input
+          id="webhook-url"
+          value={webhookSettings.url ?? ""}
+          onChange={(event) => {
+            const next = { ...webhookSettings, url: event.target.value };
+            setWebhookSettings(next);
+            saveWebhookSettings(next);
+          }}
+          placeholder="https://example.com/hooks/comfyui"
+          className="ui-input w-full px-[var(--input-padding-x)] py-[var(--input-padding-y)] type-body"
+        />
+        <FieldLabel htmlFor="webhook-secret">Shared secret (optional)</FieldLabel>
+        <input
+          id="webhook-secret"
+          value={webhookSettings.secret ?? ""}
+          onChange={(event) => {
+            const next = { ...webhookSettings, secret: event.target.value };
+            setWebhookSettings(next);
+            saveWebhookSettings(next);
+          }}
+          className="ui-input w-full px-[var(--input-padding-x)] py-[var(--input-padding-y)] type-body"
+        />
+      </ToolSection>
+
+      <ToolSection title="Scheduled batch">
+        <p className="text-sm text-zinc-400">
+          Background runner (in app layout) periodically generates prompts and optionally
+          queues them to ComfyUI.
+        </p>
+        <label className="flex items-center gap-3 text-sm text-zinc-300">
+          <input
+            type="checkbox"
+            checked={scheduledBatch.enabled}
+            onChange={(event) => {
+              const next = { ...scheduledBatch, enabled: event.target.checked };
+              setScheduledBatch(next);
+              saveScheduledBatchConfig(next);
+            }}
+            className={`h-4 w-4 rounded ${accentFocusClass()}`}
+          />
+          Enable scheduled batch
+        </label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <FieldLabel htmlFor="scheduled-interval">Interval (minutes)</FieldLabel>
+            <input
+              id="scheduled-interval"
+              type="number"
+              min={5}
+              value={scheduledBatch.intervalMinutes}
+              onChange={(event) => {
+                const next = {
+                  ...scheduledBatch,
+                  intervalMinutes: Number(event.target.value) || 60,
+                };
+                setScheduledBatch(next);
+                saveScheduledBatchConfig(next);
+              }}
+              className="ui-input w-full px-[var(--input-padding-x)] py-[var(--input-padding-y)] type-body"
+            />
+          </div>
+          <div>
+            <FieldLabel htmlFor="scheduled-count">Prompt count</FieldLabel>
+            <input
+              id="scheduled-count"
+              type="number"
+              min={1}
+              max={12}
+              value={scheduledBatch.count}
+              onChange={(event) => {
+                const next = {
+                  ...scheduledBatch,
+                  count: Number(event.target.value) || 3,
+                };
+                setScheduledBatch(next);
+                saveScheduledBatchConfig(next);
+              }}
+              className="ui-input w-full px-[var(--input-padding-x)] py-[var(--input-padding-y)] type-body"
+            />
+          </div>
+        </div>
+        <FieldLabel htmlFor="scheduled-target">Target generator</FieldLabel>
+        <select
+          id="scheduled-target"
+          value={scheduledBatch.target}
+          onChange={(event) => {
+            const next = {
+              ...scheduledBatch,
+              target: event.target.value as ScheduledBatchConfig["target"],
+            };
+            setScheduledBatch(next);
+            saveScheduledBatchConfig(next);
+          }}
+          className="ui-input w-full px-[var(--input-padding-x)] py-[var(--input-padding-y)] type-body"
+        >
+          <option value="random-scene">Random scene</option>
+          <option value="topics">Topics batch</option>
+        </select>
+        <label className="mt-3 flex items-center gap-3 text-sm text-zinc-300">
+          <input
+            type="checkbox"
+            checked={scheduledBatch.autoQueueComfyUi}
+            onChange={(event) => {
+              const next = {
+                ...scheduledBatch,
+                autoQueueComfyUi: event.target.checked,
+              };
+              setScheduledBatch(next);
+              saveScheduledBatchConfig(next);
+            }}
+            className={`h-4 w-4 rounded ${accentFocusClass()}`}
+          />
+          Auto-queue to ComfyUI
+        </label>
+        <FieldLabel htmlFor="scheduled-genre">Genre/theme hint (optional)</FieldLabel>
+        <input
+          id="scheduled-genre"
+          value={scheduledBatch.genre ?? ""}
+          onChange={(event) => {
+            const next = { ...scheduledBatch, genre: event.target.value || undefined };
+            setScheduledBatch(next);
+            saveScheduledBatchConfig(next);
+          }}
+          className="ui-input w-full px-[var(--input-padding-x)] py-[var(--input-padding-y)] type-body"
+        />
+      </ToolSection>
+
+      <ToolSection title="Active character descriptor">
+        <p className="text-sm text-zinc-400">
+          Shared mandatory descriptor injected into Character generation requests.
+        </p>
+        <TextArea
+          rows={3}
+          value={sharedSettings.activeCharacterDescriptor ?? ""}
+          onChange={(event) =>
+            updateSharedSettings({
+              activeCharacterDescriptor: event.target.value.trim() || undefined,
+            })
+          }
+          placeholder="e.g. athletic woman, mid-20s, short copper hair, green eyes"
+          className={accentFocusClass()}
+        />
       </ToolSection>
 
       <ToolSection title="Local data">

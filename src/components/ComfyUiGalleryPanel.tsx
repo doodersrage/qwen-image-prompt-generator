@@ -12,6 +12,8 @@ import {
   galleryHandoffPath,
   saveGalleryHandoff,
 } from "@/lib/gallery-handoff";
+import { startImproveFromGalleryEntry } from "@/lib/improve-output";
+import { recordAvoidedTokensFromPrompt } from "@/lib/rating-driven-random";
 import {
   downloadGalleryImage,
   downloadGallerySidecar,
@@ -77,6 +79,7 @@ export default function ComfyUiGalleryPanel({
     clearAll,
     refreshPending,
     primaryViewUrl,
+    setReviewRating,
   } = useComfyUiGallery();
 
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -374,6 +377,42 @@ export default function ComfyUiGalleryPanel({
             Favorites only
           </label>
 
+          <label className="flex items-center gap-2 pb-1.5 text-xs text-zinc-300">
+            <input
+              type="checkbox"
+              checked={filter.semanticSearch ?? false}
+              onChange={(event) =>
+                setFilter({ ...filter, semanticSearch: event.target.checked || undefined })
+              }
+              className="h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-violet-500"
+            />
+            Semantic search
+          </label>
+
+          <label className="flex items-center gap-2 pb-1.5 text-xs text-zinc-300">
+            <input
+              type="checkbox"
+              checked={filter.reviewMode ?? false}
+              onChange={(event) =>
+                setFilter({ ...filter, reviewMode: event.target.checked || undefined })
+              }
+              className="h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-violet-500"
+            />
+            Review mode
+          </label>
+
+          <label className="flex items-center gap-2 pb-1.5 text-xs text-zinc-300">
+            <input
+              type="checkbox"
+              checked={filter.unreviewedOnly ?? false}
+              onChange={(event) =>
+                setFilter({ ...filter, unreviewedOnly: event.target.checked || undefined })
+              }
+              className="h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-violet-500"
+            />
+            Unreviewed only
+          </label>
+
           {paginationEnabled && (
             <>
               <label className="space-y-1 text-xs text-zinc-400">
@@ -597,6 +636,7 @@ export default function ComfyUiGalleryPanel({
                   tool: entry.tool,
                   model: entry.model,
                   newSeed,
+                  queueParams: entry.queueParams,
                   onStatus: setRequeueStatus,
                 }).then((result) => {
                   if (!result.ok) {
@@ -616,6 +656,13 @@ export default function ComfyUiGalleryPanel({
                 });
               }}
               onOpenImage={(index) => openEntryLightbox(entry, index)}
+              reviewMode={filter.reviewMode === true}
+              onReviewRating={(rating) => {
+                setReviewRating(entry.id, rating);
+                if (rating && rating <= 2) {
+                  recordAvoidedTokensFromPrompt(entry.prompt);
+                }
+              }}
             />
           ))}
         </div>
@@ -693,6 +740,8 @@ function GalleryCard({
   onDownloadError,
   onRequeue,
   onOpenImage,
+  reviewMode,
+  onReviewRating,
 }: {
   entry: ComfyGalleryEntry;
   compact: boolean;
@@ -706,6 +755,8 @@ function GalleryCard({
   onDownloadError: (message: string | null) => void;
   onRequeue: (newSeed: boolean) => void;
   onOpenImage: (index: number) => void;
+  reviewMode?: boolean;
+  onReviewRating?: (rating: ComfyGalleryEntry["reviewRating"]) => void;
 }) {
   const router = useRouter();
   const [promptExpanded, setPromptExpanded] = useState(false);
@@ -851,6 +902,32 @@ function GalleryCard({
           </div>
         )}
 
+        {entry.queueParams?.seed ? (
+          <p className="text-[11px] text-zinc-500">Recovered seed: {entry.queueParams.seed}</p>
+        ) : null}
+        {entry.reviewRating ? (
+          <p className="text-[11px] text-violet-300/80">Review rating: {entry.reviewRating}/5</p>
+        ) : null}
+
+        {reviewMode && entry.status === "completed" && onReviewRating ? (
+          <div className="flex flex-wrap gap-1">
+            {[1, 2, 3, 4, 5].map((rating) => (
+              <button
+                key={rating}
+                type="button"
+                onClick={() => onReviewRating(rating as ComfyGalleryEntry["reviewRating"])}
+                className={`rounded border px-2 py-1 text-[11px] ${
+                  entry.reviewRating === rating
+                    ? "border-violet-500 text-violet-200"
+                    : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
+                }`}
+              >
+                {rating}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         <div className="flex flex-wrap gap-2 text-xs">
           <button
             type="button"
@@ -910,6 +987,13 @@ function GalleryCard({
           ) : null}
           {entry.status === "completed" && previewUrl ? (
             <>
+              <button
+                type="button"
+                onClick={() => startImproveFromGalleryEntry(entry)}
+                className="text-emerald-300 hover:text-emerald-200"
+              >
+                Improve
+              </button>
               <button
                 type="button"
                 onClick={() => {

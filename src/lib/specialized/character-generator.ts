@@ -319,6 +319,9 @@ ${soloRules}
   const userParts = [
     presetBlock,
     presetDirective,
+    options.activeCharacterDescriptor?.trim()
+      ? `Active character descriptor (mandatory): ${options.activeCharacterDescriptor.trim()}`
+      : null,
     poseAnchorDirective,
     mandatoryBlock,
     locationBlock || null,

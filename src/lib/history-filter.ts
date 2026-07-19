@@ -1,4 +1,5 @@
 import type { PromptHistoryEntry } from "@/hooks/usePromptHistory";
+import { filterBySemanticQuery } from "./semantic-search";
 
 export type HistoryFilter = {
   tool?: string;
@@ -7,13 +8,14 @@ export type HistoryFilter = {
   minRating?: number;
   query?: string;
   tag?: string;
+  semanticSearch?: boolean;
 };
 
 export function filterHistoryEntries(
   entries: PromptHistoryEntry[],
   filter: HistoryFilter,
 ): PromptHistoryEntry[] {
-  return entries.filter((entry) => {
+  let filtered = entries.filter((entry) => {
     if (filter.favoritesOnly && !entry.favorite) {
       return false;
     }
@@ -26,7 +28,7 @@ export function filterHistoryEntries(
     if (filter.minRating && (entry.rating ?? 0) < filter.minRating) {
       return false;
     }
-    if (filter.query?.trim()) {
+    if (filter.query?.trim() && !filter.semanticSearch) {
       const needle = filter.query.trim().toLowerCase();
       const haystack = [
         entry.prompt,
@@ -50,6 +52,19 @@ export function filterHistoryEntries(
     }
     return true;
   });
+
+  if (filter.query?.trim() && filter.semanticSearch) {
+    filtered = filterBySemanticQuery(
+      filtered,
+      filter.query,
+      (entry) =>
+        [entry.prompt, entry.hints, entry.tool, entry.model, entry.tags?.join(" ")]
+          .filter(Boolean)
+          .join("\n"),
+    );
+  }
+
+  return filtered;
 }
 
 export function uniqueHistoryTools(entries: PromptHistoryEntry[]): string[] {

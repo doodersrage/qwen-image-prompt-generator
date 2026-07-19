@@ -50,10 +50,14 @@ export default function RefineTool() {
     (handoff: {
       prompt: string;
       model?: string;
+      improveIntent?: string;
       file: File | null;
       previewUrl: string | null;
     }) => {
       setCurrentPrompt(handoff.prompt);
+      if (handoff.improveIntent) {
+        setIntentHints(handoff.improveIntent);
+      }
       if (handoff.model) {
         updateShared({ model: handoff.model as ComfyImageModel });
       }

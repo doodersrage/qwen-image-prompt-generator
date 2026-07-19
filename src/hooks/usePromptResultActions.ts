@@ -14,7 +14,9 @@ import {
 import type { ComfyImageModel } from "@/lib/comfy-models";
 import type { DetailLevel } from "@/lib/detail-level";
 import type { AthleticSport } from "@/lib/athletic-sport-profiles";
-import { resolveComfyUiRuntime } from "@/lib/comfyui-runtime";
+import { resolveRuntimeForModel } from "@/lib/comfyui-runtime-for-model";
+import { startImproveFromResult, startRefineFromResult } from "@/lib/improve-output";
+import type { WorkflowParamValues } from "@/lib/comfyui-config";
 import {
   galleryEntryPrimaryViewUrl,
 } from "@/lib/comfyui-gallery";
@@ -25,6 +27,7 @@ import {
   linkGalleryToHistory,
 } from "@/lib/prompt-lineage";
 import { resolveQueueNegativePrompt } from "@/lib/queue-negative";
+import { loadActiveProjectId } from "@/lib/prompt-projects";
 import {
   formatComfyUiJobStatusLine,
   type ComfyUiJobTrackerState,
@@ -85,6 +88,7 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
         negativePrompt?: string;
         comfyUrl: string;
         historyId?: string;
+        queueParams?: WorkflowParamValues;
       },
       showPreview = true,
     ) => {
@@ -96,6 +100,8 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
         model: config.model,
         comfyUrl: input.comfyUrl,
         historyId: input.historyId,
+        queueParams: input.queueParams,
+        projectId: loadActiveProjectId(),
       });
 
       if (input.historyId) {
@@ -193,6 +199,7 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
         model: config.model,
         hints: config.hints,
         sport,
+        tool: config.tool,
       });
     },
     [config.hints, config.model],
@@ -289,18 +296,26 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
       prompt: string;
       hints?: string;
       metadata?: Record<string, unknown>;
+      parentHistoryId?: string;
     }): string | undefined => {
       if (!input.prompt) {
         return undefined;
       }
 
+      const projectId = loadActiveProjectId();
       const historyId = addEntry({
         tool: config.tool,
         prompt: input.prompt,
         hints: input.hints ?? config.hints,
         model: config.model,
         diagnostics: diagnostics ?? undefined,
-        metadata: input.metadata,
+        metadata: {
+          ...(input.metadata ?? {}),
+          ...(input.parentHistoryId
+            ? { parentHistoryId: input.parentHistoryId }
+            : {}),
+          ...(projectId ? { projectId } : {}),
+        },
       });
       setHistorySaved(true);
       return historyId;
@@ -325,13 +340,17 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
           negativePrompt = (await fetchNegative(sport)) ?? undefined;
         }
 
-        const runtime = resolveComfyUiRuntime();
+        const queueParams = {
+          seed: String(Math.floor(Math.random() * 2 ** 32)),
+        };
+        const runtime = resolveRuntimeForModel(config.model);
         const response = await fetch("/api/comfyui", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             prompt,
             negativePrompt,
+            params: queueParams,
             ...(runtime ? { comfy: runtime } : {}),
           }),
         });
@@ -372,6 +391,7 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
             negativePrompt,
             comfyUrl: data.comfyUrl ?? "http://127.0.0.1:8188",
             historyId,
+            queueParams,
           });
         }
       } catch (err) {
@@ -422,7 +442,7 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
           negativePrompt = (await fetchNegative(sport)) ?? undefined;
         }
 
-        const runtime = resolveComfyUiRuntime();
+        const runtime = resolveRuntimeForModel(config.model);
         const response = await fetch("/api/comfyui", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -706,6 +726,37 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
     ],
   );
 
+  const improveOutput = useCallback(
+    (prompt: string, previewUrl?: string | null) => {
+      if (!prompt.trim()) {
+        return;
+      }
+      startImproveFromResult({
+        prompt,
+        previewUrl,
+        model: config.model,
+        tool: config.tool,
+      });
+    },
+    [config.model, config.tool],
+  );
+
+  const refineOutput = useCallback(
+    (prompt: string, previewUrl?: string | null, negativePrompt?: string) => {
+      if (!prompt.trim()) {
+        return;
+      }
+      startRefineFromResult({
+        prompt,
+        previewUrl,
+        negativePrompt,
+        model: config.model,
+        tool: config.tool,
+      });
+    },
+    [config.model, config.tool],
+  );
+
   return {
     preDiagnostics,
     diagnostics,
@@ -735,5 +786,7 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
     exportSidecar,
     pipelineStatus,
     setDiagnostics,
+    improveOutput,
+    refineOutput,
   };
 }

@@ -28,14 +28,17 @@ Video, audio, and 3D-only architectures (WAN, Hunyuan Video, Stable Audio, etc.)
 | **Generate** | `/` | Keywords or random surprise → model-ready prompt |
 | **Format** | `/format` | Adapt an existing prompt draft for a selected model |
 | **Character** | `/character` | Solo person, duo/sport, or subject + background compose |
+| **Pet** | `/pet` | Pet-focused prompts with scene pools |
+| **Fantasy** | `/fantasy` | Fantasy character/scene prompts |
+| **Topics** | `/topics` | Topic lists for batch prompt builds |
 | **Background** | `/background` | Environment-only prompt with no people |
 | **Image → Prompt** | `/image-prompt` | Upload an image; vision LLM writes the prompt |
 | **Negative** | `/negative` | Sport-aware negative/preserve prompts for SD models |
-| **Studio** | `/studio` | History, model compare, catalog browser, templates |
+| **Studio** | `/studio` | History, iteration tree, projects, compare, portfolio, catalog, templates |
 | **Lint** | `/lint` | Paste prompts for diagnostics, fix, compact, reformat |
 | **Refine** | `/refine` | Refine an existing prompt with image + intent hints |
-| **Settings** | `/settings` | LLM/ComfyUI health, backup import/export, reset local data |
-| **Gallery** | `/gallery` | ComfyUI queue history and completed outputs |
+| **Settings** | `/settings` | LLM/ComfyUI health, webhooks, scheduled batch, backup/reset |
+| **Gallery** | `/gallery` | ComfyUI queue history, review mode, semantic search, outputs |
 | **Variations** | `/variations` | Roll N prompt variations and batch-queue to ComfyUI |
 
 Legacy URLs `/duo`, `/compose`, and `/random-scene` redirect to the merged Character and Generate pages.
@@ -94,7 +97,22 @@ Legacy URLs `/duo`, `/compose`, and `/random-scene` redirect to the merged Chara
 - **Smart workflow defaults** — Settings maps workflow filenames to model categories automatically
 - **ComfyUI WebSocket progress** — optional faster job updates in Settings
 - **Qwen Edit builder** — segment-based edit instruction builder on Generate for Qwen Edit models
-- **Rating-driven random** — history/gallery favorites subtly adjust random-scene wildness
+- **Rating-driven random** — history/gallery favorites and downvotes subtly adjust random-scene wildness
+- **Improve output pipeline** — one-click Improve from gallery or result panels opens Refine with image + intent
+- **Context-aware negatives** — ComfyUI queue picks negative profiles from tool/hints (pet, fantasy, sport, etc.)
+- **Prompt iteration tree** — Studio tab shows parent/child history branches via `parentHistoryId`
+- **Studio deep links** — `/studio?history=<id>` highlights a saved prompt; gallery links back to history
+- **Prompt projects** — named campaigns filter Studio history; new saves attach active project id
+- **Gallery review mode** — rate completed outputs 1–5; low ratings feed wildness/avoidance bias
+- **Preset packs** — import/export bundles of scene presets from Studio Presets tab
+- **Multi-model portfolio** — Studio Portfolio tab formats one draft for several models and batch-queues
+- **Workflow pre-flight** — Topics/Variations batch queue validates workflow placeholders before submit
+- **ComfyUI param recovery** — gallery re-queue restores saved seed/params from `queueParams`
+- **Regional/inpaint builder** — Character tool composes labeled subject/background/lighting segments
+- **Semantic search** — token-overlap ranking in Studio history and Gallery filters
+- **Scheduled batch** — Settings configures periodic random-scene/topics generation (+ optional ComfyUI queue)
+- **Webhooks** — POST job completion payloads to an external URL via server proxy
+- **Active character descriptor** — shared mandatory character sheet injected into Character API requests
 
 ## Prompt size limits (selected models)
 
