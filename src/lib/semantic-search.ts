@@ -8,19 +8,42 @@ function tokenize(text: string): Set<string> {
   );
 }
 
+function bigrams(text: string): string[] {
+  const list = [...tokenize(text)];
+  const pairs: string[] = [];
+  for (let index = 0; index < list.length - 1; index += 1) {
+    pairs.push(`${list[index]} ${list[index + 1]}`);
+  }
+  return pairs;
+}
+
 export function semanticRelevanceScore(query: string, corpus: string): number {
   const queryTokens = tokenize(query);
   if (queryTokens.size === 0) {
     return 0;
   }
   const corpusTokens = tokenize(corpus);
+  const corpusLower = corpus.toLowerCase();
   let overlap = 0;
   for (const token of queryTokens) {
     if (corpusTokens.has(token)) {
       overlap += 1;
     }
   }
-  return overlap / queryTokens.size;
+  let score = overlap / queryTokens.size;
+
+  const phrase = query.trim().toLowerCase();
+  if (phrase.length > 4 && corpusLower.includes(phrase)) {
+    score += 0.35;
+  }
+
+  for (const pair of bigrams(query)) {
+    if (corpusLower.includes(pair)) {
+      score += 0.08;
+    }
+  }
+
+  return Math.min(1, score);
 }
 
 export function rankBySemanticQuery<T>(

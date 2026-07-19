@@ -47,7 +47,7 @@ async function main() {
   if (!tool || tool === "help" || args.help) {
     console.log(`Usage: node scripts/qwen-prompt.mjs <tool> [options]
 
-Tools: duo, character, batch, lint, negative, catalog, compose, generate, format, fix, compact, comfyui, topics-batch, pet, fantasy, background, random-scene, refine, image-prompt
+Tools: duo, character, batch, lint, negative, catalog, compose, generate, format, fix, compact, comfyui, topics-batch, pet, fantasy, background, random-scene, refine, image-prompt, portfolio, webhook-test
 Env: PROMPT_API_URL (default ${BASE_URL})`);
     process.exit(0);
   }
@@ -84,6 +84,68 @@ Env: PROMPT_API_URL (default ${BASE_URL})`);
     const query = args.q ? `?q=${encodeURIComponent(String(args.q))}` : "";
     const response = await fetch(`${BASE_URL}${path}${query}`);
     console.log(JSON.stringify(await response.json(), null, 2));
+    return;
+  }
+
+  if (tool === "webhook-test") {
+    const response = await fetch(`${BASE_URL}/api/webhooks/dispatch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: args.url ?? args._[1],
+        secret: args.secret,
+        payload: {
+          event: "comfyui.job.completed",
+          promptId: "cli-test",
+          prompt: args.prompt ?? "CLI webhook test",
+          model: args.model ?? "qwen-image-2512",
+          tool: "cli",
+          status: "completed",
+          imageCount: 1,
+          completedAt: Date.now(),
+        },
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      console.error(data.error ?? "Webhook test failed.");
+      process.exit(1);
+    }
+    console.log(JSON.stringify(data, null, 2));
+    return;
+  }
+
+  if (tool === "portfolio") {
+    const draft = args.input ?? args.draft ?? args._[1];
+    if (!draft?.trim()) {
+      console.error("portfolio requires --input or a draft argument");
+      process.exit(1);
+    }
+    const models = String(args.models ?? "qwen-image-2512,flux-2-klein")
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+    for (const model of models) {
+      const response = await fetch(`${BASE_URL}/api/format`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          input: draft.trim(),
+          mode: "positive",
+          model,
+          detail: args.detail ?? "balanced",
+          smartFormat: true,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        console.error(`${model}: ${data.error ?? "Format failed."}`);
+        continue;
+      }
+      console.log(`--- ${model} ---`);
+      console.log(data.prompt ?? "");
+      console.log("");
+    }
     return;
   }
 

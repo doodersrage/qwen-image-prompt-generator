@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import BatchLintGatePanel from "@/components/BatchLintGatePanel";
@@ -10,6 +10,10 @@ import { useRecentClothing } from "@/hooks/useRecentClothing";
 import { useRecentLocations } from "@/hooks/useRecentLocations";
 import { useLocationBlocklist } from "@/hooks/useLocationBlocklist";
 import { sharedLlmRequestBody } from "@/lib/llm-request-options";
+import { buildAvoidedTokensInstruction } from "@/lib/avoided-tokens";
+import { resolveQueueNegativePrompt } from "@/lib/queue-negative";
+import { DEFAULT_TOPIC_TOOL_CACHE } from "@/lib/settings-cache";
+import { runWorkflowPreflight } from "@/lib/workflow-preflight";
 import {
   batchFixPrompts,
   filterBatchByLintIndexes,
@@ -18,12 +22,10 @@ import {
 } from "@/lib/batch-lint-gate";
 import {
   buildTopicsVariationsHandoff,
+  loadTopicsVariationsHandoff,
   saveTopicsVariationsHandoff,
   variationsPathFromTopics,
 } from "@/lib/topics-variations-handoff";
-import { resolveQueueNegativePrompt } from "@/lib/queue-negative";
-import { runWorkflowPreflight } from "@/lib/workflow-preflight";
-import { DEFAULT_TOPIC_TOOL_CACHE } from "@/lib/settings-cache";
 import type { BatchFromTopicsItem } from "@/lib/batch-from-topics";
 import type { TopicGenerateResult } from "@/lib/specialized/types";
 import {
@@ -77,6 +79,27 @@ export default function TopicTool() {
 
   const batchTarget = toolSettings.batchTarget ?? "generate";
 
+  useEffect(() => {
+    if (!mounted) {
+      return;
+    }
+    if (new URLSearchParams(window.location.search).get("from") !== "gallery") {
+      return;
+    }
+    const handoff = loadTopicsVariationsHandoff();
+    if (!handoff) {
+      return;
+    }
+    setBatchResults(
+      handoff.prompts.map((prompt, index) => ({
+        topic: handoff.topics[index] ?? prompt.slice(0, 80),
+        prompt,
+        provider: "template" as const,
+      })),
+    );
+    setBatchStatus(`Loaded ${handoff.prompts.length} prompts from Gallery.`);
+  }, [mounted]);
+
   const generate = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -93,6 +116,7 @@ export default function TopicTool() {
           variety: toolSettings.variety,
           recentLocations: [],
           blockedLocations: getBlocklist(),
+          avoidedTokensInstruction: buildAvoidedTokensInstruction(),
         }),
       });
 

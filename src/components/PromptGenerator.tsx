@@ -29,6 +29,7 @@ import QwenEditBuilderPanel from "@/components/QwenEditBuilderPanel";
 import { modelUsesTagAssist } from "@/lib/tag-assist";
 import {
   applyRatingDrivenWildness,
+  buildAvoidedTokensInstruction,
   ratingDrivenWildnessLabel,
 } from "@/lib/rating-driven-random";
 import { sharedLlmRequestBody } from "@/lib/llm-request-options";
@@ -254,6 +255,7 @@ export default function PromptGenerator() {
           lockedLocation: shared.lockedLocation,
           variationSeed: shared.lockedVariationSeed,
           alwaysIncludeClothing: alwaysIncludeClothing,
+          avoidedTokensInstruction: buildAvoidedTokensInstruction(),
           ...sharedLlmRequestBody(shared),
         }),
       });
@@ -801,6 +803,7 @@ export default function PromptGenerator() {
         <PrimaryButton
           accentClassName={accentButtonClass(ACCENT)}
           type="button"
+          data-action="primary-generate"
           onClick={() => void generate()}
           disabled={submitDisabled}
           loading={loading}

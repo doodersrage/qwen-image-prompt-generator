@@ -1385,3 +1385,59 @@ describe("context negative profile", () => {
     assert.equal(profile?.id, "pet");
   });
 });
+
+describe("gallery mutations", () => {
+  it("builds location and wardrobe mutation prompts", async () => {
+    const { buildMutatedPrompt } = await import("./gallery-mutations");
+    assert.match(
+      buildMutatedPrompt("cyclist in forest", "location", "neon alley"),
+      /Relocate scene to neon alley/,
+    );
+    assert.match(
+      buildMutatedPrompt("portrait", "wardrobe", "red dress"),
+      /Change outfit to red dress/,
+    );
+  });
+});
+
+describe("history export formats", () => {
+  it("exports csv rows with escaped commas", async () => {
+    const { exportHistoryCsv } = await import("./history-export-formats");
+    const csv = exportHistoryCsv([
+      {
+        id: "1",
+        tool: "character",
+        model: "qwen-image-2512",
+        timestamp: Date.UTC(2026, 0, 1),
+        prompt: "hello, world",
+        hints: "",
+      },
+    ] as import("@/hooks/usePromptHistory").PromptHistoryEntry[]);
+    assert.match(csv, /"hello, world"/);
+    assert.match(csv, /character/);
+  });
+});
+
+describe("prompt lineage session", () => {
+  it("prefers explicit parent history id", async () => {
+    const { resolveParentHistoryId } = await import("./prompt-lineage-session");
+    assert.equal(resolveParentHistoryId("abc"), "abc");
+    assert.equal(resolveParentHistoryId(undefined), undefined);
+  });
+});
+
+describe("queue params settings", () => {
+  it("returns empty merge on server", async () => {
+    const { resolveQueueParams } = await import("./queue-params-settings");
+    const params = resolveQueueParams({ seed: "42", width: "1024" });
+    assert.equal(params.seed, "42");
+    assert.equal(params.width, "1024");
+  });
+});
+
+describe("avoided tokens", () => {
+  it("returns undefined instruction when empty", async () => {
+    const { buildAvoidedTokensInstruction } = await import("./avoided-tokens");
+    assert.equal(buildAvoidedTokensInstruction(), undefined);
+  });
+});

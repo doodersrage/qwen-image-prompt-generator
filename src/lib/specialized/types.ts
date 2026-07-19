@@ -37,6 +37,7 @@ export type RandomSceneOptions = SharedGenerationOptions & {
   /** When set, reuse this environment/variation seed instead of rolling random. */
   variationSeed?: string;
   alwaysIncludeClothing?: boolean;
+  avoidedTokensInstruction?: string;
 };
 
 import type { CharacterPresetOptions } from "../character-options";
@@ -123,6 +124,7 @@ export type TopicOptions = {
   variety?: number;
   recentLocations?: string[];
   blockedLocations?: string[];
+  avoidedTokensInstruction?: string;
 };
 
 export type TopicGenerateResult = {

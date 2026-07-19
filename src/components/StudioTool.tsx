@@ -71,6 +71,12 @@ import {
   parseStudioBackupFile,
 } from "@/lib/studio-backup";
 import {
+  downloadTextFile,
+  exportHistoryCsv,
+  exportHistoryJsonl,
+} from "@/lib/history-export-formats";
+import { sortCatalogByRatingBias } from "@/lib/catalog-rating-bias";
+import {
   buildPromptIterationForest,
   type IterationTreeNode,
 } from "@/lib/prompt-iteration-tree";
@@ -217,6 +223,15 @@ export default function StudioTool() {
     }
     return base.filter((entry) => entry.metadata?.projectId === activeProjectId);
   }, [entries, historyFilter, activeProjectId]);
+
+  const sortedCatalogClothing = useMemo(
+    () => sortCatalogByRatingBias(catalogClothing, (entry) => `${entry.label} ${entry.category}`),
+    [catalogClothing],
+  );
+  const sortedCatalogLocations = useMemo(
+    () => sortCatalogByRatingBias(catalogLocations, (entry) => entry.label),
+    [catalogLocations],
+  );
 
   const iterationForest = useMemo(
     () => buildPromptIterationForest(entries),
@@ -485,6 +500,32 @@ export default function StudioTool() {
                 )}
                 {entries.length > 0 && (
                   <>
+                    <Button
+                      variant="ghost"
+                      className="!min-h-9"
+                      onClick={() =>
+                        downloadTextFile(
+                          exportHistoryCsv(filteredEntries),
+                          "history-filtered.csv",
+                          "text/csv;charset=utf-8",
+                        )
+                      }
+                    >
+                      Export CSV
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="!min-h-9"
+                      onClick={() =>
+                        downloadTextFile(
+                          exportHistoryJsonl(filteredEntries),
+                          "history-filtered.jsonl",
+                          "application/jsonl;charset=utf-8",
+                        )
+                      }
+                    >
+                      Export JSONL
+                    </Button>
                     <Button
                       variant="ghost"
                       className="!min-h-9"
@@ -1178,13 +1219,27 @@ export default function StudioTool() {
                 />
               ) : (
               <DataList>
-                {catalogClothing.map((entry) => (
+                {sortedCatalogClothing.map((entry) => (
                   <DataListRow key={entry.id}>
                     <DataListPrimary
                       title={entry.label}
                       subtitle={entry.category}
                     />
                     <DataListActions>
+                      <Button
+                        variant="ghost"
+                        className="!min-h-8 px-3 type-caption"
+                        onClick={() => {
+                          setPresetHints((previous) =>
+                            previous.trim()
+                              ? `${previous.trim()}, ${entry.label}`
+                              : entry.label,
+                          );
+                          setBackupStatus(`Added “${entry.label}” to preset hints.`);
+                        }}
+                      >
+                        Insert
+                      </Button>
                       <Button
                         variant={
                           shared.lockedWardrobeId === entry.id
@@ -1227,7 +1282,7 @@ export default function StudioTool() {
                 />
               ) : (
               <DataList>
-                {catalogLocations.map((entry) => {
+                {sortedCatalogLocations.map((entry) => {
                   const blocked = blocklist.includes(entry.label);
                   const locked = shared.lockedLocation === entry.label;
                   return (
@@ -1249,6 +1304,20 @@ export default function StudioTool() {
                         </p>
                       </button>
                       <DataListActions>
+                        <Button
+                          variant="ghost"
+                          className="!min-h-8 px-3 type-caption"
+                          onClick={() => {
+                            setPresetHints((previous) =>
+                              previous.trim()
+                                ? `${previous.trim()}, location: ${entry.label}`
+                                : `location: ${entry.label}`,
+                            );
+                            setBackupStatus(`Added location “${entry.label}”.`);
+                          }}
+                        >
+                          Insert
+                        </Button>
                         <Button
                           variant={locked ? "secondary" : "ghost"}
                           className="!min-h-8 px-3 type-caption"

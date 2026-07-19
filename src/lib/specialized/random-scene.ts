@@ -76,6 +76,7 @@ export async function generateRandomScene(
     locationBlock,
     `Random scene ingredients:\n${seed}`,
     clothingDirective,
+    options.avoidedTokensInstruction,
     "Write a single model-ready prompt using every major ingredient above.",
   ]
     .filter(Boolean)

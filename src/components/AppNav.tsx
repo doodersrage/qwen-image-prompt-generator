@@ -47,6 +47,7 @@ const navGroups: NavGroup[] = [
       { href: "/studio", label: "Studio", description: "History & tools" },
       { href: "/gallery", label: "Gallery", description: "ComfyUI outputs" },
       { href: "/variations", label: "Variations", description: "Grid queue" },
+      { href: "/variations?matrix=1", label: "Matrix", description: "Cartesian prompts" },
     ],
   },
 ];

@@ -5,6 +5,8 @@ import { registerComfyGalleryJob } from "@/lib/comfyui-gallery-client";
 import { scheduleComfyGalleryPoll } from "@/lib/comfyui-gallery-poller";
 import { resolveComfyUiRuntime } from "@/lib/comfyui-runtime";
 import { resolveQueueNegativePrompt } from "@/lib/queue-negative";
+import { buildAvoidedTokensInstruction } from "@/lib/avoided-tokens";
+import { dispatchWebhook } from "@/lib/webhook-settings";
 import { loadSettingsCache } from "@/lib/settings-cache";
 import {
   loadScheduledBatchConfig,
@@ -45,6 +47,7 @@ export default function ScheduledBatchRunner() {
                 target: "generate",
                 model: shared.model,
                 detail: shared.detail,
+                avoidedTokensInstruction: buildAvoidedTokensInstruction(),
               }),
             });
             const data = (await response.json()) as {
@@ -68,6 +71,7 @@ export default function ScheduledBatchRunner() {
                   genre: config.genre?.trim() || undefined,
                   includePeople: true,
                   wildness: 50,
+                  avoidedTokensInstruction: buildAvoidedTokensInstruction(),
                 }),
               });
               const data = (await response.json()) as { prompt?: string };
@@ -118,6 +122,16 @@ export default function ScheduledBatchRunner() {
           }
 
           saveScheduledBatchConfig({ ...config, lastRunAt: Date.now() });
+          void dispatchWebhook({
+            event: "scheduled.batch.run",
+            tool: "scheduled-batch",
+            model: shared.model,
+            queued: prompts.length,
+            completedAt: Date.now(),
+            message: config.autoQueueComfyUi
+              ? `Generated ${prompts.length} prompts and queued to ComfyUI`
+              : `Generated ${prompts.length} prompts`,
+          });
         } finally {
           runningRef.current = false;
         }

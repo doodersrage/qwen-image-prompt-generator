@@ -29,6 +29,14 @@ import {
 import { resolveQueueNegativePrompt } from "@/lib/queue-negative";
 import { loadActiveProjectId } from "@/lib/prompt-projects";
 import {
+  clearLineageParent,
+  resolveParentHistoryId,
+} from "@/lib/prompt-lineage-session";
+import { injectLoraTriggers } from "@/lib/lora-prompt-injection";
+import { resolveQueueParams } from "@/lib/queue-params-settings";
+import { runWorkflowPreflight } from "@/lib/workflow-preflight";
+import { dispatchWebhook } from "@/lib/webhook-settings";
+import {
   formatComfyUiJobStatusLine,
   type ComfyUiJobTrackerState,
 } from "@/lib/comfyui-job-status";
@@ -303,6 +311,7 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
       }
 
       const projectId = loadActiveProjectId();
+      const parentHistoryId = resolveParentHistoryId(input.parentHistoryId);
       const historyId = addEntry({
         tool: config.tool,
         prompt: input.prompt,
@@ -311,13 +320,14 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
         diagnostics: diagnostics ?? undefined,
         metadata: {
           ...(input.metadata ?? {}),
-          ...(input.parentHistoryId
-            ? { parentHistoryId: input.parentHistoryId }
-            : {}),
+          ...(parentHistoryId ? { parentHistoryId } : {}),
           ...(projectId ? { projectId } : {}),
         },
       });
       setHistorySaved(true);
+      if (parentHistoryId) {
+        clearLineageParent();
+      }
       return historyId;
     },
     [addEntry, config.tool, config.model, config.hints, diagnostics],
@@ -335,20 +345,41 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
 
       setComfyUiStatus("Queueing…");
       try {
+        const preparedPrompt = injectLoraTriggers(prompt);
         let negativePrompt: string | undefined;
         if (modelUsesNegativePrompt(config.model)) {
           negativePrompt = (await fetchNegative(sport)) ?? undefined;
         }
 
-        const queueParams = {
-          seed: String(Math.floor(Math.random() * 2 ** 32)),
-        };
+        const preflight = await runWorkflowPreflight({
+          model: config.model,
+          prompts: [preparedPrompt],
+          negativePrompt,
+        });
+        if (!preflight.ok) {
+          throw new Error(
+            preflight.issues
+              .filter((issue) => issue.severity === "error")
+              .map((issue) => issue.message)
+              .join(" · ") || "Workflow pre-flight failed.",
+          );
+        }
+
+        const queueParams = resolveQueueParams();
         const runtime = resolveRuntimeForModel(config.model);
+        const resolvedHistoryId =
+          historyId ??
+          saveHistory({
+            prompt: preparedPrompt,
+            hints: config.hints,
+            parentHistoryId: resolveParentHistoryId(),
+          });
+
         const response = await fetch("/api/comfyui", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            prompt,
+            prompt: preparedPrompt,
             negativePrompt,
             params: queueParams,
             ...(runtime ? { comfy: runtime } : {}),
@@ -387,18 +418,29 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
           });
           trackComfyUiJob({
             promptId: data.promptId,
-            prompt,
+            prompt: preparedPrompt,
             negativePrompt,
             comfyUrl: data.comfyUrl ?? "http://127.0.0.1:8188",
-            historyId,
+            historyId: resolvedHistoryId,
             queueParams,
+          });
+          void dispatchWebhook({
+            event: "comfyui.job.queued",
+            promptId: data.promptId,
+            prompt: preparedPrompt,
+            negativePrompt,
+            model: config.model,
+            tool: config.tool,
+            status: "queued",
+            queueParams,
+            completedAt: Date.now(),
           });
         }
       } catch (err) {
         setComfyUiStatus(err instanceof Error ? err.message : "ComfyUI failed.");
       }
     },
-    [config.model, fetchNegative, trackComfyUiJob],
+    [config.model, config.tool, config.hints, fetchNegative, saveHistory, trackComfyUiJob],
   );
 
   const previewWorkflow = useCallback(
@@ -442,13 +484,31 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
           negativePrompt = (await fetchNegative(sport)) ?? undefined;
         }
 
+        const prepared = filtered.map((entry) => injectLoraTriggers(entry));
+        const preflight = await runWorkflowPreflight({
+          model: config.model,
+          prompts: prepared,
+          negativePrompt,
+        });
+        if (!preflight.ok) {
+          throw new Error(
+            preflight.issues
+              .filter((issue) => issue.severity === "error")
+              .map((issue) => issue.message)
+              .join(" · ") || "Workflow pre-flight failed.",
+          );
+        }
+
         const runtime = resolveRuntimeForModel(config.model);
         const response = await fetch("/api/comfyui", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            prompts: filtered,
+            prompts: prepared,
             negativePrompt,
+            paramsPerPrompt: prepared.map((_, index) =>
+              resolveQueueParams({ seed: String(Math.floor(Math.random() * 2 ** 32) + index) }),
+            ),
             ...(runtime ? { comfy: runtime } : {}),
           }),
         });
@@ -477,17 +537,28 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
           trackComfyUiJob(
             {
               promptId: result.promptId,
-              prompt: filtered[index] ?? filtered[0] ?? "",
+              prompt: prepared[index] ?? prepared[0] ?? "",
               negativePrompt,
               comfyUrl: result.comfyUrl ?? data.comfyUrl ?? "http://127.0.0.1:8188",
+              queueParams: resolveQueueParams(),
             },
             false,
           );
         }
 
+        void dispatchWebhook({
+          event: "comfyui.batch.completed",
+          tool: config.tool,
+          model: config.model,
+          queued: data.queued ?? prepared.length,
+          failed: data.failed,
+          completedAt: Date.now(),
+          message: `Batch queued ${data.queued ?? prepared.length}/${prepared.length}`,
+        });
+
         setComfyUiStatus(
           [
-            `queued ${data.queued ?? filtered.length}/${filtered.length}`,
+            `queued ${data.queued ?? prepared.length}/${prepared.length}`,
             data.failed ? `${data.failed} failed` : null,
             data.comfyUrl,
             negativePrompt ? "with negative" : null,
@@ -605,6 +676,12 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
 
         if (data.prompt) {
           onReformatted(data.prompt);
+          saveHistory({
+            prompt: data.prompt,
+            hints: config.hints,
+            parentHistoryId: resolveParentHistoryId(),
+            metadata: { reformattedFrom: config.model, reformattedTo: model },
+          });
         }
 
         setReformatStatus(`Reformatted for ${model}.`);
@@ -612,7 +689,7 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
         setReformatStatus(err instanceof Error ? err.message : "Reformat failed.");
       }
     },
-    [config.detail, config.reformatTarget],
+    [config.detail, config.hints, config.model, config.reformatTarget, saveHistory],
   );
 
   const exportSidecar = useCallback(

@@ -1,7 +1,7 @@
 "use client";
 
 import { promptResultPreviewProps } from "@/lib/prompt-result-preview-props";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import EnhancedPromptResult from "@/components/EnhancedPromptResult";
 import SharedToolControls from "@/components/SharedToolControls";
 import { useCachedSettings } from "@/hooks/useCachedSettings";
@@ -10,6 +10,8 @@ import { usePromptResultActions } from "@/hooks/usePromptResultActions";
 import type { ComfyImageModel } from "@/lib/comfy-models";
 import { getComfyModelDefinition } from "@/lib/comfy-models";
 import { getReformatTargetLabel, getReformatTargetModel } from "@/lib/reformat-target";
+import { diffPromptWords } from "@/lib/prompt-diff";
+import { resolveParentHistoryId } from "@/lib/prompt-lineage-session";
 import { DEFAULT_IMAGE_PROMPT_TOOL_CACHE } from "@/lib/settings-cache";
 import {
   ToolBadge,
@@ -34,6 +36,8 @@ export default function RefineTool() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [sourceHistoryId, setSourceHistoryId] = useState<string | undefined>();
+  const [beforePrompt, setBeforePrompt] = useState("");
 
   const actions = usePromptResultActions({
     tool: "refine",
@@ -53,8 +57,11 @@ export default function RefineTool() {
       improveIntent?: string;
       file: File | null;
       previewUrl: string | null;
+      payload: { historyId?: string };
     }) => {
       setCurrentPrompt(handoff.prompt);
+      setBeforePrompt(handoff.prompt);
+      setSourceHistoryId(handoff.payload.historyId ?? resolveParentHistoryId());
       if (handoff.improveIntent) {
         setIntentHints(handoff.improveIntent);
       }
@@ -126,6 +133,7 @@ export default function RefineTool() {
         data.prompt ?? "",
         intentHints.trim() || currentPrompt.trim(),
       );
+      setBeforePrompt(currentPrompt.trim() || beforePrompt);
       setOutput(prompt);
     } catch (err) {
       setOutput("");
@@ -223,6 +231,33 @@ export default function RefineTool() {
         <FieldError>{error}</FieldError>
       </ToolSection>
 
+      {output && beforePrompt && beforePrompt !== output ? (
+        <ToolSection title="Refine diff">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-xs text-zinc-400">
+              {beforePrompt}
+            </pre>
+            <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-xs text-emerald-300">
+              {output}
+            </pre>
+          </div>
+          {diffPromptWords(beforePrompt, output).segments
+            .filter((segment) => segment.type === "add")
+            .slice(0, 12)
+            .map((segment) => segment.text)
+            .join(", ") ? (
+            <p className="text-xs text-zinc-500">
+              Added/changed:{" "}
+              {diffPromptWords(beforePrompt, output).segments
+                .filter((segment) => segment.type === "add")
+                .slice(0, 12)
+                .map((segment) => segment.text)
+                .join(", ")}
+            </p>
+          ) : null}
+        </ToolSection>
+      ) : null}
+
       <EnhancedPromptResult
         output={output}
         provider={output ? "llm" : null}
@@ -231,7 +266,11 @@ export default function RefineTool() {
         onCopy={() => void copyOutput()}
         diagnostics={actions.diagnostics}
         onSaveHistory={() =>
-          actions.saveHistory({ prompt: output, hints: intentHints || currentPrompt })
+          actions.saveHistory({
+            prompt: output,
+            hints: intentHints || currentPrompt,
+            parentHistoryId: sourceHistoryId,
+          })
         }
         onSendComfyUi={() => void actions.sendComfyUi(output)}
         {...promptResultPreviewProps(actions, output)}

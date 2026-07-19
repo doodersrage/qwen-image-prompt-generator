@@ -13,7 +13,19 @@ import {
   saveGalleryHandoff,
 } from "@/lib/gallery-handoff";
 import { startImproveFromGalleryEntry } from "@/lib/improve-output";
-import { recordAvoidedTokensFromPrompt } from "@/lib/rating-driven-random";
+import { recordAvoidedTokensFromPrompt } from "@/lib/avoided-tokens";
+import { recordCatalogBiasFromPrompt } from "@/lib/catalog-rating-bias";
+import GalleryComparePanel from "@/components/GalleryComparePanel";
+import { queueMutatedGalleryJobs } from "@/lib/gallery-mutations";
+import { queueNegativeAbTest } from "@/lib/negative-ab-queue";
+import {
+  galleryTopicsPath,
+  galleryVariationsPath,
+  saveGalleryTopicsHandoff,
+  saveGalleryVariationsHandoff,
+  buildGalleryVariationsHandoff,
+} from "@/lib/gallery-variations-handoff";
+import { exportGalleryCsv, exportGalleryJsonl, downloadTextFile } from "@/lib/history-export-formats";
 import {
   downloadGalleryImage,
   downloadGallerySidecar,
@@ -82,6 +94,7 @@ export default function ComfyUiGalleryPanel({
     setReviewRating,
   } = useComfyUiGallery();
 
+  const router = useRouter();
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [requeueStatus, setRequeueStatus] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -95,6 +108,7 @@ export default function ComfyUiGalleryPanel({
   const [slideshowTransition, setSlideshowTransition] =
     useState<GallerySlideshowTransition>("slide");
   const [viewPrefsLoaded, setViewPrefsLoaded] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
 
   const bulkEnabled = showFilters && !compact;
   const paginationEnabled = showFilters && !compact && !limit;
@@ -573,6 +587,104 @@ export default function ComfyUiGalleryPanel({
           </button>
           <button
             type="button"
+            disabled={selectedIds.length < 2 || selectedIds.length > 4}
+            onClick={() => setCompareOpen(true)}
+            className="rounded-lg border border-violet-700/60 px-2 py-1 text-violet-200 hover:border-violet-500 disabled:opacity-40"
+          >
+            Compare (2–4)
+          </button>
+          <button
+            type="button"
+            disabled={selectedIds.length !== 1}
+            onClick={() => {
+              const entry = selectedEntries[0];
+              if (!entry) return;
+              setRequeueStatus("Mutating winner…");
+              void queueMutatedGalleryJobs({
+                entry,
+                kinds: ["variation", "location", "wardrobe"],
+                count: 3,
+              }).then((queued) => setRequeueStatus(`Queued ${queued} mutations.`));
+            }}
+            className="rounded-lg border border-emerald-800/60 px-2 py-1 text-emerald-200 hover:border-emerald-500 disabled:opacity-40"
+          >
+            Mutate winner
+          </button>
+          <button
+            type="button"
+            disabled={selectedIds.length !== 1}
+            onClick={() => {
+              const entry = selectedEntries[0];
+              if (!entry) return;
+              saveGalleryVariationsHandoff(buildGalleryVariationsHandoff(entry));
+              router.push(galleryVariationsPath());
+            }}
+            className="rounded-lg border border-zinc-700 px-2 py-1 text-zinc-300 hover:border-zinc-500 disabled:opacity-40"
+          >
+            → Variations
+          </button>
+          <button
+            type="button"
+            disabled={selectedIds.length !== 1}
+            onClick={() => {
+              const entry = selectedEntries[0];
+              if (!entry) return;
+              saveGalleryTopicsHandoff(entry);
+              router.push(galleryTopicsPath());
+            }}
+            className="rounded-lg border border-zinc-700 px-2 py-1 text-zinc-300 hover:border-zinc-500 disabled:opacity-40"
+          >
+            → Topics
+          </button>
+          <button
+            type="button"
+            disabled={selectedIds.length !== 1}
+            onClick={() => {
+              const entry = selectedEntries[0];
+              if (!entry) return;
+              void queueNegativeAbTest({
+                prompt: entry.prompt,
+                model: entry.model ?? "qwen-image-2512",
+                negativeA: entry.negativePrompt,
+                hints: entry.prompt.slice(0, 200),
+              }).then(({ queued, seed }) =>
+                setRequeueStatus(`Negative A/B queued ${queued} jobs · seed ${seed}`),
+              );
+            }}
+            className="rounded-lg border border-zinc-700 px-2 py-1 text-zinc-300 hover:border-zinc-500 disabled:opacity-40"
+          >
+            Negative A/B
+          </button>
+          <button
+            type="button"
+            disabled={selectedIds.length === 0}
+            onClick={() => {
+              downloadTextFile(
+                exportGalleryCsv(selectedEntries),
+                "gallery-export.csv",
+                "text/csv;charset=utf-8",
+              );
+            }}
+            className="rounded-lg border border-zinc-700 px-2 py-1 text-zinc-300 hover:border-zinc-500 disabled:opacity-40"
+          >
+            Export CSV
+          </button>
+          <button
+            type="button"
+            disabled={selectedIds.length === 0}
+            onClick={() => {
+              downloadTextFile(
+                exportGalleryJsonl(selectedEntries),
+                "gallery-export.jsonl",
+                "application/jsonl;charset=utf-8",
+              );
+            }}
+            className="rounded-lg border border-zinc-700 px-2 py-1 text-zinc-300 hover:border-zinc-500 disabled:opacity-40"
+          >
+            Export JSONL
+          </button>
+          <button
+            type="button"
             disabled={selectedIds.length === 0}
             onClick={() => {
               setRequeueStatus("Bulk re-queue started…");
@@ -600,6 +712,13 @@ export default function ComfyUiGalleryPanel({
       {requeueStatus && (
         <p className="text-xs text-violet-300/90">{requeueStatus}</p>
       )}
+
+      {compareOpen && selectedEntries.length >= 2 ? (
+        <GalleryComparePanel
+          entries={selectedEntries.slice(0, 4)}
+          onClose={() => setCompareOpen(false)}
+        />
+      ) : null}
 
       {visibleEntries.length === 0 ? (
         <p className="text-sm text-zinc-500">
@@ -662,6 +781,7 @@ export default function ComfyUiGalleryPanel({
                 if (rating && rating <= 2) {
                   recordAvoidedTokensFromPrompt(entry.prompt);
                 }
+                recordCatalogBiasFromPrompt(entry.prompt, rating);
               }}
             />
           ))}

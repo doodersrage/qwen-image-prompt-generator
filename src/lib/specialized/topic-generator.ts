@@ -70,6 +70,7 @@ export async function generateTopics(
         : "Cover diverse genres, moods, and settings with no single required theme."
   }
 - Variety level: ${variety}/100 (higher = bolder, stranger, more unexpected combinations).
+${options.avoidedTokensInstruction ? `- ${options.avoidedTokensInstruction}` : ""}
 - Output ONLY the topic lines, one per line. No numbering, bullets, labels, markdown, or blank lines.`;
 
   const userMessage = [

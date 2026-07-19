@@ -11,6 +11,7 @@ type TopicsRequestBody = {
   variety?: number;
   recentLocations?: string[];
   blockedLocations?: string[];
+  avoidedTokensInstruction?: string;
 };
 
 export async function GET() {
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
           : 50,
       recentLocations: normalizeRecentLocations(body.recentLocations),
       blockedLocations: normalizeBlockedLocations(body.blockedLocations),
+      avoidedTokensInstruction: body.avoidedTokensInstruction?.trim() || undefined,
     });
 
     return apiJson(result);

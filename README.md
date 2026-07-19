@@ -85,7 +85,7 @@ Legacy URLs `/duo`, `/compose`, and `/random-scene` redirect to the merged Chara
 - **Batch ComfyUI queue** — queue all duo batch rolls to ComfyUI with shared negative
 - **Pre-lint + rule fix** — Duo shows hint lint before generate; **Fix prompt (rules)** applies helmets, sport strips, etc.
 - **ComfyUI workflow** — optional `COMFYUI_WORKFLOW_PATH` with `{{POSITIVE}}` / `{{NEGATIVE}}` placeholders, or configure URL + workflow JSON in **Settings → ComfyUI queue settings** (stored in this browser)
-- **CLI** — `npm run prompt:cli -- duo --hints "..."` over the HTTP API (includes `topics-batch`, `compact`, `comfyui`, `pet`, `fantasy`, `background`, LLM flags)
+- **CLI** — `npm run prompt:cli -- duo --hints "..."` over the HTTP API (includes `topics-batch`, `compact`, `comfyui`, `portfolio`, `webhook-test`, `pet`, `fantasy`, `background`, LLM flags)
 - **Gallery → Refine / Image→Prompt** — open completed outputs in Refine or Image→Prompt with image + prompt pre-loaded
 - **Auto-negative on queue** — optional Settings toggle + negative profile library for SD-family ComfyUI queue
 - **Topics → Variations handoff** — send a topics batch to `/variations` as an imported grid
@@ -113,6 +113,20 @@ Legacy URLs `/duo`, `/compose`, and `/random-scene` redirect to the merged Chara
 - **Scheduled batch** — Settings configures periodic random-scene/topics generation (+ optional ComfyUI queue)
 - **Webhooks** — POST job completion payloads to an external URL via server proxy
 - **Active character descriptor** — shared mandatory character sheet injected into Character API requests
+- **Home dashboard** — pending ComfyUI jobs, recent outputs, and active project on `/`
+- **Keyboard shortcuts** — Ctrl+Enter generate, Ctrl+Shift+C copy pair, Ctrl+Shift+G queue ComfyUI
+- **Queue param overrides** — optional seed/width/height/cfg/steps overrides in Settings and result panels
+- **LoRA trigger injection** — missing trigger phrases from the LoRA library append on ComfyUI queue
+- **Avoided tokens** — low gallery ratings record motifs to avoid; generation APIs honor an avoidance instruction
+- **Catalog rating bias** — Studio catalog sorts clothing/locations by gallery review scores; click **Insert** to add to hints
+- **Gallery compare** — select 2–4 completed entries for side-by-side review on `/gallery`
+- **Mutate winner** — re-queue gallery entries with location/wardrobe/wildness/variation mutations
+- **Negative A/B** — same-seed ComfyUI queue with/without negative for SD-family models
+- **Refine diff panel** — word-level diff when refining from a saved history parent
+- **Auto lineage** — Improve/Refine/Reformat saves attach `parentHistoryId` for Studio iteration tree
+- **Gallery handoffs** — send selected prompts to Topics batch or Variations matrix (`?matrix=1`)
+- **History/gallery export** — CSV and JSONL export from Studio and Gallery bulk actions
+- **Prompt matrix mode** — `/variations?matrix=1` for row×column variation grids
 
 ## Prompt size limits (selected models)
 

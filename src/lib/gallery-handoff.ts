@@ -1,6 +1,7 @@
 import type { ComfyGalleryEntry } from "./comfyui-gallery";
 import { buildComfyViewPath } from "./comfyui-outputs";
 import type { WorkflowParamValues } from "./comfyui-config";
+import { setLineageParent } from "./prompt-lineage-session";
 
 export const GALLERY_HANDOFF_KEY = "gallery-handoff-v1";
 export const IMPROVE_INTENT_DEFAULT =
@@ -38,6 +39,13 @@ export function buildGalleryHandoff(
   target: GalleryHandoffPayload["target"],
 ): GalleryHandoffPayload {
   const image = entry.images[0];
+  if (entry.historyId) {
+    setLineageParent({
+      parentHistoryId: entry.historyId,
+      sourcePrompt: entry.prompt,
+      sourceTool: entry.tool,
+    });
+  }
   return {
     source: "gallery",
     galleryEntryId: entry.id,

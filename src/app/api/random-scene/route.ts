@@ -18,6 +18,7 @@ type RandomSceneRequestBody = {
   lockedWardrobeId?: string;
   lockedLocation?: string;
   variationSeed?: string;
+  avoidedTokensInstruction?: string;
 };
 
 export async function GET() {
@@ -47,6 +48,7 @@ export async function POST(request: Request) {
       lockedWardrobeId: normalizeLockedWardrobeId(body.lockedWardrobeId),
       lockedLocation: normalizeLockedLocation(body.lockedLocation),
       variationSeed: normalizeVariationSeed(body.variationSeed),
+      avoidedTokensInstruction: body.avoidedTokensInstruction?.trim() || undefined,
     });
 
     return apiJson(result);

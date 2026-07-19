@@ -12,6 +12,7 @@ import {
   ToolSection,
 } from "@/components/ui/ToolPageShell";
 import { Button } from "@/components/ui/Button";
+import QueueParamsPanel from "@/components/QueueParamsPanel";
 import {
   BatchPromptCard,
   type BatchPromptCrossLinks,
@@ -331,6 +332,7 @@ export default function EnhancedPromptResult({
         showSingleActions && (
         <ToolSection className="space-y-5">
           {showComfyActions && workflowSelection.mounted && (
+            <>
             <ComfyWorkflowSelector
               compact
               selectedId={workflowSelection.selectedId}
@@ -340,6 +342,8 @@ export default function EnhancedPromptResult({
               onChange={workflowSelection.setSelectedId}
               helpText="Workflow JSON used by Send to ComfyUI and Preview workflow below."
             />
+            <QueueParamsPanel compact />
+            </>
           )}
         <ActionButtonBar>
           {onRunPipeline && (
@@ -366,7 +370,7 @@ export default function EnhancedPromptResult({
             </Button>
           )}
           {onCopyPair && (
-            <Button variant="secondary" fullWidth onClick={onCopyPair}>
+            <Button variant="secondary" fullWidth onClick={onCopyPair} data-action="copy-pair">
               {pairCopied ? "Pair copied!" : "Copy prompt pair"}
             </Button>
           )}
@@ -386,7 +390,7 @@ export default function EnhancedPromptResult({
             </Button>
           )}
           {onSendComfyUi && (
-            <Button variant="accent-outline" fullWidth onClick={onSendComfyUi}>
+            <Button variant="accent-outline" fullWidth onClick={onSendComfyUi} data-action="send-comfyui">
               Send to ComfyUI
             </Button>
           )}

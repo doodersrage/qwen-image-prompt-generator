@@ -8,6 +8,7 @@ import {
   saveGalleryHandoff,
   type GalleryHandoffPayload,
 } from "./gallery-handoff";
+import { setLineageParent } from "./prompt-lineage-session";
 import type { ComfyGalleryEntry } from "./comfyui-gallery";
 
 export function startImproveFromResult(input: {
@@ -16,6 +17,7 @@ export function startImproveFromResult(input: {
   model?: string;
   tool?: string;
   negativePrompt?: string;
+  parentHistoryId?: string;
 }): void {
   const payload: GalleryHandoffPayload = {
     source: "gallery",
@@ -30,6 +32,13 @@ export function startImproveFromResult(input: {
     improveIntent: IMPROVE_INTENT_DEFAULT,
     savedAt: Date.now(),
   };
+  if (input.parentHistoryId) {
+    setLineageParent({
+      parentHistoryId: input.parentHistoryId,
+      sourcePrompt: input.prompt,
+      sourceTool: input.tool,
+    });
+  }
   saveGalleryHandoff(payload);
   window.location.href = galleryImprovePath();
 }

@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import AppNav from "@/components/AppNav";
 import ComfyGalleryBackgroundPoller from "@/components/ComfyGalleryBackgroundPoller";
 import ScheduledBatchRunner from "@/components/ScheduledBatchRunner";
+import KeyboardShortcuts from "@/components/KeyboardShortcuts";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -34,9 +35,10 @@ export default function RootLayout({
       <body className="min-h-full overflow-x-hidden bg-[var(--bg-base)] text-[var(--text-primary)]">
         <div className="min-h-full lg:pl-[var(--sidebar-width)]">
           <AppNav />
-        <ComfyGalleryBackgroundPoller />
-        <ScheduledBatchRunner />
-        {children}
+          <ComfyGalleryBackgroundPoller />
+          <ScheduledBatchRunner />
+          <KeyboardShortcuts />
+          {children}
         </div>
       </body>
     </html>

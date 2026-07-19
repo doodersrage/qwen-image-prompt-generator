@@ -36,17 +36,27 @@ export function saveWebhookSettings(settings: WebhookSettings): void {
   window.localStorage.setItem(WEBHOOK_SETTINGS_KEY, JSON.stringify(settings));
 }
 
+export type WebhookEvent =
+  | "comfyui.job.completed"
+  | "comfyui.job.error"
+  | "comfyui.job.queued"
+  | "comfyui.batch.completed"
+  | "scheduled.batch.run";
+
 export type WebhookJobPayload = {
-  event: "comfyui.job.completed" | "comfyui.job.error";
-  promptId: string;
-  prompt: string;
+  event: WebhookEvent;
+  promptId?: string;
+  prompt?: string;
   negativePrompt?: string;
   model?: string;
   tool?: string;
-  status: string;
+  status?: string;
   imageCount?: number;
   queueParams?: WorkflowParamValues;
+  queued?: number;
+  failed?: number;
   completedAt: number;
+  message?: string;
 };
 
 export async function dispatchWebhook(payload: WebhookJobPayload): Promise<boolean> {

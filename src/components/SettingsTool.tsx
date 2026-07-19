@@ -55,6 +55,7 @@ import {
 } from "@/lib/comfyui-notifications";
 import ComfyUiGalleryPanel from "@/components/ComfyUiGalleryPanel";
 import ComfyWorkflowLibraryPanel from "@/components/ComfyWorkflowLibraryPanel";
+import QueueParamsPanel from "@/components/QueueParamsPanel";
 import WorkflowPreviewPanel from "@/components/WorkflowPreviewPanel";
 import { fetchWorkflowPreview } from "@/lib/comfyui-requeue";
 import {
@@ -1059,6 +1060,10 @@ export default function SettingsTool() {
 
       <ToolSection>
         <ComfyUiGalleryPanel limit={6} compact showHeader />
+      </ToolSection>
+
+      <ToolSection title="Queue parameters">
+        <QueueParamsPanel />
       </ToolSection>
 
       <ToolSection title="Webhooks">

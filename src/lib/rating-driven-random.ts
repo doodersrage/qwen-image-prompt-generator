@@ -1,7 +1,6 @@
 import { loadComfyGallery } from "./comfyui-gallery";
 
 const HISTORY_KEY = "comfy-prompt-tool-history-v1";
-const AVOIDED_TOKENS_KEY = "comfy-prompt-avoided-tokens-v1";
 
 type HistoryEntry = {
   rating?: number;
@@ -22,38 +21,6 @@ function loadHistoryEntries(): HistoryEntry[] {
   } catch {
     return [];
   }
-}
-
-function loadAvoidedTokens(): Set<string> {
-  if (typeof window === "undefined") {
-    return new Set();
-  }
-  try {
-    const raw = window.localStorage.getItem(AVOIDED_TOKENS_KEY);
-    if (!raw) {
-      return new Set();
-    }
-    return new Set(JSON.parse(raw) as string[]);
-  } catch {
-    return new Set();
-  }
-}
-
-export function recordAvoidedTokensFromPrompt(prompt: string): void {
-  if (typeof window === "undefined" || !prompt.trim()) {
-    return;
-  }
-  const tokens = prompt
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, " ")
-    .split(/\s+/)
-    .filter((token) => token.length > 3)
-    .slice(0, 12);
-  const existing = loadAvoidedTokens();
-  for (const token of tokens) {
-    existing.add(token);
-  }
-  window.localStorage.setItem(AVOIDED_TOKENS_KEY, JSON.stringify([...existing].slice(-80)));
 }
 
 /** Returns -12..+12 adjustment for wildness based on recent feedback signals. */
@@ -98,3 +65,5 @@ export function ratingDrivenWildnessLabel(baseWildness: number): string {
   const sign = bias > 0 ? "+" : "";
   return `Adjusted ${applyRatingDrivenWildness(baseWildness)} (${sign}${bias} from ratings)`;
 }
+
+export { recordAvoidedTokensFromPrompt, loadAvoidedTokens, buildAvoidedTokensInstruction } from "./avoided-tokens";

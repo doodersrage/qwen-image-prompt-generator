@@ -23,6 +23,8 @@ import { resolveQueueNegativePrompt } from "@/lib/queue-negative";
 import { runWorkflowPreflight } from "@/lib/workflow-preflight";
 import { resolveComfyUiRuntime } from "@/lib/comfyui-runtime";
 import { DEFAULT_VARIATIONS_TOOL_CACHE } from "@/lib/settings-cache";
+import type { ComfyImageModel } from "@/lib/comfy-models";
+import { loadGalleryVariationsHandoff } from "@/lib/gallery-variations-handoff";
 import type { SharedToolSettings, VariationsToolCache } from "@/lib/settings-cache";
 import {
   buildMatrixAxes,
@@ -208,10 +210,33 @@ export default function VariationGridTool() {
   const importedAppliedRef = useRef(false);
 
   useEffect(() => {
+    if (!mounted) {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("matrix") === "1") {
+      updateToolSettings({ gridMode: "matrix" });
+    }
+  }, [mounted, updateToolSettings]);
+
+  useEffect(() => {
     if (!mounted || importedAppliedRef.current) {
       return;
     }
     const params = new URLSearchParams(window.location.search);
+    if (params.get("from") === "gallery") {
+      const handoff = loadGalleryVariationsHandoff();
+      if (handoff?.prompt) {
+        importedAppliedRef.current = true;
+        updateToolSettings({ hints: handoff.hints, gridMode: "imported" });
+        setResults([{ prompt: handoff.prompt, rowLabel: "gallery" }]);
+        setStatus("Loaded prompt from Gallery.");
+        if (handoff.model) {
+          updateShared({ model: handoff.model as ComfyImageModel });
+        }
+        return;
+      }
+    }
     if (params.get("from") !== "topics") {
       return;
     }
