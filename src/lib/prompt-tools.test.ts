@@ -82,6 +82,24 @@ describe("lintPrompt", () => {
     assert.equal(result.inferred.cyclingDiscipline, "gravel");
     assert.equal(result.inferred.duoMode, true);
   });
+
+  it("does not infer duo from lighting or object counts in the prompt", () => {
+    const result = lintPrompt({
+      hints: "beautiful woman in mini dress and tall heels",
+      prompt:
+        "A stunning woman stands near the forefront of a shallow studio space lit by two soft box speedlights from frame left, wearing a cropped wrap dress and stiletto heels.",
+    });
+    assert.equal(result.inferred.duoMode, false);
+    assert.equal(result.inferred.peopleCount, null);
+  });
+
+  it("does not treat pair of shoes as a duo hint", () => {
+    const result = lintPrompt({
+      hints: "portrait of a woman in a pair of heels",
+      prompt: "A woman in a red dress wears a pair of stiletto heels.",
+    });
+    assert.equal(result.inferred.duoMode, false);
+  });
 });
 
 describe("fixPromptRules", () => {

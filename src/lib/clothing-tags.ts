@@ -616,7 +616,7 @@ const EXPLICIT_DRESS_PHRASE =
   /\b(?:in|wearing|wears)\s+(?:(?:a|an|her|his|their)\s+)?(?:\w+\s+){0,4}dress\b/i;
 
 const DRESS_STYLE_HINTS: Array<{ phrase: RegExp; label: RegExp }> = [
-  { phrase: /\bmini dress\b/i, label: /\b(?:mini|cropped)\b.*\bdress\b/i },
+  { phrase: /\bmini dress\b/i, label: /\b(?:mini|cropped)\b(?!.*\bslip\s+dress\b).*\bdress\b/i },
   { phrase: /\bmaxi dress\b/i, label: /\bmaxi\b.*\bdress\b/i },
   { phrase: /\bslip dress\b/i, label: /\bslip dress\b/i },
   { phrase: /\bwrap dress\b/i, label: /\bwrap dress\b/i },

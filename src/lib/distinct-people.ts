@@ -143,10 +143,32 @@ function matchCouplePhrase(
   lower: string,
   input: string,
 ): PeopleConstraint | null {
-  if (!/\b(couple|pair|duo|twosome|both of them)\b/.test(lower)) {
+  if (/\bduo\b/.test(lower) || /\btwosome\b/.test(lower) || /\bboth of them\b/.test(lower)) {
+    return resolveCoupleGender(input);
+  }
+
+  if (/\bcouple\b/.test(lower)) {
+    if (/\bcouple of (?:minutes|hours|days|weeks|months|years|times|soft|hard|quick|brief|seconds)\b/.test(lower)) {
+      return null;
+    }
+    return resolveCoupleGender(input);
+  }
+
+  if (/\bpair\b/.test(lower)) {
+    if (
+      /\bpair of (?:\w+\s+){0,4}(?:men|women|people|persons|friends|lovers|strangers|students|dancers|models|cyclists|runners|athletes|figures|characters)\b/.test(
+        lower,
+      )
+    ) {
+      return resolveCoupleGender(input);
+    }
     return null;
   }
 
+  return null;
+}
+
+function resolveCoupleGender(input: string): PeopleConstraint {
   if (/\b(two men|2 men|gay men|men only)\b/i.test(input)) {
     return { count: 2, gender: "men" };
   }
@@ -171,9 +193,7 @@ export function isMultiPersonInput(input: string): boolean {
     return false;
   }
 
-  return (
-    countImpliedPeople(input) !== null || /\b(couple|pair|duo|twosome)\b/i.test(input)
-  );
+  return countImpliedPeople(input) !== null;
 }
 
 const EXPLICIT_WOMAN_SUBJECT =

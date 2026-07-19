@@ -56,14 +56,16 @@ export function analyzePromptDiagnostics(
   corpus: string,
   prompt?: string,
 ): PromptDiagnostics {
+  const hintText = corpus.trim();
   const text = [corpus, prompt].filter(Boolean).join(" ");
+  const peopleText = hintText || text;
   const sport = inferAthleticSport(text);
   const cyclingDiscipline =
     sport === "cycling" ? inferCyclingDiscipline(text) : null;
-  const people = parsePeopleConstraint(text);
-  const peopleCount = people.count ?? (/\b(?:duo|couple|pair|two)\b/i.test(text) ? 2 : null);
+  const people = parsePeopleConstraint(peopleText);
+  const peopleCount = people.count;
   const duoMode = (peopleCount ?? 0) >= 2;
-  const athleticCompetition = hintsDescribeAthleticDuoCompetition(text);
+  const athleticCompetition = hintsDescribeAthleticDuoCompetition(peopleText);
   const issues: PromptDiagnosticIssue[] = [];
   const suggestions: string[] = [];
 
@@ -124,7 +126,7 @@ export function analyzePromptDiagnostics(
     suggestions.push("Add running shorts or track pants to the outfit description.");
   }
 
-  if (prompt && !duoMode && isMultiPersonInput(text) === false) {
+  if (prompt && !duoMode && isMultiPersonInput(peopleText) === false) {
     if (/\bon the left\b/i.test(prompt) && /\bon the right\b/i.test(prompt)) {
       issues.push({
         severity: "error",
