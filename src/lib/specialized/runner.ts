@@ -6,10 +6,10 @@ import {
 } from "../comfy-models";
 import { getDetailLimits } from "../detail-level";
 import {
-  allowTemplateFallback,
-  chatCompletion,
-  isLlmEnabled,
-} from "../llm-client";
+  resolveRequestTemplateFallback,
+  resolveRequestTemperature,
+} from "../llm-request-options";
+import { chatCompletion, isLlmEnabled } from "../llm-client";
 import { isThinkingOnlyArtifact, stripPromptArtifacts } from "../prompt-cleanup";
 import { ensureSinglePersonPrompt } from "../single-person";
 import { sanitizeQwenPrompt, formatPromptForModel, trimPromptToMaxChars, compactPromptForProfile } from "../qwen-clarity";
@@ -49,6 +49,7 @@ export async function runSpecializedPrompt(options: {
   templateFallback: () => string | Promise<string>;
   sanitizeInput?: string;
   temperature?: number;
+  allowTemplateFallback?: boolean;
   maxTokens?: number;
   metadata?: Record<string, unknown>;
   seed?: string;
@@ -74,7 +75,7 @@ Output ONLY the raw prompt text. No quotes around the whole prompt, labels, mark
           { role: "user", content: options.userMessage },
         ],
         maxTokens,
-        temperature: options.temperature,
+        temperature: resolveRequestTemperature({ temperature: options.temperature }),
       });
 
       const prompt = finalizeSpecializedPrompt(
@@ -92,7 +93,7 @@ Output ONLY the raw prompt text. No quotes around the whole prompt, labels, mark
         metadata: options.metadata,
       });
     } catch (error) {
-      if (!allowTemplateFallback()) {
+      if (!resolveRequestTemplateFallback({ allowTemplateFallback: options.allowTemplateFallback })) {
         throw error instanceof Error ? error : new Error("Generation failed.");
       }
       console.warn(

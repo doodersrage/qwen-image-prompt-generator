@@ -5,6 +5,10 @@ import EnhancedPromptResult from "@/components/EnhancedPromptResult";
 import SharedToolControls from "@/components/SharedToolControls";
 import { useCachedSettings } from "@/hooks/useCachedSettings";
 import { usePromptResultActions } from "@/hooks/usePromptResultActions";
+import type { AthleticSport } from "@/lib/athletic-sport-profiles";
+import { getComfyModelDefinition } from "@/lib/comfy-models";
+import { promptResultPreviewProps } from "@/lib/prompt-result-preview-props";
+import { getReformatTargetLabel, getReformatTargetModel } from "@/lib/reformat-target";
 import { DEFAULT_NEGATIVE_TOOL_CACHE } from "@/lib/settings-cache";
 import { SPORT_PRESETS } from "@/lib/sport-presets";
 import {
@@ -20,6 +24,12 @@ import { PrimaryButton } from "@/components/ui/Button";
 
 const ACCENT = "rose" as const;
 
+type NegativeGenerateResult = {
+  prompt: string;
+  sport: AthleticSport | null;
+  mode?: string;
+};
+
 export default function NegativeTool() {
   const { mounted, shared, toolSettings, updateShared, updateToolSettings } =
     useCachedSettings("negative", DEFAULT_NEGATIVE_TOOL_CACHE);
@@ -28,12 +38,16 @@ export default function NegativeTool() {
     model: shared.model,
     detail: shared.detail,
     hints: toolSettings.sport,
+    autoFixRules: shared.autoFixRules !== false,
+    reformatTarget: getReformatTargetModel(shared.model),
   });
   const [output, setOutput] = useState("");
-  const [sport, setSport] = useState<string | null>(null);
+  const [result, setResult] = useState<NegativeGenerateResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const selectedModel = getComfyModelDefinition(shared.model);
 
   const generate = useCallback(async () => {
     setLoading(true);
@@ -52,9 +66,7 @@ export default function NegativeTool() {
         }),
       });
 
-      const data = (await response.json()) as {
-        prompt?: string;
-        sport?: string | null;
+      const data = (await response.json()) as NegativeGenerateResult & {
         error?: string;
       };
 
@@ -62,16 +74,21 @@ export default function NegativeTool() {
         throw new Error(data.error ?? "Generation failed.");
       }
 
-      setOutput(data.prompt ?? "");
-      setSport(data.sport ?? null);
+      const prompt = data.prompt ?? "";
+      setOutput(prompt);
+      setResult({
+        prompt,
+        sport: data.sport ?? null,
+        mode: data.mode,
+      });
     } catch (err) {
       setOutput("");
-      setSport(null);
+      setResult(null);
       setError(err instanceof Error ? err.message : "Generation failed.");
     } finally {
       setLoading(false);
     }
-  }, [toolSettings]);
+  }, [toolSettings, actions]);
 
   const copyOutput = useCallback(async () => {
     if (!output) return;
@@ -106,6 +123,8 @@ export default function NegativeTool() {
           onDetailChange={(detail) => updateShared({ detail })}
           onWorkflowPresetChange={(id) => updateShared({ selectedWorkflowFileId: id })}
           detailHelp="Detail level affects compact-to-limit when trimming long negatives."
+          autoFixRules={shared.autoFixRules !== false}
+          onAutoFixRulesChange={(value) => updateShared({ autoFixRules: value })}
         />
       }
     >
@@ -158,7 +177,7 @@ export default function NegativeTool() {
 
         <PrimaryButton
           accentClassName={accentButtonClass(ACCENT)}
-          onClick={generate}
+          onClick={() => void generate()}
           loading={loading}
           loadingLabel="Building negative prompt"
         >
@@ -171,19 +190,57 @@ export default function NegativeTool() {
       <EnhancedPromptResult
         output={output}
         provider="template"
+        comfyNode={selectedModel.comfyNode}
         copied={copied}
-        onCopy={copyOutput}
-        extraMeta={sport ? `sport: ${sport}` : undefined}
+        onCopy={() => void copyOutput()}
+        extraMeta={
+          result?.sport
+            ? `sport: ${result.sport}${result.mode ? ` · ${result.mode}` : ""}`
+            : result?.mode
+              ? `mode: ${result.mode}`
+              : undefined
+        }
+        diagnostics={actions.diagnostics ?? null}
         onSaveHistory={() =>
           actions.saveHistory({
             prompt: output,
             hints: toolSettings.sport,
+            metadata: {
+              sport: result?.sport,
+              mode: result?.mode,
+            },
           })
         }
+        onSendComfyUi={() => void actions.sendComfyUi(output)}
+        {...promptResultPreviewProps(actions, output, result?.sport ?? null)}
+        onFixPrompt={() => void actions.fixPrompt(output, setOutput, toolSettings.sport)}
+        onCopyPair={() => void actions.copyPromptPair(output)}
         onCompact={() => void actions.compactPrompt(output, setOutput)}
-        onExportSidecar={() => void actions.exportSidecar(output)}
+        onReformat={() => void actions.reformatForModel(output, setOutput)}
+        reformatTargetLabel={getReformatTargetLabel(shared.model)}
+        onRunPipeline={() =>
+          void actions.runExportPipeline(output, setOutput, {
+            queueComfyUi: true,
+          })
+        }
+        onExportSidecar={() =>
+          void actions.exportSidecar(output, {
+            comfyNode: selectedModel.comfyNode,
+            metadata: {
+              sport: result?.sport,
+              mode: result?.mode,
+            },
+          })
+        }
+        fixStatus={actions.fixStatus}
         compactStatus={actions.compactStatus}
+        reformatStatus={actions.reformatStatus}
+        pipelineStatus={actions.pipelineStatus}
+        comfyUiStatus={actions.comfyUiStatus}
+        comfyUiJob={actions.comfyUiJob}
+        comfyUiPreviewUrl={actions.comfyUiPreviewUrl}
         historySaved={actions.historySaved}
+        pairCopied={actions.pairCopied}
       />
     </ToolLayout>
   );

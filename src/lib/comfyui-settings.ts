@@ -9,6 +9,13 @@ import {
 
 export const COMFYUI_SETTINGS_KEY = "comfyui-settings-v4";
 
+export type LoraLibraryEntry = {
+  id: string;
+  label: string;
+  triggerPhrase: string;
+  tokenValue: string;
+};
+
 export type ComfyUiSettings = {
   useServerDefaults: boolean;
   apiUrl?: string;
@@ -17,6 +24,7 @@ export type ComfyUiSettings = {
   workflowJson?: string;
   queueParams?: WorkflowParamValues;
   customTokens?: CustomWorkflowToken[];
+  loraLibrary?: LoraLibraryEntry[];
   notifyOnComplete?: boolean;
 };
 
@@ -33,8 +41,31 @@ export const DEFAULT_COMFYUI_SETTINGS: ComfyUiSettings = {
     steps: "20",
   },
   customTokens: [],
+  loraLibrary: [],
   notifyOnComplete: false,
 };
+
+const LORA_TOKEN_PREFIX = "{{LORA_";
+
+export function mergeLoraLibraryIntoCustomTokens(
+  settings: ComfyUiSettings,
+): ComfyUiSettings {
+  const library = settings.loraLibrary ?? [];
+  const manualTokens = (settings.customTokens ?? []).filter(
+    (entry) => !entry.token.trim().startsWith(LORA_TOKEN_PREFIX),
+  );
+  const loraTokens: CustomWorkflowToken[] = library
+    .filter((entry) => entry.id.trim())
+    .map((entry) => ({
+      token: `{{LORA_${entry.id.trim()}}}`,
+      value: entry.tokenValue,
+    }));
+
+  return {
+    ...settings,
+    customTokens: [...manualTokens, ...loraTokens],
+  };
+}
 
 const LEGACY_SETTINGS_KEYS = [
   "comfyui-settings-v3",
@@ -56,6 +87,7 @@ function migrateLegacySettings(raw: string): ComfyUiSettings {
       workflowJson: parsed.workflowJson ?? "",
       queueParams: parsed.queueParams ?? DEFAULT_COMFYUI_SETTINGS.queueParams,
       customTokens: parsed.customTokens ?? [],
+      loraLibrary: parsed.loraLibrary ?? [],
       notifyOnComplete: parsed.notifyOnComplete ?? false,
     };
   } catch {

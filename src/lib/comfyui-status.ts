@@ -22,6 +22,16 @@ type ComfyHistoryEntry = {
     completed?: boolean;
   };
   outputs?: Record<string, unknown>;
+  prompt?: unknown[];
+};
+
+export type ComfyHistoryImportItem = {
+  promptId: string;
+  prompt: string;
+  negativePrompt?: string;
+  comfyUrl: string;
+  images: ComfyOutputImage[];
+  statusMessage?: string;
 };
 
 type ComfyQueueResponse = {
@@ -221,4 +231,79 @@ function interpretHistoryEntry(
     statusMessage: statusStr || "pending",
     comfyUrl,
   };
+}
+
+function extractPromptFromHistoryEntry(entry: ComfyHistoryEntry): {
+  positive?: string;
+  negative?: string;
+} {
+  const promptField = entry.prompt;
+  if (!Array.isArray(promptField) || promptField.length < 3) {
+    return {};
+  }
+
+  const workflow = promptField[2];
+  if (!workflow || typeof workflow !== "object") {
+    return {};
+  }
+
+  const texts: string[] = [];
+  for (const node of Object.values(
+    workflow as Record<string, { inputs?: Record<string, unknown> }>,
+  )) {
+    const text = typeof node.inputs?.text === "string" ? node.inputs.text.trim() : "";
+    if (text) {
+      texts.push(text);
+    }
+  }
+
+  return {
+    positive: texts[0],
+    negative: texts[1],
+  };
+}
+
+export async function listComfyUiHistoryImports(
+  runtime?: ComfyUiRuntimeConfig,
+  limit = 40,
+): Promise<ComfyHistoryImportItem[]> {
+  const comfyUrl = getComfyUiBaseUrl(runtime);
+
+  try {
+    const response = await fetch(`${comfyUrl}/history`, {
+      signal: AbortSignal.timeout(12000),
+    });
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const history = (await response.json()) as Record<string, ComfyHistoryEntry>;
+    const items: ComfyHistoryImportItem[] = [];
+
+    for (const [promptId, entry] of Object.entries(history)) {
+      const status = interpretHistoryEntry(promptId, comfyUrl, entry);
+      if (status.status !== "completed" || !status.images?.length) {
+        continue;
+      }
+
+      const extracted = extractPromptFromHistoryEntry(entry);
+      items.push({
+        promptId,
+        prompt:
+          extracted.positive?.trim() ||
+          `Imported ComfyUI job ${promptId.slice(0, 8)}`,
+        negativePrompt: extracted.negative,
+        comfyUrl,
+        images: status.images,
+        statusMessage: status.statusMessage,
+      });
+    }
+
+    return items
+      .sort((left, right) => right.promptId.localeCompare(left.promptId))
+      .slice(0, limit);
+  } catch {
+    return [];
+  }
 }

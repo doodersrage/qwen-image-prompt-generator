@@ -18,6 +18,11 @@ import {
 import { getComfyModelDefinition } from "@/lib/comfy-models";
 import { promptResultPreviewProps } from "@/lib/prompt-result-preview-props";
 import { getReformatTargetLabel, getReformatTargetModel } from "@/lib/reformat-target";
+import {
+  applyShareableSceneParams,
+  parseScenePresetFromSearch,
+} from "@/lib/scene-preset-url";
+import { getFantasyPreset } from "@/lib/fantasy-presets";
 import { readSceneLocationFromMetadata } from "@/lib/recent-locations";
 import { readClothingIdsFromMetadata } from "@/lib/recent-clothing";
 import { DEFAULT_FANTASY_TOOL_CACHE } from "@/lib/settings-cache";
@@ -89,6 +94,28 @@ export default function FantasyTool() {
     }
     if (seed?.trim()) {
       updateShared({ lockedVariationSeed: seed.trim() });
+    }
+
+    const scene = parseScenePresetFromSearch(window.location.search);
+    if (!scene) {
+      return;
+    }
+
+    const applied = applyShareableSceneParams(scene);
+    if (applied.hints?.trim()) {
+      updateToolSettings({ hints: applied.hints.trim() });
+    }
+    updateShared({
+      lockedWardrobeId: applied.lockedWardrobeId,
+      lockedLocation: applied.lockedLocation,
+      lockedVariationSeed: applied.lockedVariationSeed,
+    });
+    if (scene.fantasyPresetId) {
+      updateToolSettings({ fantasyPresetId: scene.fantasyPresetId });
+      const preset = getFantasyPreset(scene.fantasyPresetId);
+      if (preset?.hints?.trim()) {
+        updateToolSettings({ hints: preset.hints.trim() });
+      }
     }
   }, [updateShared, updateToolSettings]);
 

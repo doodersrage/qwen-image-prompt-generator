@@ -7,7 +7,7 @@ import {
 } from "@/lib/comfy-models";
 import type { DetailLevel } from "@/lib/detail-level";
 
-export const API_VERSION = "1.0.0";
+export const API_VERSION = "1.1.0";
 
 export type SerializedModel = {
   id: string;
@@ -296,6 +296,76 @@ export function buildApiCatalog(baseUrl: string) {
         example: {
           curl: `curl -sS ${baseUrl}/api/models?category=flux`,
         },
+      },
+      {
+        id: "character",
+        name: "Character",
+        description: "Single-person, duo, or compose-with-background character prompts.",
+        method: "POST",
+        path: "/api/character",
+      },
+      {
+        id: "pet",
+        name: "Pet",
+        description: "Pet and animal scene prompts with optional presets.",
+        method: "POST",
+        path: "/api/pet",
+      },
+      {
+        id: "fantasy",
+        name: "Fantasy",
+        description: "Fantasy character, creature, and environment prompts.",
+        method: "POST",
+        path: "/api/fantasy",
+      },
+      {
+        id: "background",
+        name: "Background",
+        description: "People-free environment prompts.",
+        method: "POST",
+        path: "/api/background",
+      },
+      {
+        id: "random-scene",
+        name: "Random scene",
+        description: "Roll random ingredients into a cohesive scene prompt.",
+        method: "POST",
+        path: "/api/random-scene",
+      },
+      {
+        id: "topics-batch",
+        name: "Topics batch",
+        description: "Turn topic strings into full prompts for generate, character, duo, pet, fantasy, or background.",
+        method: "POST",
+        path: "/api/topics/batch",
+      },
+      {
+        id: "comfyui",
+        name: "ComfyUI queue",
+        description: "Queue one or more prompts to ComfyUI with workflow placeholder injection.",
+        method: "POST",
+        path: "/api/comfyui",
+      },
+      {
+        id: "comfyui-history",
+        name: "ComfyUI history",
+        description: "List completed ComfyUI jobs importable into the gallery.",
+        method: "GET",
+        path: "/api/comfyui/history",
+      },
+      {
+        id: "lint",
+        name: "Lint",
+        description: "Sport/duo/helmet diagnostics for hints and finished prompts.",
+        method: "POST",
+        path: "/api/lint",
+      },
+      {
+        id: "negative",
+        name: "Negative",
+        description: "Sport-aware negative and preserve-subject prompts.",
+        method: "POST",
+        path: "/api/negative",
       },
     ],
     enums: {

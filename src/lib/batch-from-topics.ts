@@ -1,24 +1,38 @@
-import { applyLockedVariationSeed } from "./locked-variation-seed";
 import { applyLockedLocation } from "./locked-location";
 import { enrichGenerateResult } from "./generation-diagnostics";
 import { normalizeGenerationSettings } from "./generation-settings";
 import { generatePrompt } from "./prompt-generator";
+import { generateBackgroundPrompt } from "./specialized/background-generator";
 import { generateCharacterPrompt } from "./specialized/character-generator";
+import { generateFantasyPrompt } from "./specialized/fantasy-generator";
+import { generatePetPrompt } from "./specialized/pet-generator";
 import type { ComfyImageModel } from "./comfy-models";
 import type { DetailLevel } from "./detail-level";
+import type { LlmRequestOptions } from "./llm-request-options";
+
+export type BatchFromTopicsTarget =
+  | "generate"
+  | "duo"
+  | "character"
+  | "pet"
+  | "fantasy"
+  | "background";
 
 export type BatchFromTopicsOptions = {
   topics: string[];
-  target: "generate" | "duo";
+  target: BatchFromTopicsTarget;
   model: ComfyImageModel;
   detail: DetailLevel;
   lockedWardrobeId?: string;
   lockedLocation?: string;
   variationSeed?: string;
   recentClothing?: string[];
+  recentLocations?: string[];
+  blockedLocations?: string[];
   alwaysIncludeClothing?: boolean;
   distinctPeople?: boolean;
   teamKit?: boolean;
+  llm?: LlmRequestOptions;
 };
 
 export type BatchFromTopicsItem = {
@@ -58,6 +72,7 @@ export async function batchGenerateFromTopics(
         lockedWardrobeId: options.lockedWardrobeId,
         lockedLocation: options.lockedLocation,
         variationSeed: options.variationSeed,
+        llm: options.llm,
       });
       const enriched = enrichGenerateResult(result, hints, {
         teamKit: options.teamKit,
@@ -66,6 +81,89 @@ export async function batchGenerateFromTopics(
         topic,
         prompt: enriched.prompt,
         provider: enriched.provider,
+      });
+      continue;
+    }
+
+    if (options.target === "character") {
+      const result = await generateCharacterPrompt({
+        model: options.model,
+        detail: options.detail,
+        hints,
+        portraitStyle: "portrait",
+        variationStrength: 50,
+        alwaysIncludeClothing: options.alwaysIncludeClothing !== false,
+        lockedWardrobeId: options.lockedWardrobeId,
+        lockedLocation: options.lockedLocation,
+        variationSeed: options.variationSeed,
+        llm: options.llm,
+      });
+      results.push({
+        topic,
+        prompt: result.prompt,
+        provider: result.provider,
+      });
+      continue;
+    }
+
+    if (options.target === "pet") {
+      const result = await generatePetPrompt({
+        model: options.model,
+        detail: options.detail,
+        hints,
+        portraitStyle: "action",
+        variationStrength: 50,
+        lockedLocation: options.lockedLocation,
+        variationSeed: options.variationSeed,
+        recentLocations: options.recentLocations,
+        blockedLocations: options.blockedLocations,
+        llm: options.llm,
+      });
+      results.push({
+        topic,
+        prompt: result.prompt,
+        provider: result.provider,
+      });
+      continue;
+    }
+
+    if (options.target === "fantasy") {
+      const result = await generateFantasyPrompt({
+        model: options.model,
+        detail: options.detail,
+        hints,
+        portraitStyle: "action",
+        wildness: 65,
+        variationStrength: 50,
+        lockedWardrobeId: options.lockedWardrobeId,
+        lockedLocation: options.lockedLocation,
+        variationSeed: options.variationSeed,
+        recentLocations: options.recentLocations,
+        blockedLocations: options.blockedLocations,
+        alwaysIncludeClothing: options.alwaysIncludeClothing !== false,
+        llm: options.llm,
+      });
+      results.push({
+        topic,
+        prompt: result.prompt,
+        provider: result.provider,
+      });
+      continue;
+    }
+
+    if (options.target === "background") {
+      const result = await generateBackgroundPrompt({
+        model: options.model,
+        detail: options.detail,
+        settingType: hints,
+        recentLocations: options.recentLocations,
+        blockedLocations: options.blockedLocations,
+        llm: options.llm,
+      });
+      results.push({
+        topic,
+        prompt: result.prompt,
+        provider: result.provider,
       });
       continue;
     }

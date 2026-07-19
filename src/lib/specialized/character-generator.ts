@@ -392,7 +392,8 @@ ${soloRules}
     sanitizeInput: sanitizeContext,
     enforceMinimum: !(hasPresets || hasPoseAnchor(presetOptions)),
     postProcessPrompt,
-    temperature,
+    temperature: options.llm?.temperature ?? temperature,
+    allowTemplateFallback: options.llm?.allowTemplateFallback,
     soloSubject: !duoMode,
     seed: environmentSeed,
     metadata: {

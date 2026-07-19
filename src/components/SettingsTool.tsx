@@ -15,10 +15,18 @@ import {
 } from "@/lib/comfyui-config";
 import {
   DEFAULT_COMFYUI_SETTINGS,
+  mergeLoraLibraryIntoCustomTokens,
   placeholderTokensFromSettings,
   resetComfyUiSettings,
   saveComfyUiSettings,
+  type LoraLibraryEntry,
 } from "@/lib/comfyui-settings";
+import {
+  DEFAULT_SHARED_SETTINGS,
+  loadSettingsCache,
+  saveSharedSettings,
+  type SharedToolSettings,
+} from "@/lib/settings-cache";
 import {
   isComfyNotificationSupported,
   requestComfyNotificationPermission,
@@ -38,6 +46,45 @@ import { FieldError, FieldLabel, TextArea } from "@/components/ui/Field";
 import { Button, PrimaryButton } from "@/components/ui/Button";
 
 const ACCENT = "neutral" as const;
+
+function formatModelWorkflowMap(map?: Record<string, string>): string {
+  if (!map) {
+    return "";
+  }
+  return Object.entries(map)
+    .map(([modelId, workflowFileId]) => `${modelId}=${workflowFileId}`)
+    .join("\n");
+}
+
+function parseModelWorkflowMap(text: string): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+    const separator = trimmed.indexOf("=");
+    if (separator === -1) {
+      continue;
+    }
+    const modelId = trimmed.slice(0, separator).trim();
+    const workflowFileId = trimmed.slice(separator + 1).trim();
+    if (modelId && workflowFileId) {
+      map[modelId] = workflowFileId;
+    }
+  }
+  return map;
+}
+
+function createLoraLibraryEntry(): LoraLibraryEntry {
+  const id = `lora-${Date.now().toString(36)}`;
+  return {
+    id,
+    label: "",
+    triggerPhrase: "",
+    tokenValue: "",
+  };
+}
 
 type HealthResponse = {
   llm: {
@@ -68,6 +115,10 @@ type HealthResponse = {
 
 export default function SettingsTool() {
   const { mounted, settings, updateSettings } = useComfyUiSettings();
+  const [sharedSettings, setSharedSettings] =
+    useState<SharedToolSettings>(DEFAULT_SHARED_SETTINGS);
+  const [sharedMounted, setSharedMounted] = useState(false);
+  const [modelWorkflowMapText, setModelWorkflowMapText] = useState("");
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<string | null>(null);
@@ -90,6 +141,21 @@ export default function SettingsTool() {
     } else {
       setNotificationPermission("unsupported");
     }
+  }, []);
+
+  useEffect(() => {
+    const cache = loadSettingsCache();
+    setSharedSettings(cache.shared);
+    setModelWorkflowMapText(formatModelWorkflowMap(cache.shared.modelWorkflowMap));
+    setSharedMounted(true);
+  }, []);
+
+  const updateSharedSettings = useCallback((patch: Partial<SharedToolSettings>) => {
+    setSharedSettings((previous) => {
+      const next = { ...previous, ...patch };
+      saveSharedSettings(next);
+      return next;
+    });
   }, []);
 
   const workflowValidation = useMemo(() => {
@@ -145,7 +211,7 @@ export default function SettingsTool() {
       }
     }
 
-    saveComfyUiSettings(settings);
+    saveComfyUiSettings(mergeLoraLibraryIntoCustomTokens(settings));
     setWorkflowError(null);
     setStatus("ComfyUI settings saved.");
     void refreshHealth();
@@ -238,6 +304,34 @@ export default function SettingsTool() {
     [settings.customTokens, updateSettings],
   );
 
+  const updateLoraEntry = useCallback(
+    (index: number, patch: Partial<LoraLibraryEntry>) => {
+      const current = settings.loraLibrary ?? [];
+      const next = current.map((entry, entryIndex) =>
+        entryIndex === index ? { ...entry, ...patch } : entry,
+      );
+      updateSettings({ loraLibrary: next });
+    },
+    [settings.loraLibrary, updateSettings],
+  );
+
+  const addLoraEntry = useCallback(() => {
+    updateSettings({
+      loraLibrary: [...(settings.loraLibrary ?? []), createLoraLibraryEntry()],
+    });
+  }, [settings.loraLibrary, updateSettings]);
+
+  const removeLoraEntry = useCallback(
+    (index: number) => {
+      updateSettings({
+        loraLibrary: (settings.loraLibrary ?? []).filter(
+          (_, entryIndex) => entryIndex !== index,
+        ),
+      });
+    },
+    [settings.loraLibrary, updateSettings],
+  );
+
   const handlePreviewWorkflow = useCallback(async () => {
     setPreviewLoading(true);
     setPreviewError(null);
@@ -325,6 +419,106 @@ export default function SettingsTool() {
             )}
           </ul>
         )}
+      </ToolSection>
+
+      <ToolSection title="Session LLM preferences">
+        <p className="text-sm text-zinc-400">
+          Browser-session overrides sent with generation requests. Server env vars
+          still define the base model and API key.
+        </p>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between text-xs text-zinc-400">
+            <span>LLM temperature</span>
+            <span className="font-medium text-zinc-200">
+              {typeof sharedSettings.sessionLlmTemperature === "number"
+                ? sharedSettings.sessionLlmTemperature.toFixed(2)
+                : "server default"}
+            </span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={2}
+            step={0.05}
+            value={sharedSettings.sessionLlmTemperature ?? 1}
+            onChange={(event) =>
+              updateSharedSettings({
+                sessionLlmTemperature: Number(event.target.value),
+              })
+            }
+            disabled={!sharedMounted}
+            className="h-2 w-full accent-violet-500"
+          />
+          <div className="flex justify-between text-xs text-zinc-600">
+            <span>0</span>
+            <span>1</span>
+            <span>2</span>
+          </div>
+          {typeof sharedSettings.sessionLlmTemperature === "number" && (
+            <button
+              type="button"
+              disabled={!sharedMounted}
+              onClick={() =>
+                updateSharedSettings({ sessionLlmTemperature: undefined })
+              }
+              className="text-xs text-violet-300 hover:text-violet-200 disabled:opacity-50"
+            >
+              Reset to server default
+            </button>
+          )}
+        </div>
+
+        <label className="flex items-start gap-3 text-sm text-zinc-300">
+          <input
+            type="checkbox"
+            checked={sharedSettings.sessionAllowTemplateFallback === true}
+            onChange={(event) =>
+              updateSharedSettings({
+                sessionAllowTemplateFallback: event.target.checked
+                  ? true
+                  : undefined,
+              })
+            }
+            disabled={!sharedMounted}
+            className="mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-violet-500"
+          />
+          <span className="space-y-1">
+            <span className="block font-medium text-zinc-200">
+              Allow template fallback when LLM fails
+            </span>
+            <span className="block text-xs text-zinc-500">
+              When enabled, generators may fall back to template output if the LLM
+              request errors or times out.
+            </span>
+          </span>
+        </label>
+      </ToolSection>
+
+      <ToolSection title="Model → workflow map">
+        <p className="text-sm text-zinc-400">
+          One mapping per line:{" "}
+          <code className="rounded bg-zinc-800 px-1 text-violet-300">
+            modelId=workflowFileId
+          </code>
+          . When you change the target model in a generator, the mapped workflow
+          file is selected automatically.
+        </p>
+        <textarea
+          value={modelWorkflowMapText}
+          onChange={(event) => {
+            const text = event.target.value;
+            setModelWorkflowMapText(text);
+            updateSharedSettings({
+              modelWorkflowMap: parseModelWorkflowMap(text),
+            });
+          }}
+          rows={6}
+          spellCheck={false}
+          disabled={!sharedMounted}
+          placeholder={`qwen-image-2512=my-qwen-workflow.json\nflux-2-klein=flux-klein-default.json`}
+          className={`ui-input w-full font-mono text-xs leading-relaxed text-emerald-200 ${accentFocusClass(ACCENT)}`}
+        />
       </ToolSection>
 
       <ComfyWorkflowLibraryPanel
@@ -498,6 +692,102 @@ export default function SettingsTool() {
                     >
                       Remove
                     </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-zinc-400">LoRA / trigger library</p>
+              <button
+                type="button"
+                onClick={addLoraEntry}
+                className="text-xs text-violet-300 hover:text-violet-200"
+              >
+                Add LoRA
+              </button>
+            </div>
+            <p className="text-xs text-zinc-600">
+              Saved entries sync to custom workflow tokens as{" "}
+              <code className="rounded bg-zinc-800 px-1 text-violet-300">
+                {"{{LORA_<id>}}"}
+              </code>{" "}
+              when you save ComfyUI settings. Use trigger phrases in prompts and
+              token values for workflow injection.
+            </p>
+            {(settings.loraLibrary ?? []).length === 0 ? (
+              <p className="text-xs text-zinc-600">No LoRA entries yet.</p>
+            ) : (
+              <ul className="space-y-3">
+                {(settings.loraLibrary ?? []).map((entry, index) => (
+                  <li
+                    key={entry.id || index}
+                    className="space-y-2 rounded-xl border border-zinc-800 bg-zinc-950/40 p-3"
+                  >
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <label className="space-y-1 text-xs text-zinc-400">
+                        ID
+                        <input
+                          value={entry.id}
+                          onChange={(event) =>
+                            updateLoraEntry(index, { id: event.target.value })
+                          }
+                          placeholder="portrait-style"
+                          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100"
+                        />
+                      </label>
+                      <label className="space-y-1 text-xs text-zinc-400">
+                        Label
+                        <input
+                          value={entry.label}
+                          onChange={(event) =>
+                            updateLoraEntry(index, { label: event.target.value })
+                          }
+                          placeholder="Portrait style LoRA"
+                          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+                        />
+                      </label>
+                    </div>
+                    <label className="space-y-1 text-xs text-zinc-400">
+                      Trigger phrase
+                      <input
+                        value={entry.triggerPhrase}
+                        onChange={(event) =>
+                          updateLoraEntry(index, {
+                            triggerPhrase: event.target.value,
+                          })
+                        }
+                        placeholder="portrait lighting, soft skin"
+                        className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+                      />
+                    </label>
+                    <label className="space-y-1 text-xs text-zinc-400">
+                      Token value
+                      <input
+                        value={entry.tokenValue}
+                        onChange={(event) =>
+                          updateLoraEntry(index, { tokenValue: event.target.value })
+                        }
+                        placeholder="portrait_lora.safetensors"
+                        className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100"
+                      />
+                    </label>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <code className="text-xs text-violet-300">
+                        {entry.id.trim()
+                          ? `{{LORA_${entry.id.trim()}}}`
+                          : "{{LORA_<id>}}"}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => removeLoraEntry(index)}
+                        className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 hover:border-rose-500 hover:text-rose-200"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>

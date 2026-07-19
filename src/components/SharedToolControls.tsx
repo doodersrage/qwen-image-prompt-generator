@@ -6,6 +6,7 @@ import { useComfyWorkflowSelection } from "@/hooks/useComfyWorkflowSelection";
 import type { DetailLevel } from "@/lib/detail-level";
 import { getDetailLimits } from "@/lib/detail-level";
 import { getComfyModelDefinition } from "@/lib/comfy-models";
+import { patchSharedForModelChange } from "@/lib/model-workflow-map";
 import type { SharedToolSettings } from "@/lib/settings-cache";
 import { PINNED_VARIATION_SEED_LABEL } from "@/lib/tool-ui-labels";
 import { accentRingClass } from "@/lib/tool-theme";
@@ -65,7 +66,16 @@ export default function SharedToolControls({
         <FieldLabel hint="Shared across tools and remembered between page reloads.">
           Target model
         </FieldLabel>
-        <ModelSelector value={shared.model} onChange={onModelChange} />
+        <ModelSelector
+          value={shared.model}
+          onChange={(model) => {
+            onModelChange(model);
+            const patch = patchSharedForModelChange(model, shared);
+            if (patch.selectedWorkflowFileId && onWorkflowPresetChange) {
+              onWorkflowPresetChange(patch.selectedWorkflowFileId);
+            }
+          }}
+        />
       </div>
 
       <FieldDivider />

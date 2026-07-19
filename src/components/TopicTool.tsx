@@ -5,7 +5,9 @@ import Link from "next/link";
 import SharedToolControls from "@/components/SharedToolControls";
 import { useCachedSettings } from "@/hooks/useCachedSettings";
 import { useRecentClothing } from "@/hooks/useRecentClothing";
+import { useRecentLocations } from "@/hooks/useRecentLocations";
 import { useLocationBlocklist } from "@/hooks/useLocationBlocklist";
+import { sharedLlmRequestBody } from "@/lib/llm-request-options";
 import { DEFAULT_TOPIC_TOOL_CACHE } from "@/lib/settings-cache";
 import type { BatchFromTopicsItem } from "@/lib/batch-from-topics";
 import type { TopicGenerateResult } from "@/lib/specialized/types";
@@ -38,6 +40,7 @@ export default function TopicTool() {
   const { mounted, shared, toolSettings, updateShared, updateToolSettings } =
     useCachedSettings("topics", DEFAULT_TOPIC_TOOL_CACHE);
   const { getRecent: getRecentClothing } = useRecentClothing();
+  const { getRecent: getRecentLocations } = useRecentLocations();
   const { getBlocklist } = useLocationBlocklist();
   const [topics, setTopics] = useState<string[]>([]);
   const [batchResults, setBatchResults] = useState<BatchFromTopicsItem[]>([]);
@@ -112,6 +115,7 @@ export default function TopicTool() {
           model: shared.model,
           detail: shared.detail,
           recentClothing: getRecentClothing(),
+          recentLocations: getRecentLocations(),
           alwaysIncludeClothing: shared.alwaysIncludeClothing !== false,
           distinctPeople: true,
           teamKit: batchTarget === "duo",
@@ -119,6 +123,7 @@ export default function TopicTool() {
           lockedLocation: shared.lockedLocation,
           variationSeed: shared.lockedVariationSeed,
           blockedLocations: getBlocklist(),
+          ...sharedLlmRequestBody(shared),
         }),
       });
 
@@ -142,7 +147,7 @@ export default function TopicTool() {
     } finally {
       setBatchLoading(false);
     }
-  }, [topics, batchTarget, shared, getRecentClothing, getBlocklist]);
+  }, [topics, batchTarget, shared, getRecentClothing, getRecentLocations, getBlocklist]);
 
   const queueBatchComfyUi = useCallback(async () => {
     const prompts = batchResults.map((entry) => entry.prompt.trim()).filter(Boolean);
@@ -320,13 +325,23 @@ export default function TopicTool() {
                   value={batchTarget}
                   onChange={(event) =>
                     updateToolSettings({
-                      batchTarget: event.target.value as "generate" | "duo",
+                      batchTarget: event.target.value as
+                        | "generate"
+                        | "duo"
+                        | "character"
+                        | "pet"
+                        | "fantasy"
+                        | "background",
                     })
                   }
                   className="ui-input min-h-11 w-full px-3 py-[var(--input-padding-y)] type-body sm:min-w-[15rem] sm:flex-1 lg:w-auto lg:flex-none"
                 >
                   <option value="generate">Batch → Generate prompts</option>
                   <option value="duo">Batch → Character (duo) prompts</option>
+                  <option value="character">Batch → Character prompts</option>
+                  <option value="pet">Batch → Pet prompts</option>
+                  <option value="fantasy">Batch → Fantasy prompts</option>
+                  <option value="background">Batch → Background prompts</option>
                 </select>
                 <Button
                   variant="secondary"

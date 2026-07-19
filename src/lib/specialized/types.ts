@@ -1,5 +1,6 @@
 import type { ComfyImageModel } from "../comfy-models";
 import type { DetailLevel } from "../detail-level";
+import type { LlmRequestOptions } from "../llm-request-options";
 
 export type ToolLimits = {
   minChars?: number;
@@ -21,6 +22,7 @@ export type ToolGenerateResult = {
 export type SharedGenerationOptions = {
   model: ComfyImageModel;
   detail: DetailLevel;
+  llm?: LlmRequestOptions;
 };
 
 export type RandomSceneOptions = SharedGenerationOptions & {

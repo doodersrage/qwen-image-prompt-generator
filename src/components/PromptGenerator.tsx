@@ -24,6 +24,9 @@ import {
 } from "@/lib/settings-cache";
 import type { EnrichedToolGenerateResult } from "@/lib/specialized/types";
 import { readVariationSeedFromResult } from "@/lib/variation-seed-metadata";
+import TagAssistToolbar from "@/components/TagAssistToolbar";
+import { modelUsesTagAssist } from "@/lib/tag-assist";
+import { sharedLlmRequestBody } from "@/lib/llm-request-options";
 import { applyLockedLocation } from "@/lib/locked-location";
 import { getReformatTargetLabel, getReformatTargetModel } from "@/lib/reformat-target";
 import {
@@ -242,6 +245,7 @@ export default function PromptGenerator() {
           lockedLocation: shared.lockedLocation,
           variationSeed: shared.lockedVariationSeed,
           alwaysIncludeClothing: alwaysIncludeClothing,
+          ...sharedLlmRequestBody(shared),
         }),
       });
 
@@ -337,6 +341,7 @@ export default function PromptGenerator() {
           lockedWardrobeId: shared.lockedWardrobeId,
           lockedLocation: shared.lockedLocation,
           variationSeed: shared.lockedVariationSeed,
+          ...sharedLlmRequestBody(shared),
         }),
       });
 
@@ -652,6 +657,10 @@ export default function PromptGenerator() {
           rows={5}
           className={`text-base ${accentFocusClass(ACCENT)}`}
         />
+
+        {generateSource === "keywords" && modelUsesTagAssist(qwenModel) ? (
+          <TagAssistToolbar value={input} onChange={setInput} textareaId="edit-input" />
+        ) : null}
 
         <div className="flex flex-wrap gap-2">
           {EXAMPLE_INPUTS.map((example) => (

@@ -10,6 +10,8 @@ import { getSportPreset, sportPresetsForMode } from "./sport-presets";
 import { formatPromptPair, modelUsesNegativePrompt } from "./prompt-pair";
 import { buildRegenerateUrl } from "./regenerate-url";
 import { migrateLegacyToolSettings } from "./settings-cache";
+import { buildMatrixAxes } from "./variation-matrix";
+import { applyTagAssistToSelection } from "./tag-assist";
 import { applyLockedLocation } from "./locked-location";
 import { applyLockedVariationSeed } from "./locked-variation-seed";
 import { composeScenePrompt } from "./scene-composer";
@@ -329,6 +331,28 @@ describe("legacy tool settings migration", () => {
   });
 });
 
+describe("variation matrix", () => {
+  it("builds row by column cells", () => {
+    const cells = buildMatrixAxes({
+      axisRow: "variation",
+      axisCol: "location",
+      rowCount: 2,
+      colCount: 2,
+      recentLocations: ["forest", "beach"],
+    });
+    assert.equal(cells.length, 4);
+    assert.ok(cells[0].rowLabel.startsWith("Var "));
+    assert.equal(cells[0].colLabel, "forest");
+  });
+});
+
+describe("tag assist", () => {
+  it("wraps selected text with emphasis syntax", () => {
+    const result = applyTagAssistToSelection("neon alley, cat", 12, 15, "emphasis");
+    assert.match(result.nextValue, /\(cat:1\.2\)/);
+  });
+});
+
 describe("locked location", () => {
   it("appends location hint when missing", () => {
     const merged = applyLockedLocation("young woman, long hair", "Tokyo rooftop at night");
@@ -577,6 +601,19 @@ describe("scene preset share URL", () => {
     const url = buildScenePresetShareUrl("/character", params, { mode: "duo" });
     const parsed = parseScenePresetFromSearch(url.slice(url.indexOf("?")));
     assert.deepEqual(parsed, params);
+  });
+
+  it("round-trips pet and fantasy preset ids", () => {
+    const params = buildShareableSceneParams({
+      hints: "golden retriever on a trail",
+      petPresetId: "dog-action",
+      fantasyPresetId: "spellblade",
+      shared: {},
+    });
+    const encoded = buildScenePresetShareUrl("/pet", params);
+    const parsed = parseScenePresetFromSearch(encoded.slice(encoded.indexOf("?")));
+    assert.equal(parsed?.petPresetId, "dog-action");
+    assert.equal(parsed?.fantasyPresetId, "spellblade");
   });
 });
 

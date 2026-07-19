@@ -1,7 +1,12 @@
 "use client";
 
 import ComfyUiGalleryPanel from "@/components/ComfyUiGalleryPanel";
+import PngMetadataImportButton from "@/components/PngMetadataImportButton";
 import SidecarImportButton from "@/components/SidecarImportButton";
+import {
+  fetchComfyHistoryImports,
+  importComfyGalleryFromHistory,
+} from "@/lib/comfyui-gallery-client";
 import { requeueComfyJob } from "@/lib/comfyui-requeue";
 import {
   sidecarNegativePrompt,
@@ -13,6 +18,7 @@ import {
   ToolLayout,
   ToolSection,
 } from "@/components/ui/ToolPageShell";
+import { Button } from "@/components/ui/Button";
 
 const ACCENT = "neutral" as const;
 
@@ -21,6 +27,7 @@ export default function GalleryTool() {
     null,
   );
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   return (
     <ToolLayout
@@ -30,17 +37,17 @@ export default function GalleryTool() {
       title="ComfyUI Gallery"
       description={
         <>
-          Every prompt you queue to ComfyUI from this app is tracked here. Images
-          appear when the job completes—click through for full size or remove entries
-          you no longer need.
+          Every prompt you queue to ComfyUI from this app is tracked here. Import
+          completed jobs from ComfyUI history or PNG metadata when outputs were
+          generated outside this app.
         </>
       }
     >
       <ToolSection
-        title="Import sidecar"
-        description="Load a sidecar JSON to re-queue a saved prompt without opening another tool."
+        title="Import"
+        description="Load sidecar JSON, PNG metadata, or backfill from ComfyUI server history."
       >
-        <div className="flex flex-wrap items-center justify-end gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <SidecarImportButton
             onImport={(sidecar) => {
               setImportedSidecar(sidecar);
@@ -48,6 +55,38 @@ export default function GalleryTool() {
             }}
             onError={setImportStatus}
           />
+          <PngMetadataImportButton
+            onImport={(sidecar) => {
+              setImportedSidecar(sidecar);
+              setImportStatus(`Loaded PNG metadata (${sidecar.tool ?? "png-import"}).`);
+            }}
+            onError={setImportStatus}
+          />
+          <Button
+            variant="secondary"
+            loading={historyLoading}
+            loadingLabel="Importing ComfyUI history"
+            onClick={() => {
+              setHistoryLoading(true);
+              void fetchComfyHistoryImports(40)
+                .then((payload) => {
+                  const result = importComfyGalleryFromHistory(payload.items ?? []);
+                  setImportStatus(
+                    `Imported ${result.imported} job(s) from ComfyUI history (${result.skipped} duplicate(s) skipped).`,
+                  );
+                })
+                .catch((error) => {
+                  setImportStatus(
+                    error instanceof Error
+                      ? error.message
+                      : "ComfyUI history import failed.",
+                  );
+                })
+                .finally(() => setHistoryLoading(false));
+            }}
+          >
+            Import ComfyUI history
+          </Button>
         </div>
         {importStatus && <p className="text-xs text-zinc-500">{importStatus}</p>}
         {importedSidecar && (

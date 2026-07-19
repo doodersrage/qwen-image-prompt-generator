@@ -1,4 +1,5 @@
-import { batchGenerateFromTopics } from "@/lib/batch-from-topics";
+import { batchGenerateFromTopics, type BatchFromTopicsTarget } from "@/lib/batch-from-topics";
+import { parseLlmRequestOptions } from "@/lib/llm-request-options";
 import {
   normalizeRecentClothing,
   normalizeLockedWardrobeId,
@@ -11,12 +12,22 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
+const BATCH_TARGETS: BatchFromTopicsTarget[] = [
+  "generate",
+  "duo",
+  "character",
+  "pet",
+  "fantasy",
+  "background",
+];
+
 type TopicsBatchRequestBody = {
   topics?: string[];
-  target?: "generate" | "duo";
+  target?: BatchFromTopicsTarget;
   model?: string;
   detail?: string;
   recentClothing?: string[];
+  recentLocations?: string[];
   alwaysIncludeClothing?: boolean;
   distinctPeople?: boolean;
   teamKit?: boolean;
@@ -24,6 +35,8 @@ type TopicsBatchRequestBody = {
   lockedWardrobeId?: string;
   lockedLocation?: string;
   variationSeed?: string;
+  llmTemperature?: number;
+  allowTemplateFallback?: boolean;
 };
 
 export async function GET() {
@@ -40,7 +53,9 @@ export async function POST(request: Request) {
     }
 
     const shared = normalizeSharedGenerationOptions(body);
-    const target = body.target === "duo" ? "duo" : "generate";
+    const target = BATCH_TARGETS.includes(body.target ?? "generate")
+      ? (body.target ?? "generate")
+      : "generate";
 
     const result = await batchGenerateFromTopics({
       topics,
@@ -51,9 +66,12 @@ export async function POST(request: Request) {
       lockedLocation: normalizeLockedLocation(body.lockedLocation),
       variationSeed: normalizeVariationSeed(body.variationSeed),
       recentClothing: normalizeRecentClothing(body.recentClothing),
+      recentLocations: body.recentLocations,
+      blockedLocations: body.blockedLocations,
       alwaysIncludeClothing: body.alwaysIncludeClothing,
       distinctPeople: body.distinctPeople,
       teamKit: body.teamKit,
+      llm: parseLlmRequestOptions(body),
     });
 
     return apiJson(result);

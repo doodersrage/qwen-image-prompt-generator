@@ -3,6 +3,8 @@ import type { SharedToolSettings } from "./settings-cache";
 export type ShareableSceneParams = {
   hints?: string;
   sportPresetId?: string;
+  petPresetId?: string;
+  fantasyPresetId?: string;
   lockedWardrobeId?: string;
   lockedLocation?: string;
   lockedVariationSeed?: string;
@@ -11,6 +13,8 @@ export type ShareableSceneParams = {
 type CompactScenePayload = {
   h?: string;
   sp?: string;
+  pp?: string;
+  fp?: string;
   lw?: string;
   ll?: string;
   ls?: string;
@@ -19,6 +23,8 @@ type CompactScenePayload = {
 export function buildShareableSceneParams(input: {
   hints?: string;
   sportPresetId?: string;
+  petPresetId?: string;
+  fantasyPresetId?: string;
   shared: Pick<
     SharedToolSettings,
     "lockedWardrobeId" | "lockedLocation" | "lockedVariationSeed"
@@ -27,6 +33,8 @@ export function buildShareableSceneParams(input: {
   return {
     hints: input.hints?.trim() || undefined,
     sportPresetId: input.sportPresetId || undefined,
+    petPresetId: input.petPresetId || undefined,
+    fantasyPresetId: input.fantasyPresetId || undefined,
     lockedWardrobeId: input.shared.lockedWardrobeId,
     lockedLocation: input.shared.lockedLocation,
     lockedVariationSeed: input.shared.lockedVariationSeed,
@@ -63,6 +71,8 @@ export function buildScenePresetShareUrl(
   const payload: CompactScenePayload = {
     h: params.hints,
     sp: params.sportPresetId,
+    pp: params.petPresetId,
+    fp: params.fantasyPresetId,
     lw: params.lockedWardrobeId,
     ll: params.lockedLocation,
     ls: params.lockedVariationSeed,
@@ -96,6 +106,8 @@ export function parseScenePresetFromSearch(
   return {
     hints: payload.h,
     sportPresetId: payload.sp,
+    petPresetId: payload.pp,
+    fantasyPresetId: payload.fp,
     lockedWardrobeId: payload.lw,
     lockedLocation: payload.ll,
     lockedVariationSeed: payload.ls,
@@ -107,10 +119,14 @@ export function applyShareableSceneParams(
 ): Partial<SharedToolSettings> & {
   hints?: string;
   sportPresetId?: string;
+  petPresetId?: string;
+  fantasyPresetId?: string;
 } {
   return {
     hints: params.hints,
     sportPresetId: params.sportPresetId,
+    petPresetId: params.petPresetId,
+    fantasyPresetId: params.fantasyPresetId,
     lockedWardrobeId: params.lockedWardrobeId,
     lockedLocation: params.lockedLocation,
     lockedVariationSeed: params.lockedVariationSeed,

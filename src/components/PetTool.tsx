@@ -13,6 +13,11 @@ import { promptResultPreviewProps } from "@/lib/prompt-result-preview-props";
 import { presetOptionsFromPetCache } from "@/lib/pet-options";
 import { getComfyModelDefinition } from "@/lib/comfy-models";
 import { getReformatTargetLabel, getReformatTargetModel } from "@/lib/reformat-target";
+import {
+  applyShareableSceneParams,
+  parseScenePresetFromSearch,
+} from "@/lib/scene-preset-url";
+import { getPetPreset } from "@/lib/pet-presets";
 import { readSceneLocationFromMetadata } from "@/lib/recent-locations";
 import { DEFAULT_PET_TOOL_CACHE } from "@/lib/settings-cache";
 import type { EnrichedToolGenerateResult } from "@/lib/specialized/types";
@@ -70,6 +75,28 @@ export default function PetTool() {
     }
     if (seed?.trim()) {
       updateShared({ lockedVariationSeed: seed.trim() });
+    }
+
+    const scene = parseScenePresetFromSearch(window.location.search);
+    if (!scene) {
+      return;
+    }
+
+    const applied = applyShareableSceneParams(scene);
+    if (applied.hints?.trim()) {
+      updateToolSettings({ hints: applied.hints.trim() });
+    }
+    updateShared({
+      lockedWardrobeId: applied.lockedWardrobeId,
+      lockedLocation: applied.lockedLocation,
+      lockedVariationSeed: applied.lockedVariationSeed,
+    });
+    if (scene.petPresetId) {
+      updateToolSettings({ petPresetId: scene.petPresetId });
+      const preset = getPetPreset(scene.petPresetId);
+      if (preset?.hints?.trim()) {
+        updateToolSettings({ hints: preset.hints.trim() });
+      }
     }
   }, [updateShared, updateToolSettings]);
 

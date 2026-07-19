@@ -1,6 +1,8 @@
+import type { ComfyHistoryImportItem } from "./comfyui-status";
 import {
   addComfyGalleryEntry,
   loadComfyGallery,
+  saveComfyGallery,
   updateComfyGalleryByPromptId,
   type ComfyGalleryEntry,
   type ComfyGalleryJobStatus,
@@ -60,6 +62,56 @@ export function registerComfyGalleryJob(
     status: "pending",
     statusMessage: "Queued",
   });
+}
+
+export function importComfyGalleryFromHistory(
+  items: ComfyHistoryImportItem[],
+): { imported: number; skipped: number } {
+  const existing = loadComfyGallery();
+  const known = new Set(existing.map((entry) => entry.promptId));
+  const imported: ComfyGalleryEntry[] = [];
+  let skipped = 0;
+
+  for (const item of items) {
+    if (known.has(item.promptId)) {
+      skipped += 1;
+      continue;
+    }
+
+    imported.push({
+      id: crypto.randomUUID(),
+      promptId: item.promptId,
+      prompt: item.prompt,
+      negativePrompt: item.negativePrompt,
+      tool: "comfyui-import",
+      comfyUrl: item.comfyUrl,
+      status: "completed",
+      statusMessage: item.statusMessage ?? "Imported from ComfyUI history",
+      queuedAt: Date.now(),
+      completedAt: Date.now(),
+      images: item.images,
+    });
+    known.add(item.promptId);
+  }
+
+  if (imported.length > 0) {
+    saveComfyGallery([...imported, ...existing]);
+  }
+
+  return { imported: imported.length, skipped };
+}
+
+export async function fetchComfyHistoryImports(limit = 40) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  const response = await fetch(`/api/comfyui/history?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error("Could not load ComfyUI history.");
+  }
+  return (await response.json()) as {
+    items: ComfyHistoryImportItem[];
+    count: number;
+    comfyUrl?: string;
+  };
 }
 
 export async function fetchComfyJobStatus(

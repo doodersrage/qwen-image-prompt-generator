@@ -19,6 +19,12 @@ export type SharedToolSettings = {
   autoFixRules?: boolean;
   /** Saved workflow assignment used when queueing from generators. */
   selectedWorkflowFileId?: string;
+  /** Auto-select workflow file when target model changes. */
+  modelWorkflowMap?: Record<string, string>;
+  /** Session LLM temperature override (0–2) sent with generation requests. */
+  sessionLlmTemperature?: number;
+  /** Session override for template fallback when LLM fails. */
+  sessionAllowTemplateFallback?: boolean;
   /** @deprecated Use selectedWorkflowFileId */
   selectedWorkflowPresetId?: string;
 };
@@ -111,7 +117,7 @@ export type TopicToolCache = {
   seedTopic?: string;
   count?: number;
   variety?: number;
-  batchTarget?: "generate" | "duo";
+  batchTarget?: "generate" | "duo" | "character" | "pet" | "fantasy" | "background";
 };
 
 export type NegativeToolCache = {
@@ -132,7 +138,12 @@ export type VariationsToolCache = {
   hints?: string;
   count?: number;
   variationStrength?: number;
-  target?: "generate" | "character" | "duo";
+  target?: "generate" | "character" | "duo" | "pet" | "fantasy" | "background";
+  gridMode?: "roll" | "matrix";
+  matrixAxisRow?: "variation" | "sportPreset" | "location";
+  matrixAxisCol?: "variation" | "sportPreset" | "location";
+  matrixRowCount?: number;
+  matrixColCount?: number;
   portraitStyle?: "portrait" | "full-body" | "action";
   sportPresetId?: string;
 };

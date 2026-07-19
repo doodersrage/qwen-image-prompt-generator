@@ -232,6 +232,96 @@ class PromptToolsCharacter(PromptToolsBase):
         return (extract_prompt(response), self.metadata_json(response))
 
 
+class PromptToolsPet(PromptToolsBase):
+    RETURN_TYPES = ("STRING", "STRING")
+    RETURN_NAMES = ("prompt", "metadata_json")
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                **cls.model_detail_inputs(),
+                "hints": ("STRING", {"default": "", "multiline": True}),
+                "portrait_style": (PORTRAIT_STYLES, {"default": "portrait"}),
+                "variation_strength": (
+                    "INT",
+                    {"default": 50, "min": 0, "max": 100, "step": 1},
+                ),
+            },
+            "optional": cls.api_input(),
+        }
+
+    FUNCTION = "generate"
+
+    def generate(
+        self,
+        model: str,
+        detail: str,
+        hints: str,
+        portrait_style: str,
+        variation_strength: int,
+        api_base_url: str = "",
+    ):
+        payload = {
+            "model": model,
+            "detail": detail,
+            "portraitStyle": portrait_style,
+            "variationStrength": variation_strength,
+        }
+        if hints.strip():
+            payload["hints"] = hints.strip()
+
+        response = post_json(api_base_url, "/api/pet", payload)
+        return (extract_prompt(response), self.metadata_json(response))
+
+
+class PromptToolsFantasy(PromptToolsBase):
+    RETURN_TYPES = ("STRING", "STRING")
+    RETURN_NAMES = ("prompt", "metadata_json")
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                **cls.model_detail_inputs(),
+                "hints": ("STRING", {"default": "", "multiline": True}),
+                "portrait_style": (PORTRAIT_STYLES, {"default": "portrait"}),
+                "wildness": ("INT", {"default": 65, "min": 0, "max": 100, "step": 1}),
+                "variation_strength": (
+                    "INT",
+                    {"default": 50, "min": 0, "max": 100, "step": 1},
+                ),
+            },
+            "optional": cls.api_input(),
+        }
+
+    FUNCTION = "generate"
+
+    def generate(
+        self,
+        model: str,
+        detail: str,
+        hints: str,
+        portrait_style: str,
+        wildness: int,
+        variation_strength: int,
+        api_base_url: str = "",
+    ):
+        payload = {
+            "model": model,
+            "detail": detail,
+            "portraitStyle": portrait_style,
+            "wildness": wildness,
+            "variationStrength": variation_strength,
+            "fantasyWardrobe": True,
+        }
+        if hints.strip():
+            payload["hints"] = hints.strip()
+
+        response = post_json(api_base_url, "/api/fantasy", payload)
+        return (extract_prompt(response), self.metadata_json(response))
+
+
 class PromptToolsBackground(PromptToolsBase):
     @classmethod
     def INPUT_TYPES(cls):
@@ -645,6 +735,8 @@ NODE_CLASS_MAPPINGS = {
     "PromptToolsFormat": PromptToolsFormat,
     "PromptToolsRandomScene": PromptToolsRandomScene,
     "PromptToolsCharacter": PromptToolsCharacter,
+    "PromptToolsPet": PromptToolsPet,
+    "PromptToolsFantasy": PromptToolsFantasy,
     "PromptToolsBackground": PromptToolsBackground,
     "PromptToolsImageToPrompt": PromptToolsImageToPrompt,
     "PromptToolsDuo": PromptToolsDuo,
@@ -663,6 +755,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "PromptToolsFormat": "Prompt Tools · Format",
     "PromptToolsRandomScene": "Prompt Tools · Random Scene",
     "PromptToolsCharacter": "Prompt Tools · Character",
+    "PromptToolsPet": "Prompt Tools · Pet",
+    "PromptToolsFantasy": "Prompt Tools · Fantasy",
     "PromptToolsBackground": "Prompt Tools · Background",
     "PromptToolsImageToPrompt": "Prompt Tools · Image → Prompt",
     "PromptToolsDuo": "Prompt Tools · Duo / Sport",
