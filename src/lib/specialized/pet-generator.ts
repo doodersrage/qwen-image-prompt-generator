@@ -108,7 +108,8 @@ export async function generatePetPrompt(
     detail,
     toolInstructions,
     userMessage,
-    temperature,
+    temperature: options.llm?.temperature ?? temperature,
+    allowTemplateFallback: options.llm?.allowTemplateFallback,
     templateFallback: () => buildPetTemplate(seed, portraitStyle, parsed.pair),
     enforceMinimum: !hasPresets,
     metadata: {

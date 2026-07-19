@@ -5,7 +5,9 @@ import { useCallback, useState } from "react";
 import EnhancedPromptResult from "@/components/EnhancedPromptResult";
 import SharedToolControls from "@/components/SharedToolControls";
 import { useCachedSettings } from "@/hooks/useCachedSettings";
+import { useGalleryHandoff } from "@/hooks/useGalleryHandoff";
 import { usePromptResultActions } from "@/hooks/usePromptResultActions";
+import type { ComfyImageModel } from "@/lib/comfy-models";
 import { getComfyModelDefinition } from "@/lib/comfy-models";
 import { getReformatTargetLabel, getReformatTargetModel } from "@/lib/reformat-target";
 import { DEFAULT_IMAGE_PROMPT_TOOL_CACHE } from "@/lib/settings-cache";
@@ -43,6 +45,29 @@ export default function RefineTool() {
   });
 
   const selectedModel = getComfyModelDefinition(shared.model);
+
+  const applyGalleryHandoff = useCallback(
+    (handoff: {
+      prompt: string;
+      model?: string;
+      file: File | null;
+      previewUrl: string | null;
+    }) => {
+      setCurrentPrompt(handoff.prompt);
+      if (handoff.model) {
+        updateShared({ model: handoff.model as ComfyImageModel });
+      }
+      if (handoff.file) {
+        setFile(handoff.file);
+        setPreviewUrl(handoff.previewUrl);
+      } else if (handoff.previewUrl) {
+        setPreviewUrl(handoff.previewUrl);
+      }
+    },
+    [updateShared],
+  );
+
+  useGalleryHandoff("refine", applyGalleryHandoff);
 
   const onFileChange = useCallback(
     (nextFile: File | null) => {

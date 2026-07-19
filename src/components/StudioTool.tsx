@@ -44,6 +44,17 @@ import {
   getAllPromptTemplates,
 } from "@/lib/prompt-templates";
 import { buildRegenerateUrl } from "@/lib/regenerate-url";
+import type { ComfyImageModel } from "@/lib/comfy-models";
+import {
+  applyCharacterIdentityBundle,
+  buildCharacterIdentityBundle,
+  downloadCharacterIdentityBundle,
+  parseCharacterIdentityBundle,
+} from "@/lib/character-identity-bundle";
+import {
+  runVisualModelCompare,
+  type VisualCompareResult,
+} from "@/lib/visual-model-compare";
 import { diffPromptWords } from "@/lib/prompt-diff";
 import {
   createUserTemplate,
@@ -128,6 +139,11 @@ export default function StudioTool() {
   const [compareB, setCompareB] = useState<EnrichedToolGenerateResult | null>(null);
   const [compareLoading, setCompareLoading] = useState(false);
   const [compareError, setCompareError] = useState<string | null>(null);
+  const [visualCompareLoading, setVisualCompareLoading] = useState(false);
+  const [visualCompareStatus, setVisualCompareStatus] = useState<string | null>(null);
+  const [visualA, setVisualA] = useState<VisualCompareResult | null>(null);
+  const [visualB, setVisualB] = useState<VisualCompareResult | null>(null);
+  const [identityBundleName, setIdentityBundleName] = useState("");
   const [blocklist, setBlocklist] = useState<string[]>([]);
   const [copied, setCopied] = useState(false);
   const [backupStatus, setBackupStatus] = useState<string | null>(null);
@@ -253,6 +269,36 @@ export default function StudioTool() {
       setCompareLoading(false);
     }
   }, [compareHints, shared, toolSettings.compareModelB]);
+
+  const runVisualCompare = useCallback(async () => {
+    if (!compareA?.prompt?.trim()) {
+      setCompareError("Run text compare first to get a shared prompt.");
+      return;
+    }
+
+    setVisualCompareLoading(true);
+    setVisualCompareStatus("Queueing visual compare…");
+    setVisualA(null);
+    setVisualB(null);
+    try {
+      const result = await runVisualModelCompare({
+        prompt: compareA.prompt,
+        modelA: shared.model,
+        modelB: (toolSettings.compareModelB ?? "flux-2-klein") as ComfyImageModel,
+        hints: compareHints,
+        onStatus: setVisualCompareStatus,
+      });
+      setVisualA(result.a);
+      setVisualB(result.b);
+      setVisualCompareStatus("Visual compare finished.");
+    } catch (err) {
+      setVisualCompareStatus(
+        err instanceof Error ? err.message : "Visual compare failed.",
+      );
+    } finally {
+      setVisualCompareLoading(false);
+    }
+  }, [compareA, compareHints, shared.model, toolSettings.compareModelB]);
 
   const toggleBlockLocation = useCallback((label: string) => {
     setBlocklist((previous) => {
@@ -699,6 +745,19 @@ export default function StudioTool() {
             Compare models
           </PrimaryButton>
 
+          <Button
+            variant="secondary"
+            loading={visualCompareLoading}
+            loadingLabel="Rendering compare"
+            disabled={!compareA?.prompt}
+            onClick={() => void runVisualCompare()}
+          >
+            Visual compare (ComfyUI)
+          </Button>
+          {visualCompareStatus ? (
+            <p className="text-xs text-violet-300/90">{visualCompareStatus}</p>
+          ) : null}
+
           {compareError && (
             <ErrorState
               compact
@@ -735,6 +794,33 @@ export default function StudioTool() {
                 onClick: () => void runCompare(),
               }}
             />
+          )}
+
+          {(visualA?.previewUrl || visualB?.previewUrl) && (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {visualA?.previewUrl ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-zinc-400">Visual · {visualA.model}</p>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={visualA.previewUrl}
+                    alt={`Visual compare ${visualA.model}`}
+                    className="w-full rounded-xl border border-zinc-800"
+                  />
+                </div>
+              ) : null}
+              {visualB?.previewUrl ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-zinc-400">Visual · {visualB.model}</p>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={visualB.previewUrl}
+                    alt={`Visual compare ${visualB.model}`}
+                    className="w-full rounded-xl border border-zinc-800"
+                  />
+                </div>
+              ) : null}
+            </div>
           )}
         </ToolSection>
       )}
@@ -1112,6 +1198,72 @@ export default function StudioTool() {
           >
             Save current locks as preset
           </PrimaryButton>
+
+          <div className="space-y-3 border-t border-zinc-800 pt-4">
+            <p className="text-sm font-medium text-zinc-200">Character identity bundles</p>
+            <p className="text-xs text-zinc-500">
+              Export/import reusable character sheets with locks, hints, and negative profile ids.
+            </p>
+            <input
+              value={identityBundleName}
+              onChange={(event) => setIdentityBundleName(event.target.value)}
+              placeholder="Character name"
+              className="ui-input w-full px-[var(--input-padding-x)] py-[var(--input-padding-y)] type-body"
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                disabled={!identityBundleName.trim()}
+                onClick={() =>
+                  downloadCharacterIdentityBundle(
+                    buildCharacterIdentityBundle({
+                      name: identityBundleName,
+                      shared,
+                      hints: presetHints || compareHints,
+                    }),
+                  )
+                }
+              >
+                Export bundle
+              </Button>
+              <label className="cursor-pointer rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:border-zinc-500">
+                Import bundle
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (!file) {
+                      return;
+                    }
+                    void file.text().then((raw) => {
+                      const bundle = parseCharacterIdentityBundle(raw);
+                      const patch = applyCharacterIdentityBundle(bundle);
+                      updateShared({
+                        model: patch.model ?? shared.model,
+                        detail: patch.detail ?? shared.detail,
+                        lockedWardrobeId: patch.lockedWardrobeId,
+                        lockedLocation: patch.lockedLocation,
+                        lockedVariationSeed: patch.lockedVariationSeed,
+                        alwaysIncludeClothing: patch.alwaysIncludeClothing,
+                      });
+                      if (patch.hints) {
+                        setCompareHints(patch.hints);
+                        setPresetHints(patch.hints);
+                      }
+                      setIdentityBundleName(bundle.name);
+                      setBackupStatus(`Imported identity bundle “${bundle.name}”.`);
+                    }).catch((err) => {
+                      setBackupStatus(
+                        err instanceof Error ? err.message : "Import failed.",
+                      );
+                    });
+                  }}
+                />
+              </label>
+            </div>
+          </div>
 
           {scenePresets.length === 0 ? (
             <EmptyState

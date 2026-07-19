@@ -21,6 +21,11 @@ import {
 import { scheduleComfyGalleryPoll } from "@/lib/comfyui-gallery-poller";
 import { registerComfyGalleryJob } from "@/lib/comfyui-gallery-client";
 import {
+  attachGalleryPromptIdToHistory,
+  linkGalleryToHistory,
+} from "@/lib/prompt-lineage";
+import { resolveQueueNegativePrompt } from "@/lib/queue-negative";
+import {
   formatComfyUiJobStatusLine,
   type ComfyUiJobTrackerState,
 } from "@/lib/comfyui-job-status";
@@ -79,6 +84,7 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
         prompt: string;
         negativePrompt?: string;
         comfyUrl: string;
+        historyId?: string;
       },
       showPreview = true,
     ) => {
@@ -89,7 +95,17 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
         tool: config.tool,
         model: config.model,
         comfyUrl: input.comfyUrl,
+        historyId: input.historyId,
       });
+
+      if (input.historyId) {
+        linkGalleryToHistory(input.promptId, input.historyId);
+        attachGalleryPromptIdToHistory(
+          input.historyId,
+          input.promptId,
+          undefined,
+        );
+      }
 
       const initialJob: ComfyUiJobTrackerState = {
         promptId: input.promptId,
@@ -173,23 +189,13 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
 
   const fetchNegative = useCallback(
     async (sport?: AthleticSport | null) => {
-      const response = await fetch("/api/negative", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          hints: config.hints,
-          sport: sport ?? undefined,
-        }),
+      return resolveQueueNegativePrompt({
+        model: config.model,
+        hints: config.hints,
+        sport,
       });
-
-      if (!response.ok) {
-        return null;
-      }
-
-      const data = (await response.json()) as { prompt?: string };
-      return data.prompt ?? null;
     },
-    [config.hints],
+    [config.hints, config.model],
   );
 
   const applyRuleFix = useCallback(
@@ -283,12 +289,12 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
       prompt: string;
       hints?: string;
       metadata?: Record<string, unknown>;
-    }) => {
+    }): string | undefined => {
       if (!input.prompt) {
-        return;
+        return undefined;
       }
 
-      addEntry({
+      const historyId = addEntry({
         tool: config.tool,
         prompt: input.prompt,
         hints: input.hints ?? config.hints,
@@ -297,12 +303,17 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
         metadata: input.metadata,
       });
       setHistorySaved(true);
+      return historyId;
     },
     [addEntry, config.tool, config.model, config.hints, diagnostics],
   );
 
   const sendComfyUi = useCallback(
-    async (prompt: string, sport?: AthleticSport | null) => {
+    async (
+      prompt: string,
+      sport?: AthleticSport | null,
+      historyId?: string,
+    ) => {
       if (!prompt) {
         return;
       }
@@ -360,6 +371,7 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
             prompt,
             negativePrompt,
             comfyUrl: data.comfyUrl ?? "http://127.0.0.1:8188",
+            historyId,
           });
         }
       } catch (err) {

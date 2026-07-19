@@ -1,0 +1,71 @@
+import type { PromptHistoryEntry } from "@/hooks/usePromptHistory";
+import {
+  loadComfyGallery,
+  updateComfyGalleryByPromptId,
+  updateComfyGalleryEntryById,
+  type ComfyGalleryEntry,
+} from "./comfyui-gallery";
+
+export function linkGalleryToHistory(
+  promptId: string,
+  historyId: string,
+): ComfyGalleryEntry | null {
+  return updateComfyGalleryByPromptId(promptId, { historyId });
+}
+
+export function linkGalleryEntryToHistory(
+  galleryEntryId: string,
+  historyId: string,
+): ComfyGalleryEntry | null {
+  return updateComfyGalleryEntryById(galleryEntryId, { historyId });
+}
+
+export function attachGalleryPromptIdToHistory(
+  historyId: string,
+  promptId: string,
+  galleryEntryId?: string,
+): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    const key = "comfy-prompt-tool-history-v1";
+    const raw = window.localStorage.getItem(key);
+    if (!raw) {
+      return;
+    }
+    const entries = JSON.parse(raw) as PromptHistoryEntry[];
+    const next = entries.map((entry) =>
+      entry.id === historyId
+        ? {
+            ...entry,
+            metadata: {
+              ...(entry.metadata ?? {}),
+              comfyPromptId: promptId,
+              galleryEntryId,
+            },
+          }
+        : entry,
+    );
+    window.localStorage.setItem(key, JSON.stringify(next.slice(0, 100)));
+  } catch {
+    // ignore
+  }
+}
+
+export function findGalleryEntriesForHistory(
+  historyId: string,
+): ComfyGalleryEntry[] {
+  return loadComfyGallery().filter((entry) => entry.historyId === historyId);
+}
+
+export function findHistoryIdForGalleryEntry(
+  entry: ComfyGalleryEntry,
+): string | undefined {
+  return entry.historyId;
+}
+
+export function studioHistoryUrl(historyId: string): string {
+  return `/studio?history=${encodeURIComponent(historyId)}`;
+}

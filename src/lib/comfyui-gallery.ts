@@ -162,6 +162,8 @@ export type ComfyGalleryEntry = {
   negativePrompt?: string;
   tool?: string;
   model?: string;
+  /** Links back to Studio prompt history entry. */
+  historyId?: string;
   comfyUrl: string;
   status: ComfyGalleryJobStatus;
   statusMessage?: string;
@@ -371,12 +373,45 @@ export function addComfyGalleryEntry(
   return entry;
 }
 
+export function updateComfyGalleryEntryById(
+  id: string,
+  patch: Partial<
+    Pick<
+      ComfyGalleryEntry,
+      | "status"
+      | "statusMessage"
+      | "queuePosition"
+      | "completedAt"
+      | "images"
+      | "comfyUrl"
+      | "favorite"
+      | "historyId"
+      | "negativePrompt"
+    >
+  >,
+): ComfyGalleryEntry | null {
+  const entries = loadComfyGallery();
+  let updated: ComfyGalleryEntry | null = null;
+  const next = entries.map((entry) => {
+    if (entry.id !== id) {
+      return entry;
+    }
+    updated = { ...entry, ...patch };
+    return updated;
+  });
+  if (!updated) {
+    return null;
+  }
+  saveComfyGallery(next);
+  return updated;
+}
+
 export function updateComfyGalleryByPromptId(
   promptId: string,
   patch: Partial<
     Pick<
       ComfyGalleryEntry,
-      "status" | "statusMessage" | "queuePosition" | "completedAt" | "images" | "comfyUrl" | "favorite"
+      "status" | "statusMessage" | "queuePosition" | "completedAt" | "images" | "comfyUrl" | "favorite" | "historyId"
     >
   >,
 ): ComfyGalleryEntry | null {

@@ -25,7 +25,12 @@ import {
 import type { EnrichedToolGenerateResult } from "@/lib/specialized/types";
 import { readVariationSeedFromResult } from "@/lib/variation-seed-metadata";
 import TagAssistToolbar from "@/components/TagAssistToolbar";
+import QwenEditBuilderPanel from "@/components/QwenEditBuilderPanel";
 import { modelUsesTagAssist } from "@/lib/tag-assist";
+import {
+  applyRatingDrivenWildness,
+  ratingDrivenWildnessLabel,
+} from "@/lib/rating-driven-random";
 import { sharedLlmRequestBody } from "@/lib/llm-request-options";
 import { applyLockedLocation } from "@/lib/locked-location";
 import { getReformatTargetLabel, getReformatTargetModel } from "@/lib/reformat-target";
@@ -113,6 +118,10 @@ export default function PromptGenerator() {
   const genre = toolSettings.genre ?? "";
   const includePeople = toolSettings.includePeople !== false;
   const wildness = toolSettings.wildness ?? 65;
+  const effectiveWildness = useMemo(
+    () => applyRatingDrivenWildness(wildness),
+    [wildness],
+  );
 
   const qwenModel = shared.model;
   const detail = shared.detail;
@@ -237,7 +246,7 @@ export default function PromptGenerator() {
           detail,
           genre,
           includePeople,
-          wildness,
+          wildness: effectiveWildness,
           recentLocations: getRecent(),
           recentClothing: getRecentClothing(),
           blockedLocations: getBlocklist(),
@@ -295,7 +304,7 @@ export default function PromptGenerator() {
     shared.lockedLocation,
     shared.lockedVariationSeed,
     shared.lockedWardrobeId,
-    wildness,
+    effectiveWildness,
   ]);
 
   const generate = useCallback(async () => {
@@ -580,7 +589,7 @@ export default function PromptGenerator() {
             <div className="flex items-center justify-between text-xs text-zinc-400">
               <span>Safe</span>
               <span className="font-medium text-violet-300">
-                {sceneWildnessLabel(wildness)} ({wildness})
+                {ratingDrivenWildnessLabel(wildness)}
               </span>
               <span>Wild</span>
             </div>
@@ -660,6 +669,10 @@ export default function PromptGenerator() {
 
         {generateSource === "keywords" && modelUsesTagAssist(qwenModel) ? (
           <TagAssistToolbar value={input} onChange={setInput} textareaId="edit-input" />
+        ) : null}
+
+        {generateSource === "keywords" && mode === "positive" ? (
+          <QwenEditBuilderPanel model={qwenModel} onApply={setInput} />
         ) : null}
 
         <div className="flex flex-wrap gap-2">

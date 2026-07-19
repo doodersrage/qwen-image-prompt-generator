@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import BatchLintGatePanel from "@/components/BatchLintGatePanel";
 import SharedToolControls from "@/components/SharedToolControls";
 import SportPresetChips from "@/components/SportPresetChips";
 import { useCachedSettings } from "@/hooks/useCachedSettings";
@@ -12,7 +13,13 @@ import {
   registerComfyGalleryJob,
 } from "@/lib/comfyui-gallery-client";
 import { scheduleComfyGalleryPoll } from "@/lib/comfyui-gallery-poller";
-import { modelUsesNegativePrompt } from "@/lib/prompt-pair";
+import {
+  batchFixPrompts,
+  filterBatchByLintIndexes,
+  runBatchLintGate,
+  type BatchLintSummary,
+} from "@/lib/batch-lint-gate";
+import { resolveQueueNegativePrompt } from "@/lib/queue-negative";
 import { resolveComfyUiRuntime } from "@/lib/comfyui-runtime";
 import { DEFAULT_VARIATIONS_TOOL_CACHE } from "@/lib/settings-cache";
 import type { SharedToolSettings, VariationsToolCache } from "@/lib/settings-cache";
@@ -195,6 +202,33 @@ export default function VariationGridTool() {
   const [status, setStatus] = useState<string | null>(null);
   const [comfyStatus, setComfyStatus] = useState<string | null>(null);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [lintSummary, setLintSummary] = useState<BatchLintSummary | null>(null);
+  const [lintLoading, setLintLoading] = useState(false);
+  const importedAppliedRef = useRef(false);
+
+  useEffect(() => {
+    if (!mounted || importedAppliedRef.current) {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("from") !== "topics") {
+      return;
+    }
+    const prompts = toolSettings.importedBatchPrompts;
+    if (!prompts?.length) {
+      return;
+    }
+    importedAppliedRef.current = true;
+    const topics = toolSettings.importedBatchTopics ?? [];
+    setResults(
+      prompts.map((prompt, index) => ({
+        prompt,
+        rowLabel: topics[index],
+      })),
+    );
+    setStatus(`Loaded ${prompts.length} prompts from Topics batch.`);
+    updateToolSettings({ gridMode: "imported" });
+  }, [mounted, toolSettings.importedBatchPrompts, toolSettings.importedBatchTopics, updateToolSettings]);
 
   const target = toolSettings.target ?? "generate";
   const gridMode = toolSettings.gridMode ?? "roll";
@@ -346,83 +380,93 @@ export default function VariationGridTool() {
     toolSettings.variationStrength,
   ]);
 
+  const executeQueue = useCallback(
+    async (prompts: string[]) => {
+      if (prompts.length === 0) {
+        return;
+      }
+
+      setQueueLoading(true);
+      setComfyStatus("Queueing variation grid…");
+
+      try {
+        const negativePrompt = await resolveQueueNegativePrompt({
+          model: shared.model,
+          hints: toolSettings.hints?.trim(),
+        });
+
+        const runtime = resolveComfyUiRuntime();
+        const response = await fetch("/api/comfyui", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompts,
+            negativePrompt,
+            paramsPerPrompt: prompts.map((_, index) => ({
+              seed: String(Math.floor(Math.random() * 2 ** 32) + index),
+            })),
+            ...(runtime ? { comfy: runtime } : {}),
+          }),
+        });
+
+        const data = (await response.json()) as {
+          queued?: number;
+          error?: string;
+          comfyUrl?: string;
+          results?: Array<{ promptId?: string; comfyUrl?: string }>;
+        };
+
+        if (!response.ok) {
+          throw new Error(data.error ?? "ComfyUI batch queue failed.");
+        }
+
+        for (const [index, result] of (data.results ?? []).entries()) {
+          if (!result.promptId) {
+            continue;
+          }
+          registerComfyGalleryJob({
+            promptId: result.promptId,
+            prompt: prompts[index] ?? "",
+            negativePrompt,
+            tool: "variations",
+            model: shared.model,
+            comfyUrl: result.comfyUrl ?? data.comfyUrl ?? "http://127.0.0.1:8188",
+          });
+          void scheduleComfyGalleryPoll(result.promptId, {
+            comfyUrl: result.comfyUrl ?? data.comfyUrl ?? "http://127.0.0.1:8188",
+          });
+        }
+
+        setComfyStatus(
+          `Queued ${data.queued ?? prompts.length}/${prompts.length} · ${data.comfyUrl ?? ""}`.trim(),
+        );
+        setLintSummary(null);
+      } catch (err) {
+        setComfyStatus(err instanceof Error ? err.message : "ComfyUI queue failed.");
+      } finally {
+        setQueueLoading(false);
+      }
+    },
+    [shared.model, toolSettings.hints],
+  );
+
   const queueGrid = useCallback(async () => {
     const prompts = results.map((entry) => entry.prompt.trim()).filter(Boolean);
     if (prompts.length === 0) {
       return;
     }
 
-    setQueueLoading(true);
-    setComfyStatus("Queueing variation grid…");
-
+    setLintLoading(true);
     try {
-      let negativePrompt: string | undefined;
-      if (modelUsesNegativePrompt(shared.model)) {
-        const hints = toolSettings.hints?.trim() ?? "";
-        const negativeResponse = await fetch("/api/negative", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: shared.model,
-            hints,
-            soloSubject: !/\b(?:two|duo|couple|pair|both)\b/i.test(hints),
-          }),
-        });
-        const negativeData = (await negativeResponse.json()) as { prompt?: string };
-        negativePrompt = negativeData.prompt;
-      }
-
-      const runtime = resolveComfyUiRuntime();
-      const response = await fetch("/api/comfyui", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompts,
-          negativePrompt,
-          paramsPerPrompt: prompts.map((_, index) => ({
-            seed: String(Math.floor(Math.random() * 2 ** 32) + index),
-          })),
-          ...(runtime ? { comfy: runtime } : {}),
-        }),
-      });
-
-      const data = (await response.json()) as {
-        queued?: number;
-        error?: string;
-        comfyUrl?: string;
-        results?: Array<{ promptId?: string; comfyUrl?: string }>;
-      };
-
-      if (!response.ok) {
-        throw new Error(data.error ?? "ComfyUI batch queue failed.");
-      }
-
-      for (const [index, result] of (data.results ?? []).entries()) {
-        if (!result.promptId) {
-          continue;
-        }
-        registerComfyGalleryJob({
-          promptId: result.promptId,
-          prompt: prompts[index] ?? "",
-          negativePrompt,
-          tool: "variations",
-          model: shared.model,
-          comfyUrl: result.comfyUrl ?? data.comfyUrl ?? "http://127.0.0.1:8188",
-        });
-        void scheduleComfyGalleryPoll(result.promptId, {
-          comfyUrl: result.comfyUrl ?? data.comfyUrl ?? "http://127.0.0.1:8188",
-        });
-      }
-
-      setComfyStatus(
-        `Queued ${data.queued ?? prompts.length}/${prompts.length} · ${data.comfyUrl ?? ""}`.trim(),
+      const summary = await runBatchLintGate(
+        results.map((entry) => ({ prompt: entry.prompt, topic: entry.rowLabel })),
+        toolSettings.hints,
       );
-    } catch (err) {
-      setComfyStatus(err instanceof Error ? err.message : "ComfyUI queue failed.");
+      setLintSummary(summary);
     } finally {
-      setQueueLoading(false);
+      setLintLoading(false);
     }
-  }, [results, shared.model]);
+  }, [results, toolSettings.hints]);
 
   if (!mounted) {
     return null;
@@ -489,13 +533,14 @@ export default function VariationGridTool() {
               value={gridMode}
               onChange={(event) =>
                 updateToolSettings({
-                  gridMode: event.target.value as "roll" | "matrix",
+                  gridMode: event.target.value as "roll" | "matrix" | "imported",
                 })
               }
               className="ui-input w-full px-3 py-2 text-sm"
             >
               <option value="roll">Roll variations</option>
               <option value="matrix">Variation matrix</option>
+              <option value="imported">Imported batch (Topics)</option>
             </select>
           </div>
 
@@ -643,6 +688,7 @@ export default function VariationGridTool() {
             accentClassName={accentButtonClass(ACCENT)}
             loading={loading}
             loadingLabel={gridMode === "matrix" ? "Rolling matrix" : "Rolling variations"}
+            disabled={gridMode === "imported"}
             onClick={() => void (gridMode === "matrix" ? rollMatrix() : rollGrid())}
           >
             {gridMode === "matrix"
@@ -651,8 +697,8 @@ export default function VariationGridTool() {
           </PrimaryButton>
           <Button
             variant="accent-outline"
-            loading={queueLoading}
-            loadingLabel="Queueing variations"
+            loading={queueLoading || lintLoading}
+            loadingLabel={lintLoading ? "Linting batch" : "Queueing variations"}
             disabled={results.every((entry) => !entry.prompt)}
             onClick={() => void queueGrid()}
           >
@@ -678,6 +724,31 @@ export default function VariationGridTool() {
 
         {importStatus && <p className="text-sm text-zinc-500">{importStatus}</p>}
         {status && <p className="text-sm text-zinc-500">{status}</p>}
+        <BatchLintGatePanel
+          summary={lintSummary}
+          loading={lintLoading}
+          onFixAll={() => {
+            const prompts = results.map((entry) => entry.prompt);
+            void batchFixPrompts(prompts, toolSettings.hints).then((fixed) => {
+              setResults((previous) =>
+                previous.map((entry, index) => ({
+                  ...entry,
+                  prompt: fixed[index] ?? entry.prompt,
+                })),
+              );
+              setLintSummary(null);
+            });
+          }}
+          onContinue={() => {
+            const prompts = results.map((entry) => entry.prompt.trim()).filter(Boolean);
+            const filtered =
+              lintSummary && lintSummary.blockedIndexes.length > 0
+                ? filterBatchByLintIndexes(prompts, lintSummary.blockedIndexes)
+                : prompts;
+            void executeQueue(filtered);
+          }}
+          onCancel={() => setLintSummary(null)}
+        />
         {comfyStatus && <p className="text-sm text-violet-300/90">{comfyStatus}</p>}
         <FieldError>{error}</FieldError>
       </ToolSection>

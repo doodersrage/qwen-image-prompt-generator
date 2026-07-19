@@ -2,12 +2,26 @@
 
 import { useCallback, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import BatchLintGatePanel from "@/components/BatchLintGatePanel";
 import SharedToolControls from "@/components/SharedToolControls";
 import { useCachedSettings } from "@/hooks/useCachedSettings";
 import { useRecentClothing } from "@/hooks/useRecentClothing";
 import { useRecentLocations } from "@/hooks/useRecentLocations";
 import { useLocationBlocklist } from "@/hooks/useLocationBlocklist";
 import { sharedLlmRequestBody } from "@/lib/llm-request-options";
+import {
+  batchFixPrompts,
+  filterBatchByLintIndexes,
+  runBatchLintGate,
+  type BatchLintSummary,
+} from "@/lib/batch-lint-gate";
+import {
+  buildTopicsVariationsHandoff,
+  saveTopicsVariationsHandoff,
+  variationsPathFromTopics,
+} from "@/lib/topics-variations-handoff";
+import { resolveQueueNegativePrompt } from "@/lib/queue-negative";
 import { DEFAULT_TOPIC_TOOL_CACHE } from "@/lib/settings-cache";
 import type { BatchFromTopicsItem } from "@/lib/batch-from-topics";
 import type { TopicGenerateResult } from "@/lib/specialized/types";
@@ -37,6 +51,7 @@ import { Button, PrimaryButton } from "@/components/ui/Button";
 const ACCENT = "violet" as const;
 
 export default function TopicTool() {
+  const router = useRouter();
   const { mounted, shared, toolSettings, updateShared, updateToolSettings } =
     useCachedSettings("topics", DEFAULT_TOPIC_TOOL_CACHE);
   const { getRecent: getRecentClothing } = useRecentClothing();
@@ -52,6 +67,9 @@ export default function TopicTool() {
   const [error, setError] = useState<string | null>(null);
   const [batchStatus, setBatchStatus] = useState<string | null>(null);
   const [comfyBatchStatus, setComfyBatchStatus] = useState<string | null>(null);
+  const [lintSummary, setLintSummary] = useState<BatchLintSummary | null>(null);
+  const [lintLoading, setLintLoading] = useState(false);
+  const [pendingQueuePrompts, setPendingQueuePrompts] = useState<string[]>([]);
   const [copiedIndex, setCopiedIndex] = useState<number | "all" | "batch" | null>(
     null,
   );
@@ -149,56 +167,105 @@ export default function TopicTool() {
     }
   }, [topics, batchTarget, shared, getRecentClothing, getRecentLocations, getBlocklist]);
 
+  const executeComfyQueue = useCallback(
+    async (prompts: string[]) => {
+      if (prompts.length === 0) {
+        return;
+      }
+
+      setComfyBatchStatus("Queueing batch to ComfyUI…");
+      try {
+        const negativePrompt = await resolveQueueNegativePrompt({
+          model: shared.model,
+          hints: toolSettings.seedTopic ?? batchResults[0]?.topic,
+        });
+        const runtime = resolveComfyUiRuntime();
+        const response = await fetch("/api/comfyui", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompts,
+            negativePrompt,
+            ...(runtime ? { comfy: runtime } : {}),
+          }),
+        });
+        const data = (await response.json()) as {
+          queued?: number;
+          error?: string;
+          comfyUrl?: string;
+          results?: Array<{ promptId?: string; comfyUrl?: string }>;
+        };
+        if (!response.ok) {
+          throw new Error(data.error ?? "ComfyUI batch queue failed.");
+        }
+
+        for (const [index, result] of (data.results ?? []).entries()) {
+          if (!result.promptId) {
+            continue;
+          }
+          registerComfyGalleryJob({
+            promptId: result.promptId,
+            prompt: prompts[index] ?? "",
+            negativePrompt,
+            tool: "topics",
+            model: shared.model,
+            comfyUrl: result.comfyUrl ?? data.comfyUrl ?? "http://127.0.0.1:8188",
+          });
+          void scheduleComfyGalleryPoll(result.promptId, {
+            comfyUrl: result.comfyUrl ?? data.comfyUrl ?? "http://127.0.0.1:8188",
+          });
+        }
+
+        setComfyBatchStatus(
+          `Queued ${data.queued ?? prompts.length}/${prompts.length} · ${data.comfyUrl ?? ""}`.trim(),
+        );
+        setLintSummary(null);
+        setPendingQueuePrompts([]);
+      } catch (err) {
+        setComfyBatchStatus(
+          err instanceof Error ? err.message : "ComfyUI batch failed.",
+        );
+      }
+    },
+    [batchResults, shared.model, toolSettings.seedTopic],
+  );
+
   const queueBatchComfyUi = useCallback(async () => {
     const prompts = batchResults.map((entry) => entry.prompt.trim()).filter(Boolean);
     if (prompts.length === 0) {
       return;
     }
 
-    setComfyBatchStatus("Queueing batch to ComfyUI…");
+    setLintLoading(true);
+    setLintSummary(null);
     try {
-      const runtime = resolveComfyUiRuntime();
-      const response = await fetch("/api/comfyui", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompts,
-          ...(runtime ? { comfy: runtime } : {}),
-        }),
-      });
-      const data = (await response.json()) as {
-        queued?: number;
-        error?: string;
-        comfyUrl?: string;
-        results?: Array<{ promptId?: string; comfyUrl?: string }>;
-      };
-      if (!response.ok) {
-        throw new Error(data.error ?? "ComfyUI batch queue failed.");
-      }
-
-      for (const [index, result] of (data.results ?? []).entries()) {
-        if (!result.promptId) {
-          continue;
-        }
-        registerComfyGalleryJob({
-          promptId: result.promptId,
-          prompt: prompts[index] ?? "",
-          tool: "topics",
-          model: shared.model,
-          comfyUrl: result.comfyUrl ?? data.comfyUrl ?? "http://127.0.0.1:8188",
-        });
-        void scheduleComfyGalleryPoll(result.promptId, {
-          comfyUrl: result.comfyUrl ?? data.comfyUrl ?? "http://127.0.0.1:8188",
-        });
-      }
-
-      setComfyBatchStatus(
-        `Queued ${data.queued ?? prompts.length}/${prompts.length} · ${data.comfyUrl ?? ""}`.trim(),
-      );
-    } catch (err) {
-      setComfyBatchStatus(err instanceof Error ? err.message : "ComfyUI batch failed.");
+      const summary = await runBatchLintGate(batchResults, toolSettings.seedTopic);
+      setLintSummary(summary);
+      setPendingQueuePrompts(prompts);
+    } finally {
+      setLintLoading(false);
     }
-  }, [batchResults, shared.model]);
+  }, [batchResults, toolSettings.seedTopic]);
+
+  const sendToVariations = useCallback(() => {
+    if (batchResults.length === 0) {
+      return;
+    }
+    const target =
+      batchTarget === "duo"
+        ? "duo"
+        : batchTarget === "character"
+          ? "character"
+          : batchTarget;
+    saveTopicsVariationsHandoff(
+      buildTopicsVariationsHandoff(
+        batchResults,
+        target as "generate" | "duo" | "character" | "pet" | "fantasy" | "background",
+        toolSettings.seedTopic,
+      ),
+    );
+    router.push(variationsPathFromTopics());
+  }, [batchResults, batchTarget, router, toolSettings.seedTopic]);
 
   const copyTopics = useCallback(async (value: string, index: number | "all" | "batch") => {
     try {
@@ -384,7 +451,48 @@ export default function TopicTool() {
           </ToolBlockGroup>
 
           {batchResults.length > 0 && (
-            <div className="mt-[var(--group-gap)] flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <div className="mt-[var(--group-gap)] space-y-3">
+              <BatchLintGatePanel
+                summary={lintSummary}
+                loading={lintLoading}
+                onFixAll={() => {
+                  void batchFixPrompts(
+                    pendingQueuePrompts,
+                    toolSettings.seedTopic,
+                  ).then((fixed) => {
+                    setPendingQueuePrompts(fixed);
+                    setBatchResults((previous) =>
+                      previous.map((entry, index) => ({
+                        ...entry,
+                        prompt: fixed[index] ?? entry.prompt,
+                      })),
+                    );
+                    setLintSummary(null);
+                    void runBatchLintGate(
+                      fixed.map((prompt, index) => ({
+                        prompt,
+                        topic: batchResults[index]?.topic,
+                      })),
+                      toolSettings.seedTopic,
+                    ).then(setLintSummary);
+                  });
+                }}
+                onContinue={() => {
+                  const prompts =
+                    lintSummary && lintSummary.blockedIndexes.length > 0
+                      ? filterBatchByLintIndexes(
+                          pendingQueuePrompts,
+                          lintSummary.blockedIndexes,
+                        )
+                      : pendingQueuePrompts;
+                  void executeComfyQueue(prompts);
+                }}
+                onCancel={() => {
+                  setLintSummary(null);
+                  setPendingQueuePrompts([]);
+                }}
+              />
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <Button
                 variant="secondary"
                 className="w-full sm:w-auto"
@@ -398,12 +506,24 @@ export default function TopicTool() {
                 {copiedIndex === "batch" ? "Copied prompts!" : "Copy all prompts"}
               </Button>
               <Button
+                variant="secondary"
+                className="w-full sm:w-auto"
+                onClick={sendToVariations}
+              >
+                Send to Variations
+              </Button>
+              <Button
                 variant="accent-outline"
                 className="w-full sm:w-auto"
                 onClick={() => void queueBatchComfyUi()}
+                disabled={lintLoading}
               >
-                Queue batch to ComfyUI
+                {lintLoading ? "Linting batch…" : "Queue batch to ComfyUI"}
               </Button>
+              {comfyBatchStatus ? (
+                <p className="w-full text-xs text-violet-300/90">{comfyBatchStatus}</p>
+              ) : null}
+            </div>
             </div>
           )}
         </ToolSection>

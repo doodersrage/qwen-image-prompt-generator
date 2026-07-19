@@ -22,6 +22,16 @@ import {
   type LoraLibraryEntry,
 } from "@/lib/comfyui-settings";
 import {
+  DEFAULT_NEGATIVE_PROFILES,
+  type NegativeProfile,
+} from "@/lib/negative-profiles";
+import {
+  countMappedModels,
+  mergeModelWorkflowMap,
+  suggestWorkflowDefaultsByCategory,
+} from "@/lib/workflow-category-defaults";
+import { loadComfyWorkflowFiles } from "@/lib/comfyui-workflow-files";
+import {
   DEFAULT_SHARED_SETTINGS,
   loadSettingsCache,
   saveSharedSettings,
@@ -519,6 +529,28 @@ export default function SettingsTool() {
           placeholder={`qwen-image-2512=my-qwen-workflow.json\nflux-2-klein=flux-klein-default.json`}
           className={`ui-input w-full font-mono text-xs leading-relaxed text-emerald-200 ${accentFocusClass(ACCENT)}`}
         />
+        <button
+          type="button"
+          disabled={!sharedMounted}
+          onClick={() => {
+            const suggested = suggestWorkflowDefaultsByCategory(
+              loadComfyWorkflowFiles(),
+            );
+            const merged = mergeModelWorkflowMap(
+              loadSettingsCache().shared.modelWorkflowMap,
+              suggested,
+              false,
+            );
+            updateSharedSettings({ modelWorkflowMap: merged });
+            setModelWorkflowMapText(formatModelWorkflowMap(merged));
+            setStatus(
+              `Applied ${countMappedModels(merged)} model→workflow mappings from workflow filenames.`,
+            );
+          }}
+          className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:border-zinc-500"
+        >
+          Apply smart defaults by category
+        </button>
       </ToolSection>
 
       <ComfyWorkflowLibraryPanel
@@ -882,6 +914,61 @@ export default function SettingsTool() {
               preview={workflowPreview}
             />
           </div>
+        </div>
+
+        <label className="flex items-center gap-2 text-sm text-zinc-300">
+          <input
+            type="checkbox"
+            checked={settings.autoNegativeOnQueue !== false}
+            onChange={(event) =>
+              updateSettings({ autoNegativeOnQueue: event.target.checked })
+            }
+            className="h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-violet-500"
+          />
+          Auto-generate negative prompt when queueing SD-family models
+        </label>
+
+        <label className="flex items-center gap-2 text-sm text-zinc-300">
+          <input
+            type="checkbox"
+            checked={settings.useWebSocketProgress ?? false}
+            onChange={(event) =>
+              updateSettings({ useWebSocketProgress: event.target.checked })
+            }
+            className="h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-violet-500"
+          />
+          Use ComfyUI WebSocket for faster job progress updates
+        </label>
+
+        <div className="space-y-2 rounded-xl border border-zinc-800 bg-zinc-950/40 p-3">
+          <p className="text-xs font-medium text-zinc-300">Negative profile library</p>
+          <select
+            value={settings.selectedNegativeProfileId ?? "general-sd"}
+            onChange={(event) =>
+              updateSettings({ selectedNegativeProfileId: event.target.value })
+            }
+            className="ui-input w-full px-3 py-2 text-sm"
+          >
+            {(settings.negativeProfiles?.length
+              ? settings.negativeProfiles
+              : DEFAULT_NEGATIVE_PROFILES
+            ).map((profile: NegativeProfile) => (
+              <option key={profile.id} value={profile.id}>
+                {profile.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() =>
+              updateSettings({
+                negativeProfiles: DEFAULT_NEGATIVE_PROFILES,
+              })
+            }
+            className="text-xs text-violet-300 hover:text-violet-200"
+          >
+            Reset profiles to defaults
+          </button>
         </div>
 
         <label className="flex items-center gap-2 text-sm text-zinc-300">

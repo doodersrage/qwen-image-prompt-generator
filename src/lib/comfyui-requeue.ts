@@ -6,7 +6,7 @@ import {
 } from "./comfyui-gallery-client";
 import { scheduleComfyGalleryPoll } from "./comfyui-gallery-poller";
 import { resolveComfyUiRuntime } from "./comfyui-runtime";
-import { modelUsesNegativePrompt } from "./prompt-pair";
+import { resolveQueueNegativePrompt } from "./queue-negative";
 
 type WorkflowPreviewResponse = {
   ok: boolean;
@@ -58,20 +58,11 @@ export async function requeueComfyJob(
   let negativePrompt = input.negativePrompt?.trim() || undefined;
   const model = (input.model ?? "qwen-image-2512") as ComfyImageModel;
 
-  if (!negativePrompt && modelUsesNegativePrompt(model)) {
-    try {
-      const response = await fetch("/api/negative", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          hints: input.hints?.trim() || input.prompt.slice(0, 200),
-        }),
-      });
-      const data = (await response.json()) as { prompt?: string };
-      negativePrompt = data.prompt?.trim() || undefined;
-    } catch {
-      // queue without negative
-    }
+  if (!negativePrompt) {
+    negativePrompt = await resolveQueueNegativePrompt({
+      model,
+      hints: input.hints?.trim() || input.prompt.slice(0, 200),
+    });
   }
 
   const runtime = resolveComfyUiRuntime();

@@ -1,17 +1,25 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import ImageLightbox, { type ImageLightboxState } from "@/components/ui/ImageLightbox";
 import { ComfyUiGalleryJobPlaceholder } from "@/components/ui/ComfyUiJobStatusPanel";
 import { Button } from "@/components/ui/Button";
 import { useComfyUiGallery } from "@/hooks/useComfyUiGallery";
 import {
+  buildGalleryHandoff,
+  galleryHandoffPath,
+  saveGalleryHandoff,
+} from "@/lib/gallery-handoff";
+import {
   downloadGalleryImage,
   downloadGallerySidecar,
   downloadGalleryImagesSequential,
   downloadGallerySidecarBundle,
 } from "@/lib/comfyui-gallery-export";
+import { downloadGalleryZipBundle } from "@/lib/gallery-zip-export";
+import { studioHistoryUrl } from "@/lib/prompt-lineage";
 import { requeueComfyJob, requeueComfyJobs } from "@/lib/comfyui-requeue";
 import {
   buildGalleryLightboxPlaylist,
@@ -515,6 +523,19 @@ export default function ComfyUiGalleryPanel({
             type="button"
             disabled={selectedIds.length === 0}
             onClick={() => {
+              setRequeueStatus("Building ZIP export…");
+              void downloadGalleryZipBundle(selectedEntries).then((count) => {
+                setRequeueStatus(`ZIP export prepared for ${count} entries.`);
+              });
+            }}
+            className="rounded-lg border border-zinc-700 px-2 py-1 text-zinc-300 hover:border-zinc-500 disabled:opacity-40"
+          >
+            Export ZIP
+          </button>
+          <button
+            type="button"
+            disabled={selectedIds.length === 0}
+            onClick={() => {
               setRequeueStatus("Bulk re-queue started…");
               void requeueComfyJobs(
                 selectedEntries.map((entry) => ({
@@ -686,6 +707,7 @@ function GalleryCard({
   onRequeue: (newSeed: boolean) => void;
   onOpenImage: (index: number) => void;
 }) {
+  const router = useRouter();
   const [promptExpanded, setPromptExpanded] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
   const statusColor =
@@ -878,6 +900,38 @@ function GalleryCard({
           >
             Sidecar JSON
           </button>
+          {entry.historyId ? (
+            <Link
+              href={studioHistoryUrl(entry.historyId)}
+              className="text-sky-300 hover:text-sky-200"
+            >
+              Studio history
+            </Link>
+          ) : null}
+          {entry.status === "completed" && previewUrl ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  saveGalleryHandoff(buildGalleryHandoff(entry, "refine"));
+                  router.push(galleryHandoffPath("refine"));
+                }}
+                className="text-fuchsia-300 hover:text-fuchsia-200"
+              >
+                Refine
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  saveGalleryHandoff(buildGalleryHandoff(entry, "imagePrompt"));
+                  router.push(galleryHandoffPath("imagePrompt"));
+                }}
+                className="text-fuchsia-300/90 hover:text-fuchsia-200"
+              >
+                Image → Prompt
+              </button>
+            </>
+          ) : null}
           <button
             type="button"
             onClick={() => onRequeue(false)}

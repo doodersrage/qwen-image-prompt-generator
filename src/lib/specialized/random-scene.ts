@@ -130,7 +130,8 @@ export async function generateRandomScene(
       templateFallback,
       sanitizeInput: seed,
       postProcessPrompt,
-      temperature: 0.85 + wildness / 200,
+      temperature: options.llm?.temperature ?? 0.85 + wildness / 200,
+      allowTemplateFallback: options.llm?.allowTemplateFallback,
       seed,
       metadata,
     });

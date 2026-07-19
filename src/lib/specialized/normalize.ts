@@ -1,13 +1,20 @@
 import { normalizeComfyModel } from "../comfy-models";
 import { normalizeDetailLevel, type DetailLevel } from "../detail-level";
+import { parseLlmRequestOptions } from "../llm-request-options";
 import type { SharedGenerationOptions } from "./types";
 
 export function normalizeSharedGenerationOptions(
-  body?: Partial<{ model?: string; detail?: string | DetailLevel }> | null,
+  body?: Partial<{
+    model?: string;
+    detail?: string | DetailLevel;
+    llmTemperature?: number;
+    allowTemplateFallback?: boolean;
+  }> | null,
 ): SharedGenerationOptions {
   return {
     model: normalizeComfyModel(body?.model),
     detail: normalizeDetailLevel(body?.detail),
+    llm: parseLlmRequestOptions(body),
   };
 }
 

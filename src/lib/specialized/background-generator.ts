@@ -64,6 +64,8 @@ export async function generateBackgroundPrompt(
     detail: options.detail === "concise" ? "balanced" : options.detail,
     toolInstructions,
     userMessage,
+    allowTemplateFallback: options.llm?.allowTemplateFallback,
+    temperature: options.llm?.temperature,
     templateFallback: () => buildBackgroundTemplate(seed, presetOptions),
     sanitizeInput: sanitizeContext,
     enforceMinimum: !hasPresets,

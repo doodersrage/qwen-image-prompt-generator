@@ -4,6 +4,9 @@
  *
  * Usage:
  *   node scripts/qwen-prompt.mjs duo --hints "two gravel cyclists racing"
+ *   node scripts/qwen-prompt.mjs pet --hints "golden retriever at the beach"
+ *   node scripts/qwen-prompt.mjs fantasy --hints "elven ranger in moonlit forest"
+ *   node scripts/qwen-prompt.mjs background --settingType "neon alley"
  *   node scripts/qwen-prompt.mjs lint --hints "gravel" --prompt "..."
  *   node scripts/qwen-prompt.mjs negative --sport cycling
  *   node scripts/qwen-prompt.mjs batch --hints "..." --count 5
@@ -12,6 +15,7 @@
  *   node scripts/qwen-prompt.mjs fix --hints "gravel" --prompt "..."
  *   node scripts/qwen-prompt.mjs compact --prompt "..." --model qwen-image-2512
  *   node scripts/qwen-prompt.mjs comfyui --prompt "..." [--negative "..."]
+ *   node scripts/qwen-prompt.mjs topics-batch --topics "a|b|c" --target pet
  */
 
 const BASE_URL = process.env.PROMPT_API_URL ?? "http://127.0.0.1:47832";
@@ -43,7 +47,7 @@ async function main() {
   if (!tool || tool === "help" || args.help) {
     console.log(`Usage: node scripts/qwen-prompt.mjs <tool> [options]
 
-Tools: duo, character, batch, lint, negative, catalog, compose, generate, format, fix, compact, comfyui, topics-batch
+Tools: duo, character, batch, lint, negative, catalog, compose, generate, format, fix, compact, comfyui, topics-batch, pet, fantasy, background, random-scene, refine, image-prompt
 Env: PROMPT_API_URL (default ${BASE_URL})`);
     process.exit(0);
   }
@@ -62,6 +66,12 @@ Env: PROMPT_API_URL (default ${BASE_URL})`);
     compact: "/api/compact",
     comfyui: "/api/comfyui",
     "topics-batch": "/api/topics/batch",
+    pet: "/api/pet",
+    fantasy: "/api/fantasy",
+    background: "/api/background",
+    "random-scene": "/api/random-scene",
+    refine: "/api/refine",
+    "image-prompt": "/api/image-prompt",
   };
 
   const path = routes[tool];
@@ -102,6 +112,26 @@ Env: PROMPT_API_URL (default ${BASE_URL})`);
     backgroundPrompt: args.background,
     subjectPrompt: args.subject,
     style: args.style,
+    settingType: args.settingType,
+    timeOfDay: args.timeOfDay,
+    mood: args.mood,
+    genre: args.genre,
+    includePeople:
+      args.includePeople === true ||
+      args.includePeople === "true" ||
+      undefined,
+    wildness: args.wildness ? Number(args.wildness) : undefined,
+    llmTemperature: args.llmTemperature ? Number(args.llmTemperature) : undefined,
+    allowTemplateFallback:
+      args.allowTemplateFallback === true ||
+      args.allowTemplateFallback === "true" ||
+      args.allowTemplateFallback === "false"
+        ? args.allowTemplateFallback === true || args.allowTemplateFallback === "true"
+        : undefined,
+    matrixAxisRow: args.matrixAxisRow,
+    matrixAxisCol: args.matrixAxisCol,
+    matrixRowCount: args.matrixRowCount ? Number(args.matrixRowCount) : undefined,
+    matrixColCount: args.matrixColCount ? Number(args.matrixColCount) : undefined,
   };
 
   const response = await fetch(`${BASE_URL}${path}`, {

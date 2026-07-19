@@ -14,6 +14,7 @@ import {
 import { notifyComfyJobComplete } from "./comfyui-notifications";
 import { resolveComfyUiRuntime } from "./comfyui-runtime";
 import { loadComfyUiSettings } from "./comfyui-settings";
+import { subscribeComfyUiWebSocket } from "./comfyui-websocket";
 
 export type RegisterComfyGalleryJobInput = {
   promptId: string;
@@ -21,6 +22,7 @@ export type RegisterComfyGalleryJobInput = {
   negativePrompt?: string;
   tool?: string;
   model?: string;
+  historyId?: string;
   comfyUrl: string;
 };
 
@@ -58,6 +60,7 @@ export function registerComfyGalleryJob(
     negativePrompt: input.negativePrompt,
     tool: input.tool,
     model: input.model,
+    historyId: input.historyId,
     comfyUrl: input.comfyUrl,
     status: "pending",
     statusMessage: "Queued",
@@ -229,30 +232,52 @@ export async function pollComfyGalleryJob(
   const maxAttempts = options?.maxAttempts ?? DEFAULT_MAX_POLL_ATTEMPTS;
   const intervalMs = options?.intervalMs ?? DEFAULT_POLL_INTERVAL_MS;
   const onJobUpdate = options?.onJobUpdate;
+  const settings = loadComfyUiSettings();
+  let wsFinished = false;
+  let unsubscribe: (() => void) | undefined;
 
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    if (attempt > 0) {
-      await sleep(intervalMs);
-    }
+  if (settings.useWebSocketProgress && comfyUrl) {
+    unsubscribe = subscribeComfyUiWebSocket({
+      comfyUrl,
+      promptId,
+      onProgress: (progress) => {
+        if (progress.message) {
+          onStatus?.(progress.message);
+        }
+        if (progress.status === "finished") {
+          wsFinished = true;
+        }
+      },
+    });
+  }
 
-    try {
-      const status = await fetchComfyJobStatus(promptId, comfyUrl);
-      if (!status) {
-        continue;
+  try {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      if (attempt > 0) {
+        await sleep(wsFinished ? 250 : intervalMs);
       }
 
-      const entry = applyComfyJobStatus(
-        promptId,
-        status,
-        onStatus,
-        onJobUpdate,
-      );
-      if (entry) {
-        return entry;
+      try {
+        const status = await fetchComfyJobStatus(promptId, comfyUrl);
+        if (!status) {
+          continue;
+        }
+
+        const entry = applyComfyJobStatus(
+          promptId,
+          status,
+          onStatus,
+          onJobUpdate,
+        );
+        if (entry) {
+          return entry;
+        }
+      } catch {
+        // keep polling
       }
-    } catch {
-      // keep polling
     }
+  } finally {
+    unsubscribe?.();
   }
 
   return updateComfyGalleryByPromptId(promptId, {

@@ -26,6 +26,13 @@ export type ComfyUiSettings = {
   customTokens?: CustomWorkflowToken[];
   loraLibrary?: LoraLibraryEntry[];
   notifyOnComplete?: boolean;
+  /** Auto-fetch negative prompt when queueing SD-family models. */
+  autoNegativeOnQueue?: boolean;
+  /** Prefer ComfyUI WebSocket progress updates over polling-only status. */
+  useWebSocketProgress?: boolean;
+  /** Saved negative presets for queue / copy pair. */
+  negativeProfiles?: import("./negative-profiles").NegativeProfile[];
+  selectedNegativeProfileId?: string;
 };
 
 export const DEFAULT_COMFYUI_SETTINGS: ComfyUiSettings = {
@@ -43,6 +50,10 @@ export const DEFAULT_COMFYUI_SETTINGS: ComfyUiSettings = {
   customTokens: [],
   loraLibrary: [],
   notifyOnComplete: false,
+  autoNegativeOnQueue: true,
+  useWebSocketProgress: false,
+  negativeProfiles: [],
+  selectedNegativeProfileId: "general-sd",
 };
 
 const LORA_TOKEN_PREFIX = "{{LORA_";

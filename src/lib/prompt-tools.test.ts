@@ -1243,3 +1243,63 @@ describe("buildTemplateTopicList", () => {
     }
   });
 });
+
+describe("workflow category defaults", () => {
+  it("scores workflow filenames by model category", async () => {
+    const { suggestWorkflowDefaultsByCategory } = await import("./workflow-category-defaults");
+    const map = suggestWorkflowDefaultsByCategory([
+      { id: "flux-default", name: "Flux Klein default", filename: "flux-klein.json", json: "{}" },
+      { id: "qwen-default", name: "Qwen image", filename: "qwen-image.json", json: "{}" },
+    ]);
+    assert.equal(map["flux-2-klein"], "flux-default");
+    assert.ok(map["qwen-image-2512"]);
+  });
+});
+
+describe("qwen edit builder", () => {
+  it("builds keep/replace/add/remove instructions", async () => {
+    const { buildQwenEditPrompt } = await import("./qwen-edit-builder");
+    const prompt = buildQwenEditPrompt([
+      { kind: "keep", text: "subject pose" },
+      { kind: "replace", text: "background with rainy alley" },
+      { kind: "add", text: "steam from grates" },
+    ]);
+    assert.match(prompt, /Keep unchanged:/);
+    assert.match(prompt, /Replace with:/);
+    assert.match(prompt, /Add:/);
+  });
+});
+
+describe("character identity bundle", () => {
+  it("round-trips bundle export fields", async () => {
+    const { buildCharacterIdentityBundle, parseCharacterIdentityBundle } =
+      await import("./character-identity-bundle");
+    const bundle = buildCharacterIdentityBundle({
+      name: "Night courier",
+      shared: {
+        model: "qwen-image-2512",
+        detail: "balanced",
+        lockedLocation: "neon alley",
+      },
+      hints: "leather jacket, rain",
+    });
+    const parsed = parseCharacterIdentityBundle(JSON.stringify(bundle));
+    assert.equal(parsed.name, "Night courier");
+    assert.equal(parsed.lockedLocation, "neon alley");
+  });
+});
+
+describe("batch lint helpers", () => {
+  it("filters blocked batch indexes", async () => {
+    const { filterBatchByLintIndexes } = await import("./batch-lint-gate");
+    assert.deepEqual(filterBatchByLintIndexes(["a", "b", "c"], [1]), ["a", "c"]);
+  });
+});
+
+describe("gallery handoff", () => {
+  it("builds refine and image prompt paths", async () => {
+    const { galleryHandoffPath } = await import("./gallery-handoff");
+    assert.equal(galleryHandoffPath("refine"), "/refine?from=gallery");
+    assert.equal(galleryHandoffPath("imagePrompt"), "/image-prompt?from=gallery");
+  });
+});

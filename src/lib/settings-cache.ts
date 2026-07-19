@@ -128,10 +128,12 @@ export type NegativeToolCache = {
 
 export type StudioToolCache = {
   compareModelB?: string;
+  compareVisualSeed?: string;
   templateId?: string;
   templateSlots?: Record<string, string>;
   catalogTab?: "clothing" | "locations";
   locationBlocklist?: string[];
+  savedIdentityBundles?: import("./character-identity-bundle").CharacterIdentityBundle[];
 };
 
 export type VariationsToolCache = {
@@ -139,13 +141,15 @@ export type VariationsToolCache = {
   count?: number;
   variationStrength?: number;
   target?: "generate" | "character" | "duo" | "pet" | "fantasy" | "background";
-  gridMode?: "roll" | "matrix";
+  gridMode?: "roll" | "matrix" | "imported";
   matrixAxisRow?: "variation" | "sportPreset" | "location";
   matrixAxisCol?: "variation" | "sportPreset" | "location";
   matrixRowCount?: number;
   matrixColCount?: number;
   portraitStyle?: "portrait" | "full-body" | "action";
   sportPresetId?: string;
+  importedBatchPrompts?: string[];
+  importedBatchTopics?: string[];
 };
 
 export type ToolSettingsCache = {

@@ -82,7 +82,19 @@ Legacy URLs `/duo`, `/compose`, and `/random-scene` redirect to the merged Chara
 - **Batch ComfyUI queue** — queue all duo batch rolls to ComfyUI with shared negative
 - **Pre-lint + rule fix** — Duo shows hint lint before generate; **Fix prompt (rules)** applies helmets, sport strips, etc.
 - **ComfyUI workflow** — optional `COMFYUI_WORKFLOW_PATH` with `{{POSITIVE}}` / `{{NEGATIVE}}` placeholders, or configure URL + workflow JSON in **Settings → ComfyUI queue settings** (stored in this browser)
-- **CLI** — `npm run prompt:cli -- duo --hints "..."` over the HTTP API (includes `topics-batch`, `compact`, `comfyui`)
+- **CLI** — `npm run prompt:cli -- duo --hints "..."` over the HTTP API (includes `topics-batch`, `compact`, `comfyui`, `pet`, `fantasy`, `background`, LLM flags)
+- **Gallery → Refine / Image→Prompt** — open completed outputs in Refine or Image→Prompt with image + prompt pre-loaded
+- **Auto-negative on queue** — optional Settings toggle + negative profile library for SD-family ComfyUI queue
+- **Topics → Variations handoff** — send a topics batch to `/variations` as an imported grid
+- **Batch lint gate** — Topics and Variations bulk queue lint prompts first (fix-all or skip errors)
+- **Prompt lineage** — gallery entries link to Studio history when queued from result panels
+- **Visual model compare** — Studio Compare tab can queue both models to ComfyUI and show outputs side-by-side
+- **Character identity bundles** — export/import reusable character sheets from Studio Presets
+- **Gallery ZIP export** — bulk export selected entries as images + sidecars
+- **Smart workflow defaults** — Settings maps workflow filenames to model categories automatically
+- **ComfyUI WebSocket progress** — optional faster job updates in Settings
+- **Qwen Edit builder** — segment-based edit instruction builder on Generate for Qwen Edit models
+- **Rating-driven random** — history/gallery favorites subtly adjust random-scene wildness
 
 ## Prompt size limits (selected models)
 
