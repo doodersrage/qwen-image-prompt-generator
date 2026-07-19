@@ -35,12 +35,20 @@ import {
   formatGallerySlideshowInterval,
   normalizeGallerySlideshowIntervalMs,
   paginateGalleryEntries,
-  resolveGallerySlideshowTransition,
-  resolveGallerySlideshowTransitionMs,
   resolveGalleryLightboxOpenIndex,
   resolveGalleryPageSize,
+  resolveGallerySlideshowTransition,
+  resolveGallerySlideshowTransitionMs,
   sortGalleryEntries,
 } from "./comfyui-gallery";
+import { parsePetHints } from "./pet-hints";
+import {
+  buildPetPresetBlock,
+  countPetPresetSelections,
+  normalizePetPresetOptions,
+} from "./pet-options";
+import { getPetPreset, PET_PRESETS } from "./pet-presets";
+import { buildRandomPetSeed } from "./pet-scene-pools";
 import { listServerWorkflowPaths } from "./comfyui-server-workflows";
 import {
   DEFAULT_COMFYUI_SETTINGS,
@@ -846,6 +854,42 @@ describe("comfyui gallery outputs", () => {
     assert.equal(resolveGallerySlideshowTransition("invalid"), "slide");
     assert.equal(resolveGallerySlideshowTransitionMs("none"), 0);
     assert.equal(resolveGallerySlideshowTransitionMs("fade"), 520);
+  });
+
+  it("builds pet scene seeds from hints", () => {
+    const parsed = parsePetHints("tabby cat on a sunny windowsill");
+    assert.equal(parsed.species, "cat");
+    assert.equal(parsed.pair, false);
+
+    const { seed } = buildRandomPetSeed("tabby cat on a sunny windowsill", "portrait");
+    assert.match(seed, /solo pet only/i);
+    assert.match(seed, /tabby cat|cat/i);
+    assert.doesNotMatch(seed, /\b(a person|woman|man|human figure)\b/i);
+
+    const pairParsed = parsePetHints("two playful cats in a living room");
+    assert.equal(pairParsed.pair, true);
+    const pairSeed = buildRandomPetSeed("two playful cats in a living room", "action");
+    assert.match(pairSeed.seed, /two animals only/i);
+  });
+
+  it("loads pet presets", () => {
+    const preset = getPetPreset("golden-retriever-park");
+    assert.ok(preset?.hints.includes("golden retriever"));
+    assert.ok(PET_PRESETS.length >= 30);
+  });
+
+  it("builds pet preset blocks from options", () => {
+    const options = normalizePetPresetOptions({
+      species: "cat",
+      coatStyle: "long-fluffy",
+      expression: "curious",
+      settingVibe: "windowsill",
+    });
+    assert.equal(countPetPresetSelections(options), 4);
+    const block = buildPetPresetBlock(options);
+    assert.ok(block?.includes("PET PRESET"));
+    assert.match(block ?? "", /cat/i);
+    assert.match(block ?? "", /windowsill/i);
   });
 
   it("sorts gallery entries", () => {

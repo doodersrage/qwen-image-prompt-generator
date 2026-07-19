@@ -59,6 +59,16 @@ export type BackgroundToolCache = {
   surfaceMaterials?: string;
 } & Partial<Omit<BackgroundPresetOptions, "surfaceMaterials">>;
 
+import type { PetPresetOptions } from "./pet-options";
+
+export type PetToolCache = {
+  hints?: string;
+  portraitStyle?: "portrait" | "full-body" | "action";
+  variationStrength?: number;
+  petPresetId?: string;
+  presetCategory?: "all" | "dog" | "cat" | "bird" | "rabbit" | "small";
+} & Partial<PetPresetOptions>;
+
 export type ImagePromptToolCache = {
   focus?: "full" | "subject" | "background" | "style";
   extraHints?: string;
@@ -123,6 +133,7 @@ export type ToolSettingsCache = {
   format?: FormatToolCache;
   randomScene?: RandomSceneToolCache;
   background?: BackgroundToolCache;
+  pet?: PetToolCache;
   character?: CharacterToolCache;
   imagePrompt?: ImagePromptToolCache;
   topics?: TopicToolCache;
@@ -173,6 +184,12 @@ export const DEFAULT_BACKGROUND_TOOL_CACHE: BackgroundToolCache = {
   settingType: "",
   timeOfDay: "",
   mood: "",
+};
+
+export const DEFAULT_PET_TOOL_CACHE: PetToolCache = {
+  hints: "",
+  portraitStyle: "portrait",
+  variationStrength: 50,
 };
 
 export const DEFAULT_IMAGE_PROMPT_TOOL_CACHE: ImagePromptToolCache = {

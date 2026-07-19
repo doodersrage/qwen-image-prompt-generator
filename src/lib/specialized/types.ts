@@ -66,6 +66,7 @@ export type EnrichedToolGenerateResult = ToolGenerateResult & {
 };
 
 import type { BackgroundPresetOptions } from "../background-options";
+import type { PetPresetOptions } from "../pet-options";
 
 export type BackgroundOptions = SharedGenerationOptions & {
   settingType?: string;
@@ -74,6 +75,17 @@ export type BackgroundOptions = SharedGenerationOptions & {
   presetOptions?: BackgroundPresetOptions;
   recentLocations?: string[];
   blockedLocations?: string[];
+};
+
+export type PetOptions = SharedGenerationOptions & {
+  hints?: string;
+  portraitStyle?: "portrait" | "full-body" | "action";
+  variationStrength?: number;
+  presetOptions?: PetPresetOptions;
+  recentLocations?: string[];
+  blockedLocations?: string[];
+  lockedLocation?: string;
+  variationSeed?: string;
 };
 
 export type ImagePromptFocus = "full" | "subject" | "background" | "style";
