@@ -18,6 +18,10 @@ import {
   accentFocusClass,
 } from "@/components/ui/ToolPageShell";
 import { FieldDivider, FieldError, FieldLabel, TextArea } from "@/components/ui/Field";
+import {
+  DESCRIPTION_FOCUS_LABEL,
+  EXTRA_HINTS_LABEL,
+} from "@/lib/tool-ui-labels";
 import { Button, PrimaryButton } from "@/components/ui/Button";
 
 const ACCENT = "fuchsia" as const;
@@ -199,7 +203,7 @@ export default function ImagePromptTool() {
 
         <FieldDivider />
 
-        <FieldLabel>Describe focus</FieldLabel>
+        <FieldLabel>{DESCRIPTION_FOCUS_LABEL}</FieldLabel>
         <div className="flex flex-wrap gap-2">
           {(
             [
@@ -228,7 +232,7 @@ export default function ImagePromptTool() {
 
         <FieldDivider />
 
-        <FieldLabel>Extra notes (optional)</FieldLabel>
+        <FieldLabel>{EXTRA_HINTS_LABEL}</FieldLabel>
         <TextArea
           value={toolSettings.extraHints ?? ""}
           onChange={(e) => updateToolSettings({ extraHints: e.target.value })}

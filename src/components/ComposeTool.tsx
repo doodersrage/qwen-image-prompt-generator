@@ -21,7 +21,12 @@ import { readClothingIdsFromMetadata } from "@/lib/recent-clothing";
 import { DEFAULT_COMPOSE_TOOL_CACHE } from "@/lib/settings-cache";
 import type { EnrichedToolGenerateResult } from "@/lib/specialized/types";
 import { readVariationSeedFromResult } from "@/lib/variation-seed-metadata";
-import { variationStrengthLabel } from "@/lib/variation-settings";
+import { SubjectShotScaleControl } from "@/components/ShotScaleControl";
+import {
+  ROLL_VARIATION_LABEL,
+  SCENE_HINTS_LABEL,
+  rollVariationLabel,
+} from "@/lib/tool-ui-labels";
 import {
   ToolBadge,
   ToolLayout,
@@ -230,26 +235,29 @@ export default function ComposeTool() {
           <input
             value={toolSettings.settingType ?? ""}
             onChange={(e) => updateToolSettings({ settingType: e.target.value })}
-            placeholder="Background type (optional)"
+            placeholder="Quick tag: place type"
             className={`ui-input px-3 py-2 text-sm ${accentFocusClass(ACCENT)}`}
           />
           <input
             value={toolSettings.timeOfDay ?? ""}
             onChange={(e) => updateToolSettings({ timeOfDay: e.target.value })}
-            placeholder="Time / lighting"
+            placeholder="Quick tag: time / light"
             className={`ui-input px-3 py-2 text-sm ${accentFocusClass(ACCENT)}`}
           />
           <input
             value={toolSettings.mood ?? ""}
             onChange={(e) => updateToolSettings({ mood: e.target.value })}
-            placeholder="Mood"
+            placeholder="Quick tag: mood"
             className={`ui-input px-3 py-2 text-sm ${accentFocusClass(ACCENT)}`}
           />
         </div>
+        <p className="text-xs text-zinc-500">
+          Quick tags are optional shortcuts—background presets below offer structured control.
+        </p>
 
         <FieldDivider />
 
-        <FieldLabel>Subject hints</FieldLabel>
+        <FieldLabel>{SCENE_HINTS_LABEL}</FieldLabel>
         <TextArea
           value={toolSettings.hints ?? ""}
           onChange={(e) => updateToolSettings({ hints: e.target.value })}
@@ -272,6 +280,15 @@ export default function ComposeTool() {
           onChange={(patch) =>
             updateToolSettings(patch as Partial<typeof toolSettings>)
           }
+          variant="compose"
+        />
+
+        <FieldDivider />
+
+        <SubjectShotScaleControl
+          value={toolSettings.portraitStyle ?? "action"}
+          onChange={(value) => updateToolSettings({ portraitStyle: value })}
+          activeClassName="border-cyan-500 bg-cyan-500/15 text-cyan-200"
         />
 
         <FieldDivider />
@@ -301,10 +318,11 @@ export default function ComposeTool() {
 
         <FieldDivider />
 
+        <FieldLabel>{ROLL_VARIATION_LABEL}</FieldLabel>
         <div className="flex items-center justify-between text-xs text-zinc-400">
           <span>Stable</span>
           <span className="font-medium text-cyan-300">
-            {variationStrengthLabel(toolSettings.variationStrength ?? 50)} (
+            {rollVariationLabel(toolSettings.variationStrength ?? 50)} (
             {toolSettings.variationStrength ?? 50})
           </span>
           <span>Varied</span>

@@ -1075,15 +1075,15 @@ export const CHARACTER_PRESET_UI_SECTIONS: CharacterPresetUiSection[] = [
   {
     id: "camera",
     title: "Camera & scene",
-    description: "Lens, angle, light, mood, and color science.",
+    description: "Lens, angle, light, weather, and color science.",
     defaultOpen: true,
     fields: [
       { kind: "select", key: "headcount", label: "Subject headcount" },
-      { kind: "select", key: "shotFraming", label: "Shot framing & lens" },
+      { kind: "select", key: "shotFraming", label: "Lens & crop" },
       { kind: "select", key: "cameraAngle", label: "Camera angle" },
       { kind: "select", key: "depthOfField", label: "Depth of field" },
       { kind: "select", key: "lighting", label: "Lighting" },
-      { kind: "select", key: "atmosphere", label: "Atmosphere" },
+      { kind: "select", key: "atmosphere", label: "Weather / air" },
       { kind: "select", key: "colorPalette", label: "Color palette" },
       { kind: "select", key: "aesthetic", label: "Aesthetic era" },
       { kind: "select", key: "filmStock", label: "Film stock / capture" },

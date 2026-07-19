@@ -68,7 +68,6 @@ export type PetCameraAngle =
   | "eye-level"
   | "low-angle"
   | "close-up-macro"
-  | "wide-environment"
   | "shallow-dof-portrait";
 
 export type PetLightingStyle =
@@ -199,12 +198,11 @@ const SELECT_REGISTRY = {
     { value: "urban-street", label: "Urban street", script: "quiet urban sidewalk with soft city bokeh," },
   ] satisfies SelectOption<PetSettingVibe>[],
   cameraAngle: [
-    { value: "", label: "Default camera" },
+    { value: "", label: "Default angle" },
     { value: "eye-level", label: "Eye level", script: "eye-level camera aligned with the pet," },
-    { value: "low-angle", label: "Low angle", script: "low-angle hero framing from ground level," },
-    { value: "close-up-macro", label: "Close-up / macro", script: "close-up macro detail on eyes, fur, and whiskers," },
-    { value: "wide-environment", label: "Wide environment", script: "wide environmental framing with the pet anchored in scene depth," },
-    { value: "shallow-dof-portrait", label: "Shallow DOF portrait", script: "shallow depth of field portrait with creamy background blur," },
+    { value: "low-angle", label: "Low angle", script: "low-angle hero view from ground level," },
+    { value: "close-up-macro", label: "Macro lens", script: "macro lens detail on eyes, fur, and whiskers," },
+    { value: "shallow-dof-portrait", label: "Shallow DOF lens", script: "shallow depth of field with creamy background blur," },
   ] satisfies SelectOption<PetCameraAngle>[],
   lightingStyle: [
     { value: "", label: "Default lighting" },
@@ -257,20 +255,20 @@ export const PET_PRESET_UI_SECTIONS: PetPresetUiSection[] = [
   },
   {
     id: "performance",
-    title: "Pose & mood",
+    title: "Behavior & expression",
     fields: [
       { kind: "select", key: "expression", label: "Expression" },
       { kind: "select", key: "activity", label: "Activity" },
-      { kind: "select", key: "accessory", label: "Accessory" },
+      { kind: "select", key: "accessory", label: "Accessory / prop" },
       { kind: "text", key: "petDetail", label: "Extra detail", placeholder: "e.g. heterochromia, floppy left ear, mud on paws" },
     ],
   },
   {
     id: "scene",
-    title: "Scene & camera",
+    title: "Setting & light",
     fields: [
-      { kind: "select", key: "settingVibe", label: "Setting vibe" },
-      { kind: "select", key: "cameraAngle", label: "Camera" },
+      { kind: "select", key: "settingVibe", label: "Setting" },
+      { kind: "select", key: "cameraAngle", label: "Camera angle & lens" },
       { kind: "select", key: "lightingStyle", label: "Lighting" },
     ],
   },

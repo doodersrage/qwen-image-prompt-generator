@@ -22,7 +22,12 @@ import { getClothingLabel } from "@/lib/clothing-catalog";
 import { getSportPreset } from "@/lib/sport-presets";
 import { downloadTextFile } from "@/lib/prompt-pair";
 import { readVariationSeedFromMetadata, readVariationSeedFromResult } from "@/lib/variation-seed-metadata";
-import { variationStrengthLabel } from "@/lib/variation-settings";
+import { SubjectShotScaleControl } from "@/components/ShotScaleControl";
+import {
+  ROLL_VARIATION_LABEL,
+  SCENE_HINTS_LABEL,
+  rollVariationLabel,
+} from "@/lib/tool-ui-labels";
 import {
   applyShareableSceneParams,
   parseScenePresetFromSearch,
@@ -277,7 +282,7 @@ export default function DuoTool() {
           }}
         />
 
-        <FieldLabel htmlFor="duo-hints">Scene hints</FieldLabel>
+        <FieldLabel htmlFor="duo-hints">{SCENE_HINTS_LABEL}</FieldLabel>
         <TextArea
           id="duo-hints"
           rows={4}
@@ -328,11 +333,19 @@ export default function DuoTool() {
           </div>
         </div>
 
+        <SubjectShotScaleControl
+          value={toolSettings.portraitStyle ?? "action"}
+          onChange={(value) => updateToolSettings({ portraitStyle: value })}
+          activeClassName="border-emerald-500 bg-emerald-500/15 text-emerald-200"
+        />
+
+        <FieldDivider />
+
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-3">
-            <FieldLabel htmlFor="duo-variation">Variation strength</FieldLabel>
+            <FieldLabel htmlFor="duo-variation">{ROLL_VARIATION_LABEL}</FieldLabel>
             <span className="text-xs text-zinc-500">
-              {variationStrengthLabel(toolSettings.variationStrength ?? 50)}
+              {rollVariationLabel(toolSettings.variationStrength ?? 50)}
             </span>
           </div>
           <input
@@ -354,6 +367,7 @@ export default function DuoTool() {
           mounted={mounted}
           settings={toolSettings}
           onChange={updateToolSettings}
+          variant="duo"
         />
 
         <div className="flex flex-wrap gap-3">
@@ -371,7 +385,7 @@ export default function DuoTool() {
             loadingLabel="Rolling duo batch"
             onClick={() => void generate(true)}
           >
-            Roll {toolSettings.batchCount ?? 3}
+            Batch {toolSettings.batchCount ?? 3}
           </Button>
         </div>
 

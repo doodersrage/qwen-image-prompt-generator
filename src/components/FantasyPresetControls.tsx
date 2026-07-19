@@ -154,7 +154,7 @@ export default function FantasyPresetControls({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-medium text-zinc-200">Fantasy scene options</p>
+        <p className="text-sm font-medium text-zinc-200">Fantasy presets (optional)</p>
         <div className="flex items-center gap-2 text-xs">
           {selectionCount > 0 ? (
             <span className="text-violet-300">{selectionCount} active</span>

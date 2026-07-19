@@ -17,7 +17,12 @@ import { readSceneLocationFromMetadata } from "@/lib/recent-locations";
 import { DEFAULT_PET_TOOL_CACHE } from "@/lib/settings-cache";
 import type { EnrichedToolGenerateResult } from "@/lib/specialized/types";
 import { readVariationSeedFromResult } from "@/lib/variation-seed-metadata";
-import { variationStrengthLabel } from "@/lib/variation-settings";
+import { SubjectShotScaleControl } from "@/components/ShotScaleControl";
+import {
+  ROLL_VARIATION_LABEL,
+  SCENE_HINTS_LABEL,
+  rollVariationLabel,
+} from "@/lib/tool-ui-labels";
 import {
   ToolBadge,
   ToolLayout,
@@ -193,7 +198,7 @@ export default function PetTool() {
 
         <FieldDivider />
 
-        <FieldLabel>Pet hints (optional)</FieldLabel>
+        <FieldLabel>{SCENE_HINTS_LABEL}</FieldLabel>
         <TextArea
           value={toolSettings.hints ?? ""}
           onChange={(event) =>
@@ -206,36 +211,19 @@ export default function PetTool() {
 
         <FieldDivider />
 
-        <FieldLabel>Framing</FieldLabel>
-        <div className="flex flex-wrap gap-2">
-          {(
-            [
-              { label: "Portrait", value: "portrait" },
-              { label: "Full body", value: "full-body" },
-              { label: "Action", value: "action" },
-            ] as const
-          ).map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => updateToolSettings({ portraitStyle: option.value })}
-              className={`rounded-lg border px-3 py-2 text-xs font-medium ${
-                toolSettings.portraitStyle === option.value
-                  ? "border-rose-500 bg-rose-500/15 text-rose-200"
-                  : "border-zinc-700 text-zinc-400"
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+        <SubjectShotScaleControl
+          value={toolSettings.portraitStyle ?? "portrait"}
+          onChange={(value) => updateToolSettings({ portraitStyle: value })}
+          activeClassName="border-rose-500 bg-rose-500/15 text-rose-200"
+        />
 
         <FieldDivider />
 
+        <FieldLabel>{ROLL_VARIATION_LABEL}</FieldLabel>
         <div className="flex items-center justify-between text-xs text-zinc-400">
           <span>Stable</span>
           <span className="font-medium text-rose-300">
-            {variationStrengthLabel(toolSettings.variationStrength ?? 50)} (
+            {rollVariationLabel(toolSettings.variationStrength ?? 50)} (
             {toolSettings.variationStrength ?? 50})
           </span>
           <span>Varied</span>

@@ -245,7 +245,7 @@ export const FANTASY_PRESETS: readonly FantasyPreset[] = [
       subjectRole: "dragon",
       atmosphere: "epic",
       lightingStyle: "storm-light",
-      cameraAngle: "wide-establishing",
+      scale: "grand",
     },
   },
   {

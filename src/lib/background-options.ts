@@ -623,7 +623,7 @@ export const BACKGROUND_SURFACE_MATERIAL_OPTIONS: Array<{
 export const BACKGROUND_PRESET_UI_SECTIONS: BackgroundPresetUiSection[] = [
   {
     id: "setting",
-    title: "Setting archetype",
+    title: "Place & scale",
     description: "Common interior and exterior environment templates.",
     defaultOpen: true,
     fields: [
@@ -646,8 +646,8 @@ export const BACKGROUND_PRESET_UI_SECTIONS: BackgroundPresetUiSection[] = [
   },
   {
     id: "environment",
-    title: "Environment & lighting",
-    description: "Mood, atmosphere, palette, and light direction.",
+    title: "Light, air & palette",
+    description: "Weather, palette, light direction, and room state.",
     fields: [
       { kind: "select", key: "lightSource", label: "Primary light source" },
       { kind: "select", key: "atmosphere", label: "Atmosphere & weather" },

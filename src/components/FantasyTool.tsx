@@ -23,7 +23,14 @@ import { readClothingIdsFromMetadata } from "@/lib/recent-clothing";
 import { DEFAULT_FANTASY_TOOL_CACHE } from "@/lib/settings-cache";
 import type { EnrichedToolGenerateResult } from "@/lib/specialized/types";
 import { readVariationSeedFromResult } from "@/lib/variation-seed-metadata";
-import { variationStrengthLabel } from "@/lib/variation-settings";
+import { FantasyShotScaleControl } from "@/components/ShotScaleControl";
+import {
+  CONCEPT_WILDNESS_LABEL,
+  ROLL_VARIATION_LABEL,
+  SCENE_HINTS_LABEL,
+  conceptWildnessLabel,
+  rollVariationLabel,
+} from "@/lib/tool-ui-labels";
 import {
   ToolBadge,
   ToolLayout,
@@ -56,15 +63,6 @@ export default function FantasyTool() {
   );
   const focus = resolveFantasyFocus(presetOptions, toolSettings.hints);
   const includePeople = focus === "character" || focus === "ensemble";
-  const framingOptions =
-    focus === "environment"
-      ? ([{ label: "Wide", value: "wide" }] as const)
-      : ([
-          { label: "Portrait", value: "portrait" },
-          { label: "Full body", value: "full-body" },
-          { label: "Action", value: "action" },
-          { label: "Wide", value: "wide" },
-        ] as const);
   const activeFraming =
     focus === "environment" ? "wide" : (toolSettings.portraitStyle ?? "portrait");
 
@@ -245,7 +243,7 @@ export default function FantasyTool() {
 
         <FieldDivider />
 
-        <FieldLabel>Fantasy hints (optional)</FieldLabel>
+        <FieldLabel>{SCENE_HINTS_LABEL}</FieldLabel>
         <TextArea
           value={toolSettings.hints ?? ""}
           onChange={(event) =>
@@ -261,30 +259,21 @@ export default function FantasyTool() {
 
         <FieldDivider />
 
-        <FieldLabel>Framing</FieldLabel>
-        <div className="flex flex-wrap gap-2">
-          {framingOptions.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => updateToolSettings({ portraitStyle: option.value })}
-              className={`rounded-lg border px-3 py-2 text-xs font-medium ${
-                activeFraming === option.value
-                  ? "border-violet-500 bg-violet-500/15 text-violet-200"
-                  : "border-zinc-700 text-zinc-400"
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+        <FantasyShotScaleControl
+          value={activeFraming}
+          onChange={(value) => updateToolSettings({ portraitStyle: value })}
+          activeClassName="border-violet-500 bg-violet-500/15 text-violet-200"
+          environmentOnly={focus === "environment"}
+        />
 
         <FieldDivider />
 
+        <FieldLabel>{CONCEPT_WILDNESS_LABEL}</FieldLabel>
         <div className="flex items-center justify-between text-xs text-zinc-400">
           <span>Grounded</span>
           <span className="font-medium text-violet-300">
-            Wildness {toolSettings.wildness ?? 65}
+            {conceptWildnessLabel(toolSettings.wildness ?? 65)} (
+            {toolSettings.wildness ?? 65})
           </span>
           <span>Surreal</span>
         </div>
@@ -300,10 +289,11 @@ export default function FantasyTool() {
           className={`h-2 w-full ${accentRingClass(ACCENT)}`}
         />
 
+        <FieldLabel>{ROLL_VARIATION_LABEL}</FieldLabel>
         <div className="flex items-center justify-between text-xs text-zinc-400">
           <span>Stable</span>
           <span className="font-medium text-violet-300">
-            {variationStrengthLabel(toolSettings.variationStrength ?? 50)} (
+            {rollVariationLabel(toolSettings.variationStrength ?? 50)} (
             {toolSettings.variationStrength ?? 50})
           </span>
           <span>Varied</span>

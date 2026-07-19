@@ -7,6 +7,7 @@ import type { DetailLevel } from "@/lib/detail-level";
 import { getDetailLimits } from "@/lib/detail-level";
 import { getComfyModelDefinition } from "@/lib/comfy-models";
 import type { SharedToolSettings } from "@/lib/settings-cache";
+import { PINNED_VARIATION_SEED_LABEL } from "@/lib/tool-ui-labels";
 import { accentRingClass } from "@/lib/tool-theme";
 import { CollapsibleSection } from "@/components/ui/ToolPageShell";
 import { ChipButton, FieldDivider, FieldLabel } from "@/components/ui/Field";
@@ -178,7 +179,7 @@ export default function SharedToolControls({
                 className="type-caption max-w-full truncate rounded-[var(--radius-full)] border border-[var(--accent-border)] bg-[var(--accent-muted)] px-2.5 py-1 text-[var(--accent-text)]"
                 title={lockedVariationSeed}
               >
-                Locked seed:{" "}
+                {PINNED_VARIATION_SEED_LABEL}:{" "}
                 {lockedVariationSeed.length > 48
                   ? `${lockedVariationSeed.slice(0, 48)}…`
                   : lockedVariationSeed}

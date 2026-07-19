@@ -141,22 +141,25 @@ export default function BackgroundTool() {
           <input
             value={toolSettings.settingType ?? ""}
             onChange={(e) => updateToolSettings({ settingType: e.target.value })}
-            placeholder="Setting type (optional)"
+            placeholder="Quick tag: place type"
             className={`ui-input px-3 py-2 text-sm ${accentFocusClass(ACCENT)}`}
           />
           <input
             value={toolSettings.timeOfDay ?? ""}
             onChange={(e) => updateToolSettings({ timeOfDay: e.target.value })}
-            placeholder="Time / lighting (optional)"
+            placeholder="Quick tag: time / light"
             className={`ui-input px-3 py-2 text-sm ${accentFocusClass(ACCENT)}`}
           />
           <input
             value={toolSettings.mood ?? ""}
             onChange={(e) => updateToolSettings({ mood: e.target.value })}
-            placeholder="Mood (optional)"
+            placeholder="Quick tag: mood"
             className={`ui-input px-3 py-2 text-sm ${accentFocusClass(ACCENT)}`}
           />
         </div>
+        <p className="text-xs text-zinc-500">
+          Quick tags are optional shortcuts—background presets below offer structured control.
+        </p>
 
         <BackgroundPresetControls
           mounted={mounted}

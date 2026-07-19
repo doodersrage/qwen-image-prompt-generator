@@ -15,7 +15,10 @@ import { modelUsesNegativePrompt } from "@/lib/prompt-pair";
 import { resolveComfyUiRuntime } from "@/lib/comfyui-runtime";
 import { DEFAULT_VARIATIONS_TOOL_CACHE } from "@/lib/settings-cache";
 import SidecarImportButton from "@/components/SidecarImportButton";
-import { variationStrengthLabel } from "@/lib/variation-settings";
+import {
+  SHOT_SCALE_LABEL,
+  rollVariationLabel,
+} from "@/lib/tool-ui-labels";
 import type { PromptSidecar } from "@/lib/prompt-sidecar";
 import {
   ToolBadge,
@@ -308,7 +311,7 @@ export default function VariationGridTool() {
 
         {(target === "character" || target === "duo") && (
           <div className="space-y-1">
-            <FieldLabel>Portrait style</FieldLabel>
+            <FieldLabel>{SHOT_SCALE_LABEL}</FieldLabel>
             <select
               value={toolSettings.portraitStyle ?? "action"}
               onChange={(event) =>
@@ -338,7 +341,7 @@ export default function VariationGridTool() {
 
         <div className="space-y-1">
           <FieldLabel>
-            Variation strength ({variationStrengthLabel(toolSettings.variationStrength ?? 65)})
+            Variation strength ({rollVariationLabel(toolSettings.variationStrength ?? 65)})
           </FieldLabel>
           <input
             type="range"

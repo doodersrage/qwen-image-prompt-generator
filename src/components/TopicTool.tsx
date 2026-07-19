@@ -9,7 +9,10 @@ import { useLocationBlocklist } from "@/hooks/useLocationBlocklist";
 import { DEFAULT_TOPIC_TOOL_CACHE } from "@/lib/settings-cache";
 import type { BatchFromTopicsItem } from "@/lib/batch-from-topics";
 import type { TopicGenerateResult } from "@/lib/specialized/types";
-import { variationStrengthLabel } from "@/lib/variation-settings";
+import {
+  TOPIC_VARIETY_LABEL,
+  topicVarietyLabel,
+} from "@/lib/tool-ui-labels";
 import { resolveComfyUiRuntime } from "@/lib/comfyui-runtime";
 import {
   registerComfyGalleryJob,
@@ -236,7 +239,7 @@ export default function TopicTool() {
       }
     >
       <ToolSection>
-        <FieldLabel>Seed topic (optional)</FieldLabel>
+        <FieldLabel>Starting theme (optional)</FieldLabel>
         <TextArea
           value={toolSettings.seedTopic ?? ""}
           onChange={(e) => updateToolSettings({ seedTopic: e.target.value })}
@@ -268,13 +271,14 @@ export default function TopicTool() {
 
         <FieldDivider />
 
+        <FieldLabel>Topic variety</FieldLabel>
         <div className="flex items-center justify-between text-xs text-zinc-400">
           <span>Focused</span>
           <span className="font-medium text-violet-300">
-            {variationStrengthLabel(toolSettings.variety ?? 50)} (
+            {topicVarietyLabel(toolSettings.variety ?? 50)} (
             {toolSettings.variety ?? 50})
           </span>
-          <span>Wild</span>
+          <span>Exploratory</span>
         </div>
         <input
           type="range"

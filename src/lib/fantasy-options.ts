@@ -114,9 +114,7 @@ export type FantasyCameraAngle =
   | ""
   | "eye-level"
   | "low-hero"
-  | "aerial"
-  | "wide-establishing"
-  | "close-portrait";
+  | "aerial";
 
 export type FantasyLightingStyle =
   | ""
@@ -234,7 +232,7 @@ const SELECT_REGISTRY = {
     { value: "astral-rift", label: "Astral rift", script: "a tearing astral rift with starfield fragments," },
   ] satisfies SelectOption<FantasyMagicElement>[],
   atmosphere: [
-    { value: "", label: "Natural mood" },
+    { value: "", label: "Natural tone" },
     { value: "epic", label: "Epic", script: "epic triumphant atmosphere," },
     { value: "ominous", label: "Ominous", script: "ominous foreboding atmosphere," },
     { value: "whimsical", label: "Whimsical", script: "whimsical playful atmosphere," },
@@ -251,18 +249,16 @@ const SELECT_REGISTRY = {
     { value: "eternal-twilight", label: "Eternal twilight", script: "eternal twilight with neither day nor night," },
   ] satisfies SelectOption<FantasyTimeOfDay>[],
   scale: [
-    { value: "", label: "Natural scale" },
+    { value: "", label: "Natural epic scale" },
     { value: "intimate", label: "Intimate", script: "intimate close-scale staging," },
     { value: "grand", label: "Grand", script: "grand cinematic scale," },
     { value: "monumental", label: "Monumental", script: "monumental mythic scale with vast surroundings," },
   ] satisfies SelectOption<FantasyScale>[],
   cameraAngle: [
-    { value: "", label: "Default camera" },
+    { value: "", label: "Default angle" },
     { value: "eye-level", label: "Eye level", script: "eye-level camera aligned with the subject," },
-    { value: "low-hero", label: "Low hero angle", script: "low hero-angle framing from below," },
+    { value: "low-hero", label: "Low hero angle", script: "low hero-angle view from below," },
     { value: "aerial", label: "Aerial", script: "aerial downward perspective," },
-    { value: "wide-establishing", label: "Wide establishing", script: "wide establishing shot with layered depth," },
-    { value: "close-portrait", label: "Close portrait", script: "close portrait framing on face, gear, and expression," },
   ] satisfies SelectOption<FantasyCameraAngle>[],
   lightingStyle: [
     { value: "", label: "Default lighting" },
@@ -316,16 +312,23 @@ export const FANTASY_PRESET_UI_SECTIONS: FantasyPresetUiSection[] = [
     fields: [
       { kind: "select", key: "settingArchetype", label: "Setting" },
       { kind: "select", key: "magicElement", label: "Magic element" },
-      { kind: "select", key: "atmosphere", label: "Atmosphere" },
+      { kind: "select", key: "atmosphere", label: "Tone / mood" },
       { kind: "select", key: "timeOfDay", label: "Time of day" },
     ],
   },
   {
     id: "cinema",
-    title: "Scale & camera",
+    title: "Cinematic framing",
+    description: "Epic scale and camera angle—use Shot scale above for portrait, full body, action, or wide.",
     fields: [
-      { kind: "select", key: "scale", label: "Scale" },
-      { kind: "select", key: "cameraAngle", label: "Camera" },
+      { kind: "select", key: "scale", label: "Epic scale" },
+      { kind: "select", key: "cameraAngle", label: "Camera angle" },
+    ],
+  },
+  {
+    id: "look",
+    title: "Light & color",
+    fields: [
       { kind: "select", key: "lightingStyle", label: "Lighting" },
       { kind: "select", key: "colorPalette", label: "Color palette" },
     ],
@@ -373,6 +376,12 @@ export function normalizeFantasyPresetOptions(
 
   normalized.fantasyDetail =
     typeof input?.fantasyDetail === "string" ? input.fantasyDetail.trim() : "";
+
+  const legacyCamera =
+    typeof input?.cameraAngle === "string" ? input.cameraAngle : "";
+  if (legacyCamera === "wide-establishing" && !normalized.scale) {
+    normalized.scale = "grand";
+  }
 
   return normalized;
 }

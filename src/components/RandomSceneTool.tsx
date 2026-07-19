@@ -17,7 +17,11 @@ import { getReformatTargetLabel, getReformatTargetModel } from "@/lib/reformat-t
 import { DEFAULT_RANDOM_SCENE_TOOL_CACHE } from "@/lib/settings-cache";
 import type { EnrichedToolGenerateResult } from "@/lib/specialized/types";
 import { readVariationSeedFromResult } from "@/lib/variation-seed-metadata";
-import { variationStrengthLabel } from "@/lib/variation-settings";
+import {
+  SCENE_WILDNESS_LABEL,
+  THEME_HINT_LABEL,
+  sceneWildnessLabel,
+} from "@/lib/tool-ui-labels";
 import {
   ToolBadge,
   ToolLayout,
@@ -174,7 +178,7 @@ export default function RandomSceneTool() {
       }
     >
       <ToolSection>
-        <FieldLabel>Optional genre / theme</FieldLabel>
+        <FieldLabel>{THEME_HINT_LABEL}</FieldLabel>
         <input
           value={toolSettings.genre ?? ""}
           onChange={(e) => updateToolSettings({ genre: e.target.value })}
@@ -198,10 +202,11 @@ export default function RandomSceneTool() {
 
         <FieldDivider />
 
+        <FieldLabel>{SCENE_WILDNESS_LABEL}</FieldLabel>
         <div className="flex items-center justify-between text-xs text-zinc-400">
           <span>Safe</span>
           <span className="font-medium text-amber-300">
-            {variationStrengthLabel(toolSettings.wildness ?? 65)} (
+            {sceneWildnessLabel(toolSettings.wildness ?? 65)} (
             {toolSettings.wildness ?? 65})
           </span>
           <span>Wild</span>

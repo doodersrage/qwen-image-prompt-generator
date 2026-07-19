@@ -25,7 +25,10 @@ import {
   parseScenePresetFromSearch,
 } from "@/lib/scene-preset-url";
 import { getSportPreset } from "@/lib/sport-presets";
-import { variationStrengthLabel } from "@/lib/variation-settings";
+import {
+  RANDOMIZE_INGREDIENTS_LABEL,
+  rollVariationLabel,
+} from "@/lib/tool-ui-labels";
 import {
   CollapsibleSection,
   ToolBadge,
@@ -509,7 +512,7 @@ export default function PromptGenerator() {
             <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <FieldLabel hint="Randomize people, lighting, framing, and palette each run.">
-                Variation seed
+                {RANDOMIZE_INGREDIENTS_LABEL}
               </FieldLabel>
               <label className="inline-flex cursor-pointer items-center gap-2">
                 <span className="text-xs text-zinc-400">
@@ -529,7 +532,7 @@ export default function PromptGenerator() {
                 <div className="flex items-center justify-between gap-3 text-xs text-zinc-400">
                   <span>Subtle</span>
                   <span className="font-medium text-violet-300">
-                    {variationStrengthLabel(variationStrength)} ({variationStrength})
+                    {rollVariationLabel(variationStrength)} ({variationStrength})
                   </span>
                   <span>Wild</span>
                 </div>
@@ -543,7 +546,7 @@ export default function PromptGenerator() {
                     setVariationStrength(Number(e.target.value))
                   }
                   className="h-2 w-full cursor-pointer appearance-none rounded-full bg-zinc-800 accent-violet-500"
-                  aria-label="Variation seed strength"
+                  aria-label="Randomize ingredients strength"
                 />
                 <div className="flex flex-wrap gap-2">
                   {[

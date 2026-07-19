@@ -20,7 +20,12 @@ import { presetOptionsFromCache } from "@/lib/character-options";
 import { DEFAULT_CHARACTER_TOOL_CACHE } from "@/lib/settings-cache";
 import type { EnrichedToolGenerateResult } from "@/lib/specialized/types";
 import { readVariationSeedFromMetadata, readVariationSeedFromResult } from "@/lib/variation-seed-metadata";
-import { variationStrengthLabel } from "@/lib/variation-settings";
+import { SubjectShotScaleControl } from "@/components/ShotScaleControl";
+import {
+  ROLL_VARIATION_LABEL,
+  SCENE_HINTS_LABEL,
+  rollVariationLabel,
+} from "@/lib/tool-ui-labels";
 import { downloadTextFile } from "@/lib/prompt-pair";
 import {
   applyShareableSceneParams,
@@ -266,7 +271,7 @@ export default function CharacterTool() {
 
         <FieldDivider />
 
-        <FieldLabel>Character hints (optional)</FieldLabel>
+        <FieldLabel>{SCENE_HINTS_LABEL}</FieldLabel>
         <TextArea
           value={toolSettings.hints ?? ""}
           onChange={(e) => updateToolSettings({ hints: e.target.value })}
@@ -279,42 +284,24 @@ export default function CharacterTool() {
           mounted={mounted}
           settings={toolSettings}
           onChange={updateToolSettings}
+          variant="solo"
         />
 
         <FieldDivider />
 
-        <FieldLabel>Framing</FieldLabel>
-        <div className="flex flex-wrap gap-2">
-          {(
-            [
-              { label: "Portrait", value: "portrait" },
-              { label: "Full body", value: "full-body" },
-              { label: "Action", value: "action" },
-            ] as const
-          ).map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() =>
-                updateToolSettings({ portraitStyle: option.value })
-              }
-              className={`rounded-lg border px-3 py-2 text-xs font-medium ${
-                toolSettings.portraitStyle === option.value
-                  ? "border-sky-500 bg-sky-500/15 text-sky-200"
-                  : "border-zinc-700 text-zinc-400"
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+        <SubjectShotScaleControl
+          value={toolSettings.portraitStyle ?? "portrait"}
+          onChange={(value) => updateToolSettings({ portraitStyle: value })}
+          activeClassName="border-sky-500 bg-sky-500/15 text-sky-200"
+        />
 
         <FieldDivider />
 
+        <FieldLabel>{ROLL_VARIATION_LABEL}</FieldLabel>
         <div className="flex items-center justify-between text-xs text-zinc-400">
           <span>Stable</span>
           <span className="font-medium text-sky-300">
-            {variationStrengthLabel(toolSettings.variationStrength ?? 50)} (
+            {rollVariationLabel(toolSettings.variationStrength ?? 50)} (
             {toolSettings.variationStrength ?? 50})
           </span>
           <span>Varied</span>

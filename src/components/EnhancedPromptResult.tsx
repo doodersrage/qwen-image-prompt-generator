@@ -24,6 +24,7 @@ import {
   isComfyUiJobProcessing,
 } from "@/lib/comfyui-job-status";
 import type { GenerationDiagnostics } from "@/lib/generation-diagnostics";
+import { PINNED_VARIATION_SEED_LABEL } from "@/lib/tool-ui-labels";
 
 export type BatchPromptItem = {
   prompt: string;
@@ -410,7 +411,7 @@ export default function EnhancedPromptResult({
             reformatStatus ||
             comfyUiStatus}
           {!fixStatus && !comfyUiStatus && variationSeed
-            ? `Variation seed: ${variationSeed.length > 120 ? `${variationSeed.slice(0, 120)}…` : variationSeed}`
+            ? `${PINNED_VARIATION_SEED_LABEL}: ${variationSeed.length > 120 ? `${variationSeed.slice(0, 120)}…` : variationSeed}`
             : null}
         </p>
       )}

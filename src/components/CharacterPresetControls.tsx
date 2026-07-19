@@ -187,16 +187,34 @@ function PresetField({
   );
 }
 
+function shouldShowFieldForVariant(
+  field: CharacterPresetUiField,
+  variant: CharacterPresetControlsProps["variant"],
+): boolean {
+  if (variant === "solo" && (field.key === "headcount" || field.key === "duoDynamic")) {
+    return false;
+  }
+  if (
+    (variant === "duo" || variant === "compose") &&
+    field.key === "headcount"
+  ) {
+    return false;
+  }
+  return true;
+}
+
 function PresetSection({
   section,
   settings,
   presetOptions,
   onChange,
+  variant,
 }: {
   section: CharacterPresetUiSection;
   settings: CharacterToolCache;
   presetOptions: CharacterPresetOptions;
   onChange: (patch: Partial<CharacterToolCache>) => void;
+  variant: CharacterPresetControlsProps["variant"];
 }) {
   if (section.showWhen && !section.showWhen(presetOptions)) {
     return null;
@@ -206,8 +224,10 @@ function PresetSection({
     section.id,
     presetOptions,
   );
-  const visibleFields = section.fields.filter((field) =>
-    shouldShowPresetField(field, presetOptions),
+  const visibleFields = section.fields.filter(
+    (field) =>
+      shouldShowFieldForVariant(field, variant) &&
+      shouldShowPresetField(field, presetOptions),
   );
 
   if (visibleFields.length === 0) {
@@ -235,7 +255,7 @@ function PresetSection({
         </div>
       </summary>
       <div className="grid gap-3 border-t border-zinc-800/80 px-4 pb-4 pt-3 sm:grid-cols-2">
-        {section.fields.map((field) => (
+        {visibleFields.map((field) => (
           <PresetField
             key={`${section.id}-${field.key}`}
             field={field}
@@ -253,12 +273,14 @@ type CharacterPresetControlsProps = {
   mounted: boolean;
   settings: CharacterToolCache;
   onChange: (patch: Partial<CharacterToolCache>) => void;
+  variant?: "solo" | "duo" | "compose";
 };
 
 export default function CharacterPresetControls({
   mounted,
   settings,
   onChange,
+  variant = "solo",
 }: CharacterPresetControlsProps) {
   const presetOptions = useMemo(
     () => presetOptionsFromCache(settings),
@@ -315,6 +337,7 @@ export default function CharacterPresetControls({
             settings={settings}
             presetOptions={presetOptions}
             onChange={onChange}
+            variant={variant}
           />
         ))}
 

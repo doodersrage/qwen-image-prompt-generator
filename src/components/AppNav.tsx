@@ -30,7 +30,7 @@ const navGroups: NavGroup[] = [
     links: [
       { href: "/character", label: "Character", description: "Single person" },
       { href: "/duo", label: "Duo", description: "Sport & pairs" },
-      { href: "/compose", label: "Compose", description: "Scene merge" },
+      { href: "/compose", label: "Compose", description: "Subject + background" },
       { href: "/background", label: "Background", description: "No people" },
       { href: "/pet", label: "Pet", description: "Dogs, cats & more" },
       { href: "/fantasy", label: "Fantasy", description: "Magic & myth" },
