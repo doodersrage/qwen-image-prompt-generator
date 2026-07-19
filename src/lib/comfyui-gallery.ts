@@ -21,17 +21,137 @@ export type ComfyGallerySort =
   | "favorites-first";
 
 export const GALLERY_PAGE_SIZE_OPTIONS = [12, 24, 48] as const;
-export type GalleryPageSize = (typeof GALLERY_PAGE_SIZE_OPTIONS)[number];
+export const GALLERY_PAGE_SIZE_ALL = "all" as const;
+export type GalleryPageSize =
+  | (typeof GALLERY_PAGE_SIZE_OPTIONS)[number]
+  | typeof GALLERY_PAGE_SIZE_ALL;
+
+export const GALLERY_SLIDESHOW_INTERVAL_OPTIONS = [
+  2000, 3000, 4000, 5000, 7500, 10000, 15000, 20000, 30000, 45000, 60000, 90000,
+  120000,
+] as const;
+export type GallerySlideshowIntervalMs =
+  (typeof GALLERY_SLIDESHOW_INTERVAL_OPTIONS)[number];
+
+export function formatGallerySlideshowInterval(ms: number): string {
+  if (ms < 60_000) {
+    return `${ms / 1000}s`;
+  }
+
+  const minutes = Math.floor(ms / 60_000);
+  const seconds = (ms % 60_000) / 1000;
+  if (seconds === 0) {
+    return `${minutes}m`;
+  }
+
+  return `${minutes}m ${seconds}s`;
+}
+
+export function normalizeGallerySlideshowIntervalMs(
+  value: unknown,
+): GallerySlideshowIntervalMs {
+  if (isGallerySlideshowIntervalMs(value)) {
+    return value;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return GALLERY_SLIDESHOW_INTERVAL_OPTIONS.reduce((best, option) =>
+      Math.abs(option - value) < Math.abs(best - value) ? option : best,
+    );
+  }
+
+  return DEFAULT_GALLERY_VIEW.slideshowIntervalMs;
+}
+
+export const GALLERY_SLIDESHOW_TRANSITION_OPTIONS = [
+  "slide",
+  "fade",
+  "zoom",
+  "none",
+] as const;
+export type GallerySlideshowTransition =
+  (typeof GALLERY_SLIDESHOW_TRANSITION_OPTIONS)[number];
+
+export const GALLERY_SLIDESHOW_TRANSITION_LABELS: Record<
+  GallerySlideshowTransition,
+  string
+> = {
+  slide: "Slide",
+  fade: "Fade",
+  zoom: "Zoom",
+  none: "Instant",
+};
+
+export function isGallerySlideshowTransition(
+  value: unknown,
+): value is GallerySlideshowTransition {
+  return (
+    typeof value === "string" &&
+    GALLERY_SLIDESHOW_TRANSITION_OPTIONS.includes(
+      value as GallerySlideshowTransition,
+    )
+  );
+}
+
+export function resolveGallerySlideshowTransition(
+  value: unknown,
+): GallerySlideshowTransition {
+  return isGallerySlideshowTransition(value)
+    ? value
+    : DEFAULT_GALLERY_VIEW.slideshowTransition;
+}
+
+export const GALLERY_SLIDESHOW_TRANSITION_MS = 520;
+
+export function resolveGallerySlideshowTransitionMs(
+  transition: GallerySlideshowTransition,
+): number {
+  return transition === "none" ? 0 : GALLERY_SLIDESHOW_TRANSITION_MS;
+}
 
 export type ComfyGalleryViewPreferences = {
   sort: ComfyGallerySort;
   pageSize: GalleryPageSize;
+  slideshowIntervalMs: GallerySlideshowIntervalMs;
+  slideshowTransition: GallerySlideshowTransition;
 };
 
 export const DEFAULT_GALLERY_VIEW: ComfyGalleryViewPreferences = {
   sort: "queued-desc",
   pageSize: 12,
+  slideshowIntervalMs: 5000,
+  slideshowTransition: "slide",
 };
+
+export function isGallerySlideshowIntervalMs(
+  value: unknown,
+): value is GallerySlideshowIntervalMs {
+  return (
+    typeof value === "number" &&
+    GALLERY_SLIDESHOW_INTERVAL_OPTIONS.includes(
+      value as GallerySlideshowIntervalMs,
+    )
+  );
+}
+
+export function isGalleryPageSize(value: unknown): value is GalleryPageSize {
+  return (
+    value === GALLERY_PAGE_SIZE_ALL ||
+    (typeof value === "number" &&
+      GALLERY_PAGE_SIZE_OPTIONS.includes(value as (typeof GALLERY_PAGE_SIZE_OPTIONS)[number]))
+  );
+}
+
+export function resolveGalleryPageSize(
+  pageSize: GalleryPageSize,
+  totalItems: number,
+): number {
+  if (pageSize === GALLERY_PAGE_SIZE_ALL) {
+    return Math.max(totalItems, 1);
+  }
+
+  return pageSize;
+}
 
 export const COMFYUI_GALLERY_VIEW_KEY = "comfyui-gallery-view-v1";
 
@@ -189,10 +309,8 @@ export function loadGalleryViewPreferences(): ComfyGalleryViewPreferences {
     }
 
     const parsed = JSON.parse(raw) as Partial<ComfyGalleryViewPreferences>;
-    const pageSize = GALLERY_PAGE_SIZE_OPTIONS.includes(
-      parsed.pageSize as GalleryPageSize,
-    )
-      ? (parsed.pageSize as GalleryPageSize)
+    const pageSize = isGalleryPageSize(parsed.pageSize)
+      ? parsed.pageSize
       : DEFAULT_GALLERY_VIEW.pageSize;
 
     const sortValues: ComfyGallerySort[] = [
@@ -205,8 +323,14 @@ export function loadGalleryViewPreferences(): ComfyGalleryViewPreferences {
     const sort = sortValues.includes(parsed.sort as ComfyGallerySort)
       ? (parsed.sort as ComfyGallerySort)
       : DEFAULT_GALLERY_VIEW.sort;
+    const slideshowIntervalMs = normalizeGallerySlideshowIntervalMs(
+      parsed.slideshowIntervalMs,
+    );
+    const slideshowTransition = resolveGallerySlideshowTransition(
+      parsed.slideshowTransition,
+    );
 
-    return { sort, pageSize };
+    return { sort, pageSize, slideshowIntervalMs, slideshowTransition };
   } catch {
     return DEFAULT_GALLERY_VIEW;
   }
@@ -311,4 +435,55 @@ export function galleryEntryViewUrls(entry: ComfyGalleryEntry): string[] {
 
 export function galleryEntryPrimaryViewUrl(entry: ComfyGalleryEntry): string | null {
   return galleryEntryViewUrls(entry)[0] ?? null;
+}
+
+export type GalleryLightboxPlaylist = {
+  images: string[];
+  titles: string[];
+};
+
+export function buildGalleryLightboxPlaylist(
+  entries: readonly ComfyGalleryEntry[],
+  titleLength = 120,
+): GalleryLightboxPlaylist {
+  const images: string[] = [];
+  const titles: string[] = [];
+
+  for (const entry of entries) {
+    const urls = galleryEntryViewUrls(entry);
+    if (urls.length === 0) {
+      continue;
+    }
+
+    const title = entry.prompt.slice(0, titleLength);
+    for (const url of urls) {
+      images.push(url);
+      titles.push(title);
+    }
+  }
+
+  return { images, titles };
+}
+
+export function resolveGalleryLightboxOpenIndex(
+  entries: readonly ComfyGalleryEntry[],
+  entryId: string,
+  imageIndex = 0,
+): number {
+  let flatIndex = 0;
+
+  for (const entry of entries) {
+    const urls = galleryEntryViewUrls(entry);
+    if (urls.length === 0) {
+      continue;
+    }
+
+    if (entry.id === entryId) {
+      return flatIndex + Math.min(Math.max(imageIndex, 0), urls.length - 1);
+    }
+
+    flatIndex += urls.length;
+  }
+
+  return 0;
 }

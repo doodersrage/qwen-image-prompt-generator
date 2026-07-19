@@ -14,16 +14,24 @@ import {
 } from "@/lib/comfyui-gallery-export";
 import { requeueComfyJob, requeueComfyJobs } from "@/lib/comfyui-requeue";
 import {
+  buildGalleryLightboxPlaylist,
   galleryEntryViewUrls,
+  GALLERY_PAGE_SIZE_ALL,
   GALLERY_PAGE_SIZE_OPTIONS,
+  GALLERY_SLIDESHOW_INTERVAL_OPTIONS,
+  GALLERY_SLIDESHOW_TRANSITION_OPTIONS,
   loadGalleryViewPreferences,
   paginateGalleryEntries,
+  resolveGalleryPageSize,
+  resolveGalleryLightboxOpenIndex,
   saveGalleryViewPreferences,
   sortGalleryEntries,
   type ComfyGalleryEntry,
   type ComfyGalleryJobStatus,
   type ComfyGallerySort,
   type GalleryPageSize,
+  type GallerySlideshowIntervalMs,
+  type GallerySlideshowTransition,
 } from "@/lib/comfyui-gallery";
 
 const GALLERY_SORT_OPTIONS: { value: ComfyGallerySort; label: string }[] = [
@@ -67,9 +75,14 @@ export default function ComfyUiGalleryPanel({
   const [requeueStatus, setRequeueStatus] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [lightbox, setLightbox] = useState<ImageLightboxState | null>(null);
+  const [slideshowPlaying, setSlideshowPlaying] = useState(false);
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<ComfyGallerySort>("queued-desc");
   const [pageSize, setPageSize] = useState<GalleryPageSize>(12);
+  const [slideshowIntervalMs, setSlideshowIntervalMs] =
+    useState<GallerySlideshowIntervalMs>(5000);
+  const [slideshowTransition, setSlideshowTransition] =
+    useState<GallerySlideshowTransition>("slide");
   const [viewPrefsLoaded, setViewPrefsLoaded] = useState(false);
 
   const bulkEnabled = showFilters && !compact;
@@ -88,6 +101,8 @@ export default function ComfyUiGalleryPanel({
     const preferences = loadGalleryViewPreferences();
     setSort(preferences.sort);
     setPageSize(preferences.pageSize);
+    setSlideshowIntervalMs(preferences.slideshowIntervalMs);
+    setSlideshowTransition(preferences.slideshowTransition);
     setViewPrefsLoaded(true);
   }, [mounted]);
 
@@ -95,8 +110,20 @@ export default function ComfyUiGalleryPanel({
     if (!viewPrefsLoaded || !paginationEnabled) {
       return;
     }
-    saveGalleryViewPreferences({ sort, pageSize });
-  }, [sort, pageSize, viewPrefsLoaded, paginationEnabled]);
+    saveGalleryViewPreferences({
+      sort,
+      pageSize,
+      slideshowIntervalMs,
+      slideshowTransition,
+    });
+  }, [
+    sort,
+    pageSize,
+    slideshowIntervalMs,
+    slideshowTransition,
+    viewPrefsLoaded,
+    paginationEnabled,
+  ]);
 
   useEffect(() => {
     setPage(1);
@@ -113,13 +140,60 @@ export default function ComfyUiGalleryPanel({
       };
     }
 
-    return paginateGalleryEntries(sortedSource, page, pageSize);
+    const effectivePageSize = resolveGalleryPageSize(pageSize, sortedSource.length);
+    return paginateGalleryEntries(sortedSource, page, effectivePageSize);
   }, [sortedSource, limit, page, pageSize, paginationEnabled]);
 
   const visibleEntries = pagination.items;
   const totalPages = pagination.totalPages;
   const currentPage = pagination.page;
   const totalFiltered = pagination.totalItems;
+  const effectivePageSize = resolveGalleryPageSize(pageSize, totalFiltered);
+  const showPagination = paginationEnabled && pageSize !== GALLERY_PAGE_SIZE_ALL && totalFiltered > effectivePageSize;
+
+  const lightboxPlaylist = useMemo(
+    () => buildGalleryLightboxPlaylist(visibleEntries),
+    [visibleEntries],
+  );
+
+  const openEntryLightbox = (entry: ComfyGalleryEntry, imageIndex: number) => {
+    if (lightboxPlaylist.images.length === 0) {
+      return;
+    }
+
+    const index = resolveGalleryLightboxOpenIndex(
+      visibleEntries,
+      entry.id,
+      imageIndex,
+    );
+
+    setLightbox({
+      images: lightboxPlaylist.images,
+      titles: lightboxPlaylist.titles,
+      index,
+      title: lightboxPlaylist.titles[index],
+    });
+    setSlideshowPlaying(false);
+  };
+
+  const startSlideshow = () => {
+    if (lightboxPlaylist.images.length === 0) {
+      return;
+    }
+
+    setLightbox({
+      images: lightboxPlaylist.images,
+      titles: lightboxPlaylist.titles,
+      index: 0,
+      title: lightboxPlaylist.titles[0],
+    });
+    setSlideshowPlaying(true);
+  };
+
+  const closeLightbox = () => {
+    setLightbox(null);
+    setSlideshowPlaying(false);
+  };
 
   useEffect(() => {
     if (!paginationEnabled || page === currentPage) {
@@ -149,11 +223,32 @@ export default function ComfyUiGalleryPanel({
     <section className="space-y-4">
       <ImageLightbox
         state={lightbox}
-        onClose={() => setLightbox(null)}
+        onClose={closeLightbox}
         onIndexChange={(index) =>
           setLightbox((previous) =>
-            previous ? { ...previous, index } : previous,
+            previous
+              ? {
+                  ...previous,
+                  index,
+                  title: previous.titles?.[index] ?? previous.title,
+                }
+              : previous,
           )
+        }
+        slideshow={
+          lightboxPlaylist.images.length > 1
+            ? {
+                playing: slideshowPlaying,
+                intervalMs: slideshowIntervalMs,
+                intervalOptions: GALLERY_SLIDESHOW_INTERVAL_OPTIONS,
+                transition: slideshowTransition,
+                transitionOptions: GALLERY_SLIDESHOW_TRANSITION_OPTIONS,
+                onPlayingChange: setSlideshowPlaying,
+                onIntervalChange: (intervalMs) =>
+                  setSlideshowIntervalMs(intervalMs as GallerySlideshowIntervalMs),
+                onTransitionChange: setSlideshowTransition,
+              }
+            : undefined
         }
       />
       {showHeader && (
@@ -295,7 +390,7 @@ export default function ComfyUiGalleryPanel({
                 <select
                   value={pageSize}
                   onChange={(event) =>
-                    setPageSize(Number(event.target.value) as GalleryPageSize)
+                    setPageSize(event.target.value as GalleryPageSize)
                   }
                   className="ui-input block px-3 py-[var(--input-padding-y)] type-body"
                 >
@@ -304,27 +399,40 @@ export default function ComfyUiGalleryPanel({
                       {size}
                     </option>
                   ))}
+                  <option value={GALLERY_PAGE_SIZE_ALL}>All</option>
                 </select>
               </label>
+
+              {lightboxPlaylist.images.length > 1 && (
+                <button
+                  type="button"
+                  onClick={startSlideshow}
+                  className="self-end rounded-lg border border-violet-700/60 px-3 py-[var(--input-padding-y)] text-violet-200 hover:border-violet-500"
+                >
+                  Slideshow
+                </button>
+              )}
             </>
           )}
 
           <p className="ml-auto text-xs text-zinc-600">
             {totalFiltered}/{entries.length} match
-            {paginationEnabled && totalFiltered > pageSize
+            {paginationEnabled && showPagination
               ? ` · page ${currentPage}/${totalPages}`
-              : ""}
+              : pageSize === GALLERY_PAGE_SIZE_ALL && totalFiltered > 0
+                ? " · showing all"
+                : ""}
           </p>
           </div>
         </div>
       )}
 
-      {paginationEnabled && totalFiltered > pageSize && (
+      {showPagination && (
         <GalleryPaginator
           page={currentPage}
           totalPages={totalPages}
           totalItems={totalFiltered}
-          pageSize={pageSize}
+          pageSize={effectivePageSize}
           onPageChange={setPage}
         />
       )}
@@ -486,24 +594,18 @@ export default function ComfyUiGalleryPanel({
                   );
                 });
               }}
-              onOpenImage={(index) =>
-                setLightbox({
-                  images: galleryEntryViewUrls(entry),
-                  index,
-                  title: entry.prompt.slice(0, 120),
-                })
-              }
+              onOpenImage={(index) => openEntryLightbox(entry, index)}
             />
           ))}
         </div>
       )}
 
-      {paginationEnabled && totalFiltered > pageSize && visibleEntries.length > 0 && (
+      {showPagination && visibleEntries.length > 0 && (
         <GalleryPaginator
           page={currentPage}
           totalPages={totalPages}
           totalItems={totalFiltered}
-          pageSize={pageSize}
+          pageSize={effectivePageSize}
           onPageChange={setPage}
         />
       )}

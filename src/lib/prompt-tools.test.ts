@@ -30,8 +30,15 @@ import { formatComfyUiJobStatusLine } from "./comfyui-job-status";
 import { validateWorkflowJson, stripEmptyComfyUiRuntime, injectWorkflowPlaceholders } from "./comfyui-config";
 import { extractImagesFromOutputs } from "./comfyui-outputs";
 import {
+  buildGalleryLightboxPlaylist,
   filterComfyGalleryEntries,
+  formatGallerySlideshowInterval,
+  normalizeGallerySlideshowIntervalMs,
   paginateGalleryEntries,
+  resolveGallerySlideshowTransition,
+  resolveGallerySlideshowTransitionMs,
+  resolveGalleryLightboxOpenIndex,
+  resolveGalleryPageSize,
   sortGalleryEntries,
 } from "./comfyui-gallery";
 import { listServerWorkflowPaths } from "./comfyui-server-workflows";
@@ -814,6 +821,33 @@ describe("comfyui gallery outputs", () => {
     assert.equal(overflow.items[0], "entry-24");
   });
 
+  it("shows all entries when page size is all", () => {
+    const entries = Array.from({ length: 25 }, (_, index) => `entry-${index}`);
+    assert.equal(resolveGalleryPageSize("all", 25), 25);
+    const all = paginateGalleryEntries(
+      entries,
+      1,
+      resolveGalleryPageSize("all", entries.length),
+    );
+    assert.equal(all.items.length, 25);
+    assert.equal(all.totalPages, 1);
+  });
+
+  it("formats and normalizes slideshow intervals", () => {
+    assert.equal(formatGallerySlideshowInterval(5000), "5s");
+    assert.equal(formatGallerySlideshowInterval(90_000), "1m 30s");
+    assert.equal(formatGallerySlideshowInterval(120_000), "2m");
+    assert.equal(normalizeGallerySlideshowIntervalMs(8000), 7500);
+    assert.equal(normalizeGallerySlideshowIntervalMs("nope"), 5000);
+  });
+
+  it("resolves slideshow transition preferences", () => {
+    assert.equal(resolveGallerySlideshowTransition("zoom"), "zoom");
+    assert.equal(resolveGallerySlideshowTransition("invalid"), "slide");
+    assert.equal(resolveGallerySlideshowTransitionMs("none"), 0);
+    assert.equal(resolveGallerySlideshowTransitionMs("fade"), 520);
+  });
+
   it("sorts gallery entries", () => {
     const entries = [
       {
@@ -862,6 +896,37 @@ describe("comfyui gallery outputs", () => {
       sortGalleryEntries(entries, "favorites-first").map((entry) => entry.id),
       ["2", "1"],
     );
+  });
+
+  it("builds a cross-entry lightbox playlist", () => {
+    const entries = [
+      {
+        id: "a",
+        promptId: "p1",
+        prompt: "first prompt",
+        comfyUrl: "http://127.0.0.1:8188",
+        status: "completed" as const,
+        queuedAt: 1,
+        images: [{ filename: "a.png", subfolder: "", type: "output" }],
+      },
+      {
+        id: "b",
+        promptId: "p2",
+        prompt: "second prompt",
+        comfyUrl: "http://127.0.0.1:8188",
+        status: "completed" as const,
+        queuedAt: 2,
+        images: [
+          { filename: "b1.png", subfolder: "", type: "output" },
+          { filename: "b2.png", subfolder: "", type: "output" },
+        ],
+      },
+    ];
+
+    const playlist = buildGalleryLightboxPlaylist(entries);
+    assert.equal(playlist.images.length, 3);
+    assert.equal(playlist.titles[0], "first prompt");
+    assert.equal(resolveGalleryLightboxOpenIndex(entries, "b", 1), 2);
   });
 });
 
