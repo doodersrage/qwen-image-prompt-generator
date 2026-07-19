@@ -1,20 +1,33 @@
 import type { PromptHistoryEntry } from "@/hooks/usePromptHistory";
 
 export function buildRegenerateUrl(entry: PromptHistoryEntry): string {
-  const path =
+  const sceneMode =
     entry.tool === "compose"
-      ? "/compose"
+      ? "compose"
       : entry.tool === "duo" || entry.diagnostics?.inferred.duoMode
-        ? "/duo"
+        ? "duo"
         : entry.tool === "character"
-          ? "/character"
-          : "/";
+          ? "solo"
+          : null;
+
+  const path =
+    sceneMode !== null
+      ? "/character"
+      : entry.tool === "randomScene"
+        ? "/"
+        : "/";
 
   const params = new URLSearchParams();
+  if (sceneMode) {
+    params.set("mode", sceneMode);
+  }
+  if (entry.tool === "randomScene") {
+    params.set("source", "random");
+  }
   if (entry.hints?.trim()) {
     params.set("hints", entry.hints.trim());
   } else if (entry.tool === "generate") {
-    params.set("hints", entry.prompt.slice(0, 500));
+    params.set("input", entry.prompt.slice(0, 500));
   }
   if (entry.model && entry.model !== "n/a") {
     params.set("model", entry.model);

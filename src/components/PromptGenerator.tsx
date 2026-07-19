@@ -8,7 +8,10 @@ import SportPresetChips from "@/components/SportPresetChips";
 import { useCachedSettings } from "@/hooks/useCachedSettings";
 import { usePromptResultActions } from "@/hooks/usePromptResultActions";
 import { useRecentClothing } from "@/hooks/useRecentClothing";
+import { useRecentLocations } from "@/hooks/useRecentLocations";
+import { useLocationBlocklist } from "@/hooks/useLocationBlocklist";
 import { readClothingIdsFromMetadata } from "@/lib/recent-clothing";
+import { readSceneLocationFromMetadata } from "@/lib/recent-locations";
 import type { DetailLevel } from "@/lib/detail-level";
 import { getDetailLimits } from "@/lib/detail-level";
 import {
@@ -17,7 +20,10 @@ import {
 } from "@/lib/comfy-models";
 import {
   DEFAULT_GENERATE_TOOL_CACHE,
+  type GenerateSource,
 } from "@/lib/settings-cache";
+import type { EnrichedToolGenerateResult } from "@/lib/specialized/types";
+import { readVariationSeedFromResult } from "@/lib/variation-seed-metadata";
 import { applyLockedLocation } from "@/lib/locked-location";
 import { getReformatTargetLabel, getReformatTargetModel } from "@/lib/reformat-target";
 import {
@@ -27,7 +33,10 @@ import {
 import { getSportPreset } from "@/lib/sport-presets";
 import {
   RANDOMIZE_INGREDIENTS_LABEL,
+  SCENE_WILDNESS_LABEL,
+  THEME_HINT_LABEL,
   rollVariationLabel,
+  sceneWildnessLabel,
 } from "@/lib/tool-ui-labels";
 import {
   CollapsibleSection,
@@ -36,6 +45,7 @@ import {
   ToolSection,
   accentButtonClass,
   accentFocusClass,
+  accentRingClass,
 } from "@/components/ui/ToolPageShell";
 import { FieldDivider, FieldError, FieldLabel, TextArea } from "@/components/ui/Field";
 import { PrimaryButton } from "@/components/ui/Button";
@@ -73,15 +83,21 @@ const EXAMPLE_INPUTS = [
 ];
 
 export default function PromptGenerator() {
-  const { shared, toolSettings, updateShared, updateToolSettings } =
+  const { mounted, shared, toolSettings, updateShared, updateToolSettings } =
     useCachedSettings("generate", DEFAULT_GENERATE_TOOL_CACHE);
+  const { getRecent, record: recordLocation } = useRecentLocations();
   const { getRecent: getRecentClothing, record: recordClothing } = useRecentClothing();
+  const { getBlocklist } = useLocationBlocklist();
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<PromptMode>(
     DEFAULT_GENERATE_TOOL_CACHE.mode ?? "positive",
   );
   const [output, setOutput] = useState("");
   const [provider, setProvider] = useState<"llm" | "template" | null>(null);
+  const [randomResult, setRandomResult] = useState<EnrichedToolGenerateResult | null>(
+    null,
+  );
+  const [randomSeed, setRandomSeed] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -89,6 +105,11 @@ export default function PromptGenerator() {
     GenerateResponse,
     "model" | "comfyNode" | "limits"
   > | null>(null);
+
+  const generateSource = toolSettings.generateSource ?? "keywords";
+  const genre = toolSettings.genre ?? "";
+  const includePeople = toolSettings.includePeople !== false;
+  const wildness = toolSettings.wildness ?? 65;
 
   const qwenModel = shared.model;
   const detail = shared.detail;
@@ -99,13 +120,17 @@ export default function PromptGenerator() {
   const autoFixRules = shared.autoFixRules !== false;
 
   const actions = usePromptResultActions({
-    tool: "generate",
+    tool: generateSource === "random" ? "randomScene" : "generate",
     model: qwenModel,
     detail,
-    hints: input,
+    hints: generateSource === "random" ? genre : input,
     autoFixRules,
     reformatTarget: getReformatTargetModel(qwenModel),
   });
+
+  const variationSeed = readVariationSeedFromResult(
+    randomResult ?? { metadata: undefined, seed: undefined },
+  );
 
   const setQwenModel = (model: ComfyImageModel) => updateShared({ model });
   const setDetail = (value: DetailLevel) => updateShared({ detail: value });
@@ -136,11 +161,22 @@ export default function PromptGenerator() {
     }
   }, [toolSettings.mode]);
 
+  const setGenerateSource = (value: GenerateSource) =>
+    updateToolSettings({ generateSource: value });
+
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
     const params = new URLSearchParams(window.location.search);
+    if (params.get("source") === "random") {
+      updateToolSettings({ generateSource: "random" });
+    }
+    const seed = params.get("seed");
+    if (seed?.trim()) {
+      updateShared({ lockedVariationSeed: seed.trim() });
+    }
+
     const prefilled = params.get("input") ?? params.get("hints");
     if (prefilled?.trim()) {
       setInput(prefilled.trim());
@@ -169,14 +205,101 @@ export default function PromptGenerator() {
     }
   }, [updateShared, updateToolSettings]);
 
-  const submitDisabled = loading || !input.trim();
-  const submitDisabledReason = !input.trim()
-    ? "Enter scene keywords above to enable generation."
-    : loading
-      ? "Generating…"
-      : null;
+  const submitDisabled =
+    loading ||
+    (generateSource === "keywords" ? !input.trim() : !mounted);
+  const submitDisabledReason =
+    generateSource === "keywords" && !input.trim()
+      ? "Enter scene keywords above to enable generation."
+      : loading
+        ? "Generating…"
+        : null;
+
+  const generateRandom = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setCopied(false);
+    actions.resetStatuses();
+    setRandomResult(null);
+    setRandomSeed(null);
+    setProvider(null);
+    setResultMeta(null);
+
+    try {
+      const response = await fetch("/api/random-scene", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: qwenModel,
+          detail,
+          genre,
+          includePeople,
+          wildness,
+          recentLocations: getRecent(),
+          recentClothing: getRecentClothing(),
+          blockedLocations: getBlocklist(),
+          lockedWardrobeId: shared.lockedWardrobeId,
+          lockedLocation: shared.lockedLocation,
+          variationSeed: shared.lockedVariationSeed,
+          alwaysIncludeClothing: alwaysIncludeClothing,
+        }),
+      });
+
+      const data = (await response.json()) as EnrichedToolGenerateResult & {
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Generation failed.");
+      }
+
+      recordLocation(readSceneLocationFromMetadata(data.metadata));
+      recordClothing(readClothingIdsFromMetadata(data.metadata));
+
+      const prompt = await actions.finalizePrompt(data.prompt, genre);
+      setOutput(prompt);
+      setRandomResult({ ...data, prompt });
+      setRandomSeed(data.seed ?? null);
+      setProvider(data.provider ?? null);
+      setResultMeta({
+        model: data.model ?? qwenModel,
+        comfyNode: data.comfyNode ?? selectedModel.comfyNode,
+        limits: data.limits ?? activeLimits,
+      });
+    } catch (err) {
+      setOutput("");
+      setRandomResult(null);
+      setRandomSeed(null);
+      setError(err instanceof Error ? err.message : "Generation failed.");
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    actions,
+    activeLimits,
+    alwaysIncludeClothing,
+    detail,
+    genre,
+    getBlocklist,
+    getRecent,
+    getRecentClothing,
+    includePeople,
+    qwenModel,
+    recordClothing,
+    recordLocation,
+    selectedModel.comfyNode,
+    shared.lockedLocation,
+    shared.lockedVariationSeed,
+    shared.lockedWardrobeId,
+    wildness,
+  ]);
 
   const generate = useCallback(async () => {
+    if (generateSource === "random") {
+      await generateRandom();
+      return;
+    }
+
     if (!input.trim()) {
       setError("Enter a topic or keywords first.");
       return;
@@ -242,11 +365,13 @@ export default function PromptGenerator() {
       setOutput("");
       setProvider(null);
       setResultMeta(null);
+      setRandomResult(null);
+      setRandomSeed(null);
       setError(err instanceof Error ? err.message : "Generation failed.");
     } finally {
       setLoading(false);
     }
-  }, [input, mode, variationEnabled, variationStrength, distinctPeople, alwaysIncludeClothing, detail, qwenModel, getRecentClothing, recordClothing, actions, shared.lockedLocation, shared.lockedWardrobeId, shared.lockedVariationSeed]);
+  }, [generateRandom, generateSource, input, mode, variationEnabled, variationStrength, distinctPeople, alwaysIncludeClothing, detail, qwenModel, getRecentClothing, recordClothing, actions, shared.lockedLocation, shared.lockedWardrobeId, shared.lockedVariationSeed]);
 
   const copyOutput = useCallback(async () => {
     if (!output) return;
@@ -320,7 +445,8 @@ export default function PromptGenerator() {
             </div>
           </div>
 
-          {mode === "positive" && (
+          {mode === "positive" &&
+            (generateSource === "keywords" || includePeople) && (
             <>
               <FieldDivider />
               <label className="flex cursor-pointer items-start gap-3">
@@ -393,7 +519,80 @@ export default function PromptGenerator() {
         </>
       }
     >
-      <ToolSection title="Scene prompt" description="Describe what you want to generate, then tune variation options below.">
+      <ToolSection title="Scene prompt" description="Describe what you want to generate, or roll a random surprise scene.">
+        <FieldLabel>Prompt source</FieldLabel>
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              { label: "From keywords", value: "keywords" },
+              { label: "Random surprise", value: "random" },
+            ] as const
+          ).map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setGenerateSource(option.value)}
+              className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                generateSource === option.value
+                  ? "border-violet-500 bg-violet-500/15 text-violet-200"
+                  : "border-zinc-700 text-zinc-400"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
+        <FieldDivider />
+
+        {generateSource === "random" ? (
+          <>
+            <FieldLabel>{THEME_HINT_LABEL}</FieldLabel>
+            <input
+              value={genre}
+              onChange={(e) => updateToolSettings({ genre: e.target.value })}
+              placeholder="e.g. solarpunk, noir, cozy horror"
+              className={`ui-input w-full px-4 py-3 text-sm ${accentFocusClass(ACCENT)}`}
+            />
+
+            <FieldDivider />
+
+            <label className="inline-flex items-center gap-2 text-sm text-zinc-300">
+              <input
+                type="checkbox"
+                checked={includePeople}
+                onChange={(e) =>
+                  updateToolSettings({ includePeople: e.target.checked })
+                }
+                className="h-4 w-4 rounded border-zinc-600"
+              />
+              Include people in random ingredients
+            </label>
+
+            <FieldDivider />
+
+            <FieldLabel>{SCENE_WILDNESS_LABEL}</FieldLabel>
+            <div className="flex items-center justify-between text-xs text-zinc-400">
+              <span>Safe</span>
+              <span className="font-medium text-violet-300">
+                {sceneWildnessLabel(wildness)} ({wildness})
+              </span>
+              <span>Wild</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={wildness}
+              onChange={(e) =>
+                updateToolSettings({ wildness: Number(e.target.value) })
+              }
+              className={`h-2 w-full ${accentRingClass(ACCENT)}`}
+            />
+          </>
+        ) : (
+          <>
         {mode === "positive" && (
           <SportPresetChips
             mode="all"
@@ -574,6 +773,8 @@ export default function PromptGenerator() {
             </div>
           </CollapsibleSection>
         )}
+          </>
+        )}
 
         <PrimaryButton
           accentClassName={accentButtonClass(ACCENT)}
@@ -581,11 +782,17 @@ export default function PromptGenerator() {
           onClick={() => void generate()}
           disabled={submitDisabled}
           loading={loading}
-          loadingLabel="Generating scene prompt"
+          loadingLabel={
+            generateSource === "random"
+              ? "Generating random scene"
+              : "Generating scene prompt"
+          }
           title={submitDisabledReason ?? undefined}
           aria-disabled={submitDisabled}
         >
-          Generate scene prompt
+          {generateSource === "random"
+            ? "Generate random scene"
+            : "Generate scene prompt"}
         </PrimaryButton>
 
         {submitDisabledReason && !loading && (
@@ -595,7 +802,7 @@ export default function PromptGenerator() {
         {error && <FieldError>{error}</FieldError>}
       </ToolSection>
 
-      {output && mode === "positive" && (
+      {output && (generateSource === "random" || mode === "positive") && (
         <EnhancedPromptResult
           output={output}
           provider={provider}
@@ -604,33 +811,58 @@ export default function PromptGenerator() {
           copied={copied}
           onCopy={() => void copyOutput()}
           extraMeta={
-            resultMeta
-              ? `${resultMeta.limits.minChars ? `${resultMeta.limits.minChars}–` : ""}${resultMeta.limits.maxChars} char limit · ${output.length} chars`
-              : undefined
+            generateSource === "random" && randomSeed
+              ? `seed: ${randomSeed}`
+              : resultMeta
+                ? `${resultMeta.limits.minChars ? `${resultMeta.limits.minChars}–` : ""}${resultMeta.limits.maxChars} char limit · ${output.length} chars`
+                : undefined
           }
-          diagnostics={actions.diagnostics}
+          diagnostics={actions.diagnostics ?? randomResult?.diagnostics ?? null}
           preDiagnostics={actions.preDiagnostics}
           onSaveHistory={() =>
-            actions.saveHistory({ prompt: output, hints: input })
+            actions.saveHistory({
+              prompt: output,
+              hints: generateSource === "random" ? genre : input,
+              metadata: randomResult?.metadata,
+            })
           }
           onSendComfyUi={() => void actions.sendComfyUi(output)}
           {...promptResultPreviewProps(actions, output)}
-          onFixPrompt={() => void actions.fixPrompt(output, setOutput, input)}
+          onFixPrompt={() =>
+            void actions.fixPrompt(
+              output,
+              setOutput,
+              generateSource === "random" ? genre : input,
+            )
+          }
           onCopyPair={() => void actions.copyPromptPair(output)}
           onCompact={() => void actions.compactPrompt(output, setOutput)}
           onReformat={() => void actions.reformatForModel(output, setOutput)}
           reformatTargetLabel={getReformatTargetLabel(qwenModel)}
           onRunPipeline={() =>
             void actions.runExportPipeline(output, setOutput, {
-              maxChars: resultMeta?.limits.maxChars,
+              maxChars: resultMeta?.limits?.maxChars,
               queueComfyUi: true,
             })
           }
           onExportSidecar={() =>
             void actions.exportSidecar(output, {
               comfyNode: resultMeta?.comfyNode ?? selectedModel.comfyNode,
-              variationSeed: shared.lockedVariationSeed,
+              variationSeed: variationSeed ?? shared.lockedVariationSeed,
+              metadata: randomResult?.metadata,
             })
+          }
+          onLockSeed={() => {
+            if (variationSeed) {
+              updateShared({ lockedVariationSeed: variationSeed });
+            }
+          }}
+          variationSeed={variationSeed}
+          seedLocked={
+            Boolean(
+              variationSeed &&
+                shared.lockedVariationSeed?.trim() === variationSeed.trim(),
+            )
           }
           fixStatus={actions.fixStatus}
           compactStatus={actions.compactStatus}
@@ -672,7 +904,7 @@ export default function PromptGenerator() {
         </section>
       )}
 
-      {output && mode === "positive" && (
+      {output && generateSource === "keywords" && mode === "positive" && (
         <p className="-mt-4 text-xs text-zinc-500">
           Paste into{" "}
           <code className="rounded bg-zinc-800 px-1 text-violet-300">

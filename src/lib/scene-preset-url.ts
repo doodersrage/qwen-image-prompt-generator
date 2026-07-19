@@ -58,6 +58,7 @@ function decodePayload(encoded: string): CompactScenePayload | null {
 export function buildScenePresetShareUrl(
   basePath: string,
   params: ShareableSceneParams,
+  extra?: Record<string, string>,
 ): string {
   const payload: CompactScenePayload = {
     h: params.hints,
@@ -68,6 +69,13 @@ export function buildScenePresetShareUrl(
   };
   const url = new URL(basePath, "http://local");
   url.searchParams.set("scene", encodePayload(payload));
+  if (extra) {
+    for (const [key, value] of Object.entries(extra)) {
+      if (value) {
+        url.searchParams.set(key, value);
+      }
+    }
+  }
   return `${url.pathname}${url.search}`;
 }
 

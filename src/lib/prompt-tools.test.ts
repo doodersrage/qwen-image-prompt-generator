@@ -220,7 +220,7 @@ describe("prompt pair export", () => {
 });
 
 describe("regenerate url", () => {
-  it("routes duo history to duo page with hints", () => {
+  it("routes duo history to character page with duo mode", () => {
     const url = buildRegenerateUrl({
       id: "1",
       tool: "duo",
@@ -229,7 +229,8 @@ describe("regenerate url", () => {
       model: "qwen-image-2512",
       timestamp: Date.now(),
     });
-    assert.match(url, /^\/duo\?/);
+    assert.match(url, /^\/character\?/);
+    assert.match(url, /mode=duo/);
     assert.match(url, /hints=gravel/);
   });
 
@@ -243,6 +244,21 @@ describe("regenerate url", () => {
       timestamp: Date.now(),
     });
     assert.match(url, /^\/character\?/);
+    assert.match(url, /mode=solo/);
+  });
+
+  it("routes random scene history to generate with random source", () => {
+    const url = buildRegenerateUrl({
+      id: "3",
+      tool: "randomScene",
+      prompt: "A foggy pier at dawn.",
+      hints: "noir",
+      model: "qwen-image-2512",
+      timestamp: Date.now(),
+    });
+    assert.match(url, /^\/\?/);
+    assert.match(url, /source=random/);
+    assert.match(url, /hints=noir/);
   });
 });
 
@@ -491,7 +507,7 @@ describe("scene preset share URL", () => {
         lockedVariationSeed: "seed-abc",
       },
     });
-    const url = buildScenePresetShareUrl("/duo", params);
+    const url = buildScenePresetShareUrl("/character", params, { mode: "duo" });
     const parsed = parseScenePresetFromSearch(url.slice(url.indexOf("?")));
     assert.deepEqual(parsed, params);
   });

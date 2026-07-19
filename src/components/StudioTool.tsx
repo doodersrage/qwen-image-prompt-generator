@@ -571,7 +571,7 @@ export default function StudioTool() {
               icon="inbox"
               title="No saved prompts yet"
               description="Generate a scene in Duo or another tool, then use Save to history on the result panel. Your prompts will appear here for re-queue, export, and diff."
-              action={{ label: "Open Duo", href: "/duo" }}
+              action={{ label: "Open Character", href: "/character?mode=duo" }}
             />
           ) : filteredEntries.length === 0 ? (
             <EmptyState
@@ -1035,10 +1035,10 @@ export default function StudioTool() {
           />
 
           <Link
-            href={`/duo?hints=${encodeURIComponent(filledTemplate)}`}
+            href={`/character?mode=duo&hints=${encodeURIComponent(filledTemplate)}`}
             className="ui-btn-primary inline-flex w-fit"
           >
-            Open in Duo generator
+            Open in Character (duo)
           </Link>
             </>
           )}
@@ -1159,7 +1159,7 @@ export default function StudioTool() {
                       className="!min-h-8 px-3 type-caption"
                       onClick={() => {
                         const url = buildScenePresetShareUrl(
-                          "/duo",
+                          "/character",
                           buildShareableSceneParams({
                             hints: preset.hints,
                             sportPresetId: preset.sportPresetId,
@@ -1171,6 +1171,7 @@ export default function StudioTool() {
                                 preset.sharedLocks?.lockedVariationSeed,
                             },
                           }),
+                          { mode: "duo" },
                         );
                         const absolute =
                           typeof window !== "undefined"
@@ -1187,7 +1188,7 @@ export default function StudioTool() {
                     </Button>
                     <a
                       href={buildScenePresetShareUrl(
-                        "/duo",
+                        "/character",
                         buildShareableSceneParams({
                           hints: preset.hints,
                           sportPresetId: preset.sportPresetId,
@@ -1198,10 +1199,11 @@ export default function StudioTool() {
                               preset.sharedLocks?.lockedVariationSeed,
                           },
                         }),
+                        { mode: "duo" },
                       )}
                       className="ui-btn-ghost !min-h-8 px-3 type-caption"
                     >
-                      Open Duo
+                      Open Character (duo)
                     </a>
                     <Button
                       variant="danger"
@@ -1228,7 +1230,7 @@ export default function StudioTool() {
               icon="diff"
               title="Save prompts before diffing"
               description="Diff compares two history entries word-by-word. Generate prompts elsewhere, save them to history, then pick left and right entries here."
-              action={{ label: "Open Duo", href: "/duo" }}
+              action={{ label: "Open Character", href: "/character?mode=duo" }}
             />
           ) : (
             <>

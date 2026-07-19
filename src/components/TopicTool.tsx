@@ -431,7 +431,7 @@ function TopicCard({
           Generate
         </Link>
         <Link
-          href={`/duo?hints=${encodeURIComponent(topic)}`}
+          href={`/character?mode=duo&hints=${encodeURIComponent(topic)}`}
           className="ui-btn-ghost !min-h-9 px-4 type-caption"
         >
           Duo

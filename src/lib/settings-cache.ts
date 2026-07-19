@@ -23,12 +23,19 @@ export type SharedToolSettings = {
   selectedWorkflowPresetId?: string;
 };
 
+export type GenerateSource = "keywords" | "random";
+
 export type GenerateToolCache = {
   mode?: "positive" | "negative";
+  generateSource?: GenerateSource;
   variationEnabled?: boolean;
   variationStrength?: number;
   distinctPeople?: boolean;
   sportPresetId?: string;
+  /** Optional theme steer for random surprise mode. */
+  genre?: string;
+  includePeople?: boolean;
+  wildness?: number;
 };
 
 export type FormatToolCache = {
@@ -44,11 +51,25 @@ export type RandomSceneToolCache = {
 
 import type { CharacterPresetOptions } from "./character-options";
 
+export type CharacterSceneMode = "solo" | "duo" | "compose";
+
 export type CharacterToolCache = {
   hints?: string;
+  sceneMode?: CharacterSceneMode;
   portraitStyle?: "portrait" | "full-body" | "action";
   variationStrength?: number;
-} & Partial<CharacterPresetOptions>;
+  sportPresetId?: string;
+  teamKit?: boolean;
+  batchCount?: number;
+  composeSubjectMode?: "character" | "duo";
+  composeStyle?: "layered" | "inline";
+  settingType?: string;
+  timeOfDay?: string;
+  mood?: string;
+} & Partial<CharacterPresetOptions> &
+  Partial<Omit<BackgroundPresetOptions, "surfaceMaterials">> & {
+    surfaceMaterials?: string;
+  };
 
 import type { BackgroundPresetOptions } from "./background-options";
 
@@ -177,9 +198,13 @@ export const DEFAULT_SHARED_SETTINGS: SharedToolSettings = {
 
 export const DEFAULT_GENERATE_TOOL_CACHE: GenerateToolCache = {
   mode: "positive",
+  generateSource: "keywords",
   variationEnabled: DEFAULT_VARIATION_SETTINGS.enabled,
   variationStrength: DEFAULT_VARIATION_SETTINGS.strength,
   distinctPeople: true,
+  genre: "",
+  includePeople: true,
+  wildness: 65,
 };
 
 export const DEFAULT_FORMAT_TOOL_CACHE: FormatToolCache = {
@@ -195,8 +220,17 @@ export const DEFAULT_RANDOM_SCENE_TOOL_CACHE: RandomSceneToolCache = {
 
 export const DEFAULT_CHARACTER_TOOL_CACHE: CharacterToolCache = {
   hints: "",
+  sceneMode: "solo",
   portraitStyle: "portrait",
   variationStrength: 50,
+  sportPresetId: "",
+  teamKit: false,
+  batchCount: 3,
+  composeSubjectMode: "duo",
+  composeStyle: "layered",
+  settingType: "",
+  timeOfDay: "",
+  mood: "",
 };
 
 export const DEFAULT_BACKGROUND_TOOL_CACHE: BackgroundToolCache = {

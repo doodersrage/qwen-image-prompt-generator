@@ -60,7 +60,7 @@ export function BatchPromptCard({
           </Link>
           {duoHints ? (
             <Link
-              href={`/duo?hints=${encodeURIComponent(duoHints)}`}
+              href={`/character?mode=duo&hints=${encodeURIComponent(duoHints)}`}
               className="ui-btn-ghost !min-h-9 px-4 type-caption"
             >
               Duo

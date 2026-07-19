@@ -19,7 +19,7 @@ const navGroups: NavGroup[] = [
   {
     label: "Prompt",
     links: [
-      { href: "/", label: "Generate", description: "Keywords → prompt" },
+      { href: "/", label: "Generate", description: "Keywords or random scene" },
       { href: "/format", label: "Format", description: "Draft → model-ready" },
       { href: "/lint", label: "Lint", description: "Diagnostics & fix" },
       { href: "/topics", label: "Topics", description: "Idea list" },
@@ -28,13 +28,14 @@ const navGroups: NavGroup[] = [
   {
     label: "Scene",
     links: [
-      { href: "/character", label: "Character", description: "Single person" },
-      { href: "/duo", label: "Duo", description: "Sport & pairs" },
-      { href: "/compose", label: "Compose", description: "Subject + background" },
+      {
+        href: "/character",
+        label: "Character",
+        description: "Solo, duo, or with background",
+      },
       { href: "/background", label: "Background", description: "No people" },
       { href: "/pet", label: "Pet", description: "Dogs, cats & more" },
       { href: "/fantasy", label: "Fantasy", description: "Magic & myth" },
-      { href: "/random-scene", label: "Random", description: "Surprise me" },
     ],
   },
   {

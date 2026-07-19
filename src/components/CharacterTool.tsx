@@ -1,26 +1,34 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import BackgroundPresetControls from "@/components/BackgroundPresetControls";
 import CharacterPresetControls from "@/components/CharacterPresetControls";
 import EnhancedPromptResult from "@/components/EnhancedPromptResult";
 import { promptResultPreviewProps } from "@/lib/prompt-result-preview-props";
 import SharedToolControls from "@/components/SharedToolControls";
 import SportPresetChips from "@/components/SportPresetChips";
+import { SubjectShotScaleControl } from "@/components/ShotScaleControl";
 import { useCachedSettings } from "@/hooks/useCachedSettings";
 import { usePromptResultActions } from "@/hooks/usePromptResultActions";
 import { useRecentLocations } from "@/hooks/useRecentLocations";
 import { useRecentClothing } from "@/hooks/useRecentClothing";
 import { useLocationBlocklist } from "@/hooks/useLocationBlocklist";
 import { getClothingLabel } from "@/lib/clothing-catalog";
+import { presetOptionsFromBackgroundCache } from "@/lib/background-options";
 import { readSceneLocationFromMetadata } from "@/lib/recent-locations";
 import { readClothingIdsFromMetadata } from "@/lib/recent-clothing";
 import { getComfyModelDefinition } from "@/lib/comfy-models";
 import { getReformatTargetLabel, getReformatTargetModel } from "@/lib/reformat-target";
 import { presetOptionsFromCache } from "@/lib/character-options";
-import { DEFAULT_CHARACTER_TOOL_CACHE } from "@/lib/settings-cache";
+import {
+  DEFAULT_CHARACTER_TOOL_CACHE,
+  type CharacterSceneMode,
+} from "@/lib/settings-cache";
 import type { EnrichedToolGenerateResult } from "@/lib/specialized/types";
-import { readVariationSeedFromMetadata, readVariationSeedFromResult } from "@/lib/variation-seed-metadata";
-import { SubjectShotScaleControl } from "@/components/ShotScaleControl";
+import {
+  readVariationSeedFromMetadata,
+  readVariationSeedFromResult,
+} from "@/lib/variation-seed-metadata";
 import {
   ROLL_VARIATION_LABEL,
   SCENE_HINTS_LABEL,
@@ -33,18 +41,77 @@ import {
 } from "@/lib/scene-preset-url";
 import { getSportPreset } from "@/lib/sport-presets";
 import {
-  ToolBadge,
-  ToolLayout,
-  ToolSection,
   accentButtonClass,
   accentFocusClass,
   accentRingClass,
+  type ToolAccent,
+} from "@/lib/tool-theme";
+import {
+  ToolBadge,
+  ToolLayout,
+  ToolSection,
 } from "@/components/ui/ToolPageShell";
 import { FieldDivider, FieldError, FieldLabel, TextArea } from "@/components/ui/Field";
 import { Button, PrimaryButton } from "@/components/ui/Button";
 
-const ACCENT = "sky" as const;
-const CHARACTER_BATCH_COUNT = 3;
+const SOLO_BATCH_COUNT = 3;
+
+const SCENE_MODE_OPTIONS: Array<{
+  value: CharacterSceneMode;
+  label: string;
+  description: string;
+}> = [
+  { value: "solo", label: "Solo", description: "Single person portrait or action" },
+  { value: "duo", label: "Duo / sport", description: "Two people, teams, and competition" },
+  {
+    value: "compose",
+    label: "With background",
+    description: "Subject plus generated environment merged together",
+  },
+];
+
+function accentForSceneMode(mode: CharacterSceneMode): ToolAccent {
+  if (mode === "duo") {
+    return "emerald";
+  }
+  if (mode === "compose") {
+    return "cyan";
+  }
+  return "sky";
+}
+
+function historyToolForSceneMode(mode: CharacterSceneMode): "character" | "duo" | "compose" {
+  if (mode === "duo") {
+    return "duo";
+  }
+  if (mode === "compose") {
+    return "compose";
+  }
+  return "character";
+}
+
+function presetVariantForSceneMode(
+  mode: CharacterSceneMode,
+): "solo" | "duo" | "compose" {
+  if (mode === "duo") {
+    return "duo";
+  }
+  if (mode === "compose") {
+    return "compose";
+  }
+  return "solo";
+}
+
+function defaultPortraitStyle(mode: CharacterSceneMode): "portrait" | "full-body" | "action" {
+  return mode === "solo" ? "portrait" : "action";
+}
+
+function parseSceneMode(value: string | null): CharacterSceneMode | null {
+  if (value === "solo" || value === "duo" || value === "compose") {
+    return value;
+  }
+  return null;
+}
 
 export default function CharacterTool() {
   const { mounted, shared, toolSettings, updateShared, updateToolSettings } =
@@ -59,8 +126,14 @@ export default function CharacterTool() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  const sceneMode = toolSettings.sceneMode ?? "solo";
+  const accent = accentForSceneMode(sceneMode);
+  const historyTool = historyToolForSceneMode(sceneMode);
+  const portraitStyle =
+    toolSettings.portraitStyle ?? defaultPortraitStyle(sceneMode);
+
   const actions = usePromptResultActions({
-    tool: "character",
+    tool: historyTool,
     model: shared.model,
     detail: shared.detail,
     hints: toolSettings.hints,
@@ -72,11 +145,26 @@ export default function CharacterTool() {
   const inferredSport = result?.diagnostics?.inferred.sport ?? null;
   const variationSeed = readVariationSeedFromResult(result ?? {});
 
+  const modeDescription = useMemo(() => {
+    if (sceneMode === "duo") {
+      return "Two-person action scenes with sport-aware wardrobe, competition kits, helmets, and distinct identities.";
+    }
+    if (sceneMode === "compose") {
+      return "Generates a subject and background prompt, then merges them into one scene-ready block.";
+    }
+    return "Builds a detailed single-person prompt—face, hair, clothing, pose, and expression.";
+  }, [sceneMode]);
+
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
     const params = new URLSearchParams(window.location.search);
+    const mode = parseSceneMode(params.get("mode"));
+    if (mode) {
+      updateToolSettings({ sceneMode: mode });
+    }
+
     const hints = params.get("hints");
     const seed = params.get("seed");
     if (hints?.trim()) {
@@ -101,6 +189,7 @@ export default function CharacterTool() {
       lockedVariationSeed: applied.lockedVariationSeed,
     });
     if (applied.sportPresetId) {
+      updateToolSettings({ sceneMode: "duo", sportPresetId: applied.sportPresetId });
       const preset = getSportPreset(applied.sportPresetId);
       if (preset?.hints?.trim()) {
         updateToolSettings({ hints: preset.hints.trim() });
@@ -119,7 +208,58 @@ export default function CharacterTool() {
       try {
         await actions.runPreLint(toolSettings.hints);
 
-        const endpoint = batch ? "/api/batch" : "/api/character";
+        if (sceneMode === "compose") {
+          const response = await fetch("/api/compose", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: shared.model,
+              detail: shared.detail,
+              subjectMode: toolSettings.composeSubjectMode ?? "duo",
+              hints: toolSettings.hints,
+              portraitStyle,
+              variationStrength: toolSettings.variationStrength,
+              presetOptions: presetOptionsFromCache(toolSettings),
+              background: {
+                settingType: toolSettings.settingType,
+                timeOfDay: toolSettings.timeOfDay,
+                mood: toolSettings.mood,
+                presetOptions: presetOptionsFromBackgroundCache(toolSettings),
+              },
+              composeStyle: toolSettings.composeStyle ?? "layered",
+              recentLocations: getRecent(),
+              recentClothing: getRecentClothing(),
+              blockedLocations: getBlocklist(),
+              lockedWardrobeId: shared.lockedWardrobeId,
+              lockedLocation: shared.lockedLocation,
+              variationSeed: shared.lockedVariationSeed,
+              alwaysIncludeClothing: shared.alwaysIncludeClothing !== false,
+              teamKit: toolSettings.teamKit === true,
+            }),
+          });
+
+          const data = (await response.json()) as EnrichedToolGenerateResult & {
+            error?: string;
+          };
+
+          if (!response.ok) {
+            throw new Error(data.error ?? "Composition failed.");
+          }
+
+          recordLocation(readSceneLocationFromMetadata(data.metadata));
+          recordClothing(readClothingIdsFromMetadata(data.metadata));
+          const prompt = await actions.finalizePrompt(data.prompt, toolSettings.hints);
+          setOutput(prompt);
+          setResult({ ...data, prompt });
+          return;
+        }
+
+        const presetOptions =
+          sceneMode === "duo"
+            ? { ...presetOptionsFromCache(toolSettings), headcount: "duo" as const }
+            : presetOptionsFromCache(toolSettings);
+
+        const endpoint = batch ? "/api/batch" : sceneMode === "duo" ? "/api/duo" : "/api/character";
         const response = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -127,9 +267,9 @@ export default function CharacterTool() {
             model: shared.model,
             detail: shared.detail,
             hints: toolSettings.hints,
-            portraitStyle: toolSettings.portraitStyle,
+            portraitStyle,
             variationStrength: toolSettings.variationStrength,
-            presetOptions: presetOptionsFromCache(toolSettings),
+            presetOptions,
             recentLocations: getRecent(),
             recentClothing: getRecentClothing(),
             blockedLocations: getBlocklist(),
@@ -137,7 +277,15 @@ export default function CharacterTool() {
             lockedLocation: shared.lockedLocation,
             variationSeed: shared.lockedVariationSeed,
             alwaysIncludeClothing: shared.alwaysIncludeClothing !== false,
-            count: batch ? CHARACTER_BATCH_COUNT : undefined,
+            teamKit: sceneMode === "duo" ? toolSettings.teamKit === true : undefined,
+            sportPresetId:
+              sceneMode === "duo" ? toolSettings.sportPresetId || undefined : undefined,
+            count:
+              batch
+                ? sceneMode === "duo"
+                  ? toolSettings.batchCount ?? 3
+                  : SOLO_BATCH_COUNT
+                : undefined,
           }),
         });
 
@@ -168,7 +316,6 @@ export default function CharacterTool() {
           const prompt = await actions.finalizePrompt(data.prompt, toolSettings.hints);
           setOutput(prompt);
           setResult({ ...data, prompt });
-          setBatchResults([]);
         }
       } catch (err) {
         setOutput("");
@@ -179,7 +326,18 @@ export default function CharacterTool() {
         setLoading(false);
       }
     },
-    [shared, toolSettings, getRecent, recordLocation, getRecentClothing, recordClothing, getBlocklist, actions],
+    [
+      actions,
+      getBlocklist,
+      getRecent,
+      getRecentClothing,
+      portraitStyle,
+      recordClothing,
+      recordLocation,
+      sceneMode,
+      shared,
+      toolSettings,
+    ],
   );
 
   const exportBatch = useCallback(() => {
@@ -188,17 +346,19 @@ export default function CharacterTool() {
     }
 
     downloadTextFile(
-      `character-batch-${Date.now()}.txt`,
+      `${historyTool}-batch-${Date.now()}.txt`,
       batchResults
         .map((entry, index) => `# ${index + 1}\n${entry.prompt}`)
         .join("\n\n"),
     );
-  }, [batchResults]);
+  }, [batchResults, historyTool]);
 
   const batchPrompts = batchResults.map((entry) => entry.prompt);
 
   const copyOutput = useCallback(async () => {
-    if (!output) return;
+    if (!output) {
+      return;
+    }
     try {
       await navigator.clipboard.writeText(output);
       setCopied(true);
@@ -208,24 +368,27 @@ export default function CharacterTool() {
     }
   }, [output]);
 
+  const activeClassName =
+    accent === "emerald"
+      ? "border-emerald-500 bg-emerald-500/15 text-emerald-200"
+      : accent === "cyan"
+        ? "border-cyan-500 bg-cyan-500/15 text-cyan-200"
+        : "border-sky-500 bg-sky-500/15 text-sky-200";
+
   return (
     <ToolLayout
-      accent={ACCENT}
+      accent={accent}
       badge={
-        <ToolBadge accent={ACCENT}>
+        <ToolBadge accent={accent}>
           Character · {selectedModel.comfyNode}
         </ToolBadge>
       }
       title="Character Generator"
       description={
         <>
-          Builds a detailed single-person prompt—face, hair, clothing, pose, and
-          expression. Include sex/gender and age in hints; they are treated as
-          mandatory. Add a place with{" "}
-          <code className="text-sky-300">in/at/on …</code>, a trailing clause
-          after a comma, or <code className="text-sky-300">location: …</code>.
-          Expand optional presets below for composition, lighting, and pose
-          anchors.
+          {modeDescription} Include sex/gender and age in hints when relevant. Add a
+          place with <code className="text-sky-300">in/at/on …</code> or{" "}
+          <code className="text-sky-300">location: …</code>.
         </>
       }
       sidebar={
@@ -234,7 +397,11 @@ export default function CharacterTool() {
           onModelChange={(model) => updateShared({ model })}
           onDetailChange={(detail) => updateShared({ detail })}
           onWorkflowPresetChange={(id) => updateShared({ selectedWorkflowFileId: id })}
-          detailHelp="Rich detail recommended for character sheets and portraits."
+          detailHelp={
+            sceneMode === "duo"
+              ? "Action mode works best with Rich detail for sport scenes."
+              : "Rich detail recommended for character sheets and portraits."
+          }
           showWardrobeOption
           alwaysIncludeClothing={shared.alwaysIncludeClothing !== false}
           onAlwaysIncludeClothingChange={(value) =>
@@ -259,48 +426,244 @@ export default function CharacterTool() {
       }
     >
       <ToolSection>
-        <SportPresetChips
-          mode="solo"
-          onSelect={(preset) => {
-            updateToolSettings({
-              hints: preset.hints,
-              portraitStyle: preset.portraitStyle ?? "portrait",
-            });
-          }}
-        />
+        <FieldLabel>Scene mode</FieldLabel>
+        <div className="flex flex-wrap gap-2">
+          {SCENE_MODE_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              title={option.description}
+              onClick={() =>
+                updateToolSettings({
+                  sceneMode: option.value,
+                  portraitStyle: defaultPortraitStyle(option.value),
+                })
+              }
+              className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                sceneMode === option.value ? activeClassName : "border-zinc-700 text-zinc-400"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
 
         <FieldDivider />
+
+        {sceneMode === "solo" ? (
+          <SportPresetChips
+            mode="solo"
+            onSelect={(preset) => {
+              updateToolSettings({
+                hints: preset.hints,
+                portraitStyle: preset.portraitStyle ?? "portrait",
+              });
+            }}
+          />
+        ) : null}
+
+        {sceneMode === "duo" ? (
+          <SportPresetChips
+            mode="duo"
+            selectedId={toolSettings.sportPresetId}
+            onSelect={(preset) => {
+              updateToolSettings({
+                sportPresetId: preset.id,
+                hints: preset.hints,
+                portraitStyle: preset.portraitStyle ?? "action",
+                teamKit: preset.teamKit ?? false,
+              });
+            }}
+          />
+        ) : null}
+
+        {sceneMode === "compose" ? (
+          <>
+            <FieldLabel>Subject in scene</FieldLabel>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  { label: "Solo character", value: "character" },
+                  { label: "Duo / sport", value: "duo" },
+                ] as const
+              ).map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() =>
+                    updateToolSettings({ composeSubjectMode: option.value })
+                  }
+                  className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                    (toolSettings.composeSubjectMode ?? "duo") === option.value
+                      ? activeClassName
+                      : "border-zinc-700 text-zinc-400"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+
+            <FieldDivider />
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <input
+                value={toolSettings.settingType ?? ""}
+                onChange={(e) => updateToolSettings({ settingType: e.target.value })}
+                placeholder="Quick tag: place type"
+                className={`ui-input px-3 py-2 text-sm ${accentFocusClass(accent)}`}
+              />
+              <input
+                value={toolSettings.timeOfDay ?? ""}
+                onChange={(e) => updateToolSettings({ timeOfDay: e.target.value })}
+                placeholder="Quick tag: time / light"
+                className={`ui-input px-3 py-2 text-sm ${accentFocusClass(accent)}`}
+              />
+              <input
+                value={toolSettings.mood ?? ""}
+                onChange={(e) => updateToolSettings({ mood: e.target.value })}
+                placeholder="Quick tag: mood"
+                className={`ui-input px-3 py-2 text-sm ${accentFocusClass(accent)}`}
+              />
+            </div>
+            <p className="text-xs text-zinc-500">
+              Quick tags are optional shortcuts—background presets below offer structured
+              control.
+            </p>
+
+            <BackgroundPresetControls
+              mounted={mounted}
+              settings={toolSettings}
+              onChange={(patch) =>
+                updateToolSettings(patch as Partial<typeof toolSettings>)
+              }
+            />
+
+            <FieldDivider />
+          </>
+        ) : null}
+
+        {(sceneMode === "solo" || sceneMode === "duo") && <FieldDivider />}
 
         <FieldLabel>{SCENE_HINTS_LABEL}</FieldLabel>
         <TextArea
           value={toolSettings.hints ?? ""}
           onChange={(e) => updateToolSettings({ hints: e.target.value })}
-          placeholder="e.g. young woman in her twenties, long dark hair; on a Tokyo rooftop at night"
-          rows={3}
-          className={accentFocusClass(ACCENT)}
+          placeholder={
+            sceneMode === "duo"
+              ? "two female gravel cyclists in a fierce competition on a muddy doubletrack"
+              : sceneMode === "compose"
+                ? "two female gravel cyclists in fierce competition"
+                : "e.g. young woman in her twenties, long dark hair; on a Tokyo rooftop at night"
+          }
+          rows={sceneMode === "duo" ? 4 : 3}
+          className={accentFocusClass(accent)}
         />
+
+        {sceneMode === "duo" || sceneMode === "compose" ? (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-800 p-3">
+                <input
+                  type="checkbox"
+                  checked={toolSettings.teamKit === true}
+                  onChange={(event) =>
+                    updateToolSettings({ teamKit: event.target.checked })
+                  }
+                  className={`mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-950 ${accentRingClass(accent)}`}
+                />
+                <span className="space-y-1">
+                  <span className="text-sm font-medium text-zinc-200">Team kit</span>
+                  <span className="block text-xs text-zinc-500">
+                    Identical kits for both athletes. Off = rival accent colors.
+                  </span>
+                </span>
+              </label>
+
+              {sceneMode === "duo" ? (
+                <div className="space-y-2">
+                  <FieldLabel htmlFor="batch-count">Batch count</FieldLabel>
+                  <input
+                    id="batch-count"
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={toolSettings.batchCount ?? 3}
+                    onChange={(event) =>
+                      updateToolSettings({
+                        batchCount: Math.min(
+                          12,
+                          Math.max(1, Number(event.target.value) || 3),
+                        ),
+                      })
+                    }
+                    className="ui-input w-full px-4 py-2 text-sm"
+                  />
+                </div>
+              ) : null}
+            </div>
+
+            <FieldDivider />
+          </>
+        ) : null}
 
         <CharacterPresetControls
           mounted={mounted}
           settings={toolSettings}
           onChange={updateToolSettings}
-          variant="solo"
+          variant={presetVariantForSceneMode(sceneMode)}
         />
 
         <FieldDivider />
 
         <SubjectShotScaleControl
-          value={toolSettings.portraitStyle ?? "portrait"}
+          value={portraitStyle}
           onChange={(value) => updateToolSettings({ portraitStyle: value })}
-          activeClassName="border-sky-500 bg-sky-500/15 text-sky-200"
+          activeClassName={activeClassName}
         />
+
+        {sceneMode === "compose" ? (
+          <>
+            <FieldDivider />
+            <FieldLabel>Merge style</FieldLabel>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  { label: "Layered sections", value: "layered" },
+                  { label: "Inline prose", value: "inline" },
+                ] as const
+              ).map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => updateToolSettings({ composeStyle: option.value })}
+                  className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                    (toolSettings.composeStyle ?? "layered") === option.value
+                      ? activeClassName
+                      : "border-zinc-700 text-zinc-400"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </>
+        ) : null}
 
         <FieldDivider />
 
         <FieldLabel>{ROLL_VARIATION_LABEL}</FieldLabel>
         <div className="flex items-center justify-between text-xs text-zinc-400">
           <span>Stable</span>
-          <span className="font-medium text-sky-300">
+          <span
+            className={`font-medium ${
+              accent === "emerald"
+                ? "text-emerald-300"
+                : accent === "cyan"
+                  ? "text-cyan-300"
+                  : "text-sky-300"
+            }`}
+          >
             {rollVariationLabel(toolSettings.variationStrength ?? 50)} (
             {toolSettings.variationStrength ?? 50})
           </span>
@@ -315,28 +678,34 @@ export default function CharacterTool() {
           onChange={(e) =>
             updateToolSettings({ variationStrength: Number(e.target.value) })
           }
-          className={`h-2 w-full ${accentRingClass(ACCENT)}`}
+          className={`h-2 w-full ${accentRingClass(accent)}`}
         />
 
         <div className="flex flex-wrap gap-3">
           <PrimaryButton
-            accentClassName={accentButtonClass(ACCENT)}
+            accentClassName={accentButtonClass(accent)}
             onClick={() => void generate(false)}
             disabled={!mounted}
             loading={loading}
             loadingLabel="Generating character prompt"
           >
-            Generate character prompt
+            {sceneMode === "compose"
+              ? "Compose scene prompt"
+              : sceneMode === "duo"
+                ? "Generate duo"
+                : "Generate character prompt"}
           </PrimaryButton>
-          <Button
-            variant="secondary"
-            disabled={!mounted}
-            loading={loading}
-            loadingLabel="Rolling character variations"
-            onClick={() => void generate(true)}
-          >
-            Roll {CHARACTER_BATCH_COUNT}
-          </Button>
+          {sceneMode !== "compose" ? (
+            <Button
+              variant="secondary"
+              disabled={!mounted}
+              loading={loading}
+              loadingLabel="Rolling batch variations"
+              onClick={() => void generate(true)}
+            >
+              Batch {sceneMode === "duo" ? toolSettings.batchCount ?? 3 : SOLO_BATCH_COUNT}
+            </Button>
+          ) : null}
         </div>
 
         <FieldError>{error}</FieldError>
@@ -436,6 +805,11 @@ export default function CharacterTool() {
         comfyUiPreviewUrl={actions.comfyUiPreviewUrl}
         historySaved={actions.historySaved}
         pairCopied={actions.pairCopied}
+        extraMeta={
+          sceneMode === "duo" && toolSettings.sportPresetId
+            ? getSportPreset(toolSettings.sportPresetId)?.label
+            : undefined
+        }
       />
     </ToolLayout>
   );
