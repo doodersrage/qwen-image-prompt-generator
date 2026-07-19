@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ModelSelector from "@/components/ModelSelector";
 import { useCachedSettings } from "@/hooks/useCachedSettings";
+import { useRecentClothing } from "@/hooks/useRecentClothing";
+import { readClothingIdsFromMetadata } from "@/lib/recent-clothing";
 import type { DetailLevel } from "@/lib/detail-level";
 import { getDetailLimits } from "@/lib/detail-level";
 import {
@@ -28,6 +30,13 @@ type GenerateResponse = {
     maxSentences: number;
     maxTokens: number;
   };
+  metadata?: {
+    wardrobeAssignments?: Array<{
+      wardrobeId?: string | null;
+      footwearId?: string | null;
+      accessoriesId?: string | null;
+    }>;
+  };
 };
 
 const EXAMPLE_INPUTS = [
@@ -40,6 +49,7 @@ const EXAMPLE_INPUTS = [
 export default function PromptGenerator() {
   const { shared, toolSettings, updateShared, updateToolSettings } =
     useCachedSettings("generate", DEFAULT_GENERATE_TOOL_CACHE);
+  const { getRecent: getRecentClothing, record: recordClothing } = useRecentClothing();
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<PromptMode>(
     DEFAULT_GENERATE_TOOL_CACHE.mode ?? "positive",
@@ -121,6 +131,7 @@ export default function PromptGenerator() {
           distinctPeople: mode === "positive" && distinctPeople,
           alwaysIncludeClothing:
             mode === "positive" && alwaysIncludeClothing,
+          recentClothing: getRecentClothing(),
           detail: mode === "positive" ? detail : "balanced",
           model: qwenModel,
         }),
@@ -133,6 +144,8 @@ export default function PromptGenerator() {
       if (!response.ok) {
         throw new Error(data.error ?? "Generation failed.");
       }
+
+      recordClothing(readClothingIdsFromMetadata(data.metadata));
 
       setOutput(data.prompt);
       setProvider(data.provider);
@@ -149,7 +162,7 @@ export default function PromptGenerator() {
     } finally {
       setLoading(false);
     }
-  }, [input, mode, variationEnabled, variationStrength, distinctPeople, alwaysIncludeClothing, detail, qwenModel]);
+  }, [input, mode, variationEnabled, variationStrength, distinctPeople, alwaysIncludeClothing, detail, qwenModel, getRecentClothing, recordClothing]);
 
   const copyOutput = useCallback(async () => {
     if (!output) return;

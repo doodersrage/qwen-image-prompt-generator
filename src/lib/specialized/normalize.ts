@@ -24,3 +24,7 @@ export function normalizeRecentLocations(raw: unknown): string[] | undefined {
 
   return locations.length > 0 ? locations : undefined;
 }
+
+export function normalizeRecentClothing(raw: unknown): string[] | undefined {
+  return normalizeRecentLocations(raw);
+}

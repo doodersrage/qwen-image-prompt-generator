@@ -67,15 +67,7 @@ export function stripPromptArtifacts(raw: string): string {
     .replace(/^'{3}\s*|'{3}\s*$/g, "")
     .trim();
 
-  text = text
-    .replace(
-      /^(?:here(?:'s| is)|adapted prompt|formatted prompt|positive prompt|negative prompt|output|prompt|result)\s*:?\s*/i,
-      "",
-    )
-    .replace(/^adapt this draft for[^:.\n]*:?\s*/i, "")
-    .replace(/^draft to adapt:\s*-{2,}\s*/i, "")
-    .replace(/\s*-{2,}\s*$/g, "")
-    .trim();
+  text = stripFormatToolPreambles(text);
 
   for (let i = 0; i < 3; i += 1) {
     const next = text.replace(/^["'`“”‘’]+|["'`“”‘’]+$/g, "").trim();
@@ -99,6 +91,39 @@ export function stripPromptArtifacts(raw: string): string {
   text = stripThinkingArtifacts(text);
 
   return text;
+}
+
+/** Strip LLM meta labels like "the prompt adapted for Qwen-Image-2512:" from format-tool output. */
+function stripFormatToolPreambles(text: string): string {
+  let cleaned = text.trim();
+  if (!cleaned) {
+    return cleaned;
+  }
+
+  const preamblePatterns = [
+    /^(?:(?:here(?:'s| is)\s+(?:the\s+)?)?)(?:the\s+)?(?:prompt\s+)?(?:adapted|formatted|rewritten|converted|optimized)\s+(?:prompt\s+)?(?:for\s+)[^:.\n]+:\s*/i,
+    /^(?:adapted|formatted|rewritten|converted|optimized)\s+(?:prompt\s+)?(?:for\s+)[^:.\n]+:\s*/i,
+    /^(?:here(?:'s| is)|adapted prompt|formatted prompt|positive prompt|negative prompt|output|prompt|result)\s*:?\s*/i,
+    /^target model:\s*[^:.\n]+:?\s*/i,
+    /^adapt this draft for[^:.\n]*:?\s*/i,
+    /^draft to adapt:\s*-{2,}\s*/i,
+  ];
+
+  for (let pass = 0; pass < 3; pass += 1) {
+    let changed = false;
+    for (const pattern of preamblePatterns) {
+      const next = cleaned.replace(pattern, "").trim();
+      if (next !== cleaned) {
+        cleaned = next;
+        changed = true;
+      }
+    }
+    if (!changed) {
+      break;
+    }
+  }
+
+  return cleaned.replace(/\s*-{2,}\s*$/g, "").trim();
 }
 
 function looksLikePromptProse(text: string): boolean {

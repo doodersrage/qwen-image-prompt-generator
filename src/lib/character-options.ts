@@ -1,9 +1,12 @@
 import type { ClothingCatalogFieldKey } from "./clothing-catalog";
 import {
   CLOTHING_CATALOG_FIELD_KEYS,
+  collectWardrobeEntryIds,
   getClothingCatalogFieldCategories,
+  getClothingLabel,
   getClothingScript,
   normalizeClothingCatalogId,
+  sanitizeCatalogScriptsInPrompt,
 } from "./clothing-catalog";
 import { parseCharacterHints } from "./character-hints";
 import { subjectGenderToClothingGender } from "./clothing-tags";
@@ -1520,7 +1523,9 @@ export function getCharacterPresetScriptLines(
   if (options.wardrobe?.trim()) {
     lines.push(`wearing ${enrichWardrobe(options.wardrobe)},`);
   } else {
-    const catalogWardrobe = getClothingScript(options.wardrobeCatalog);
+    const catalogWardrobe =
+      getClothingLabel(options.wardrobeCatalog) ??
+      getClothingScript(options.wardrobeCatalog);
     if (catalogWardrobe) {
       lines.push(`wearing ${catalogWardrobe},`);
     }
@@ -1529,7 +1534,9 @@ export function getCharacterPresetScriptLines(
   if (options.footwear?.trim()) {
     lines.push(`wearing ${enrichFootwear(options.footwear)},`);
   } else {
-    const catalogFootwear = getClothingScript(options.footwearCatalog);
+    const catalogFootwear =
+      getClothingLabel(options.footwearCatalog) ??
+      getClothingScript(options.footwearCatalog);
     if (catalogFootwear) {
       lines.push(`wearing ${catalogFootwear},`);
     }
@@ -1538,7 +1545,9 @@ export function getCharacterPresetScriptLines(
   if (options.accessories?.trim()) {
     lines.push(`wearing ${enrichAccessories(options.accessories)},`);
   } else {
-    const catalogAccessories = getClothingScript(options.accessoriesCatalog);
+    const catalogAccessories =
+      getClothingLabel(options.accessoriesCatalog) ??
+      getClothingScript(options.accessoriesCatalog);
     if (catalogAccessories) {
       lines.push(`wearing ${catalogAccessories},`);
     }
@@ -1813,7 +1822,34 @@ export function mergeCharacterPresetsIntoPrompt(
     result = result ? `${prefix} ${result}` : prefix;
   }
 
-  return result.replace(/\s+/g, " ").trim();
+  const presetCatalogIds = collectWardrobeEntryIds({
+    wardrobeId: options.wardrobeCatalog,
+    footwearId: options.footwearCatalog,
+    accessoriesId: options.accessoriesCatalog,
+  });
+
+  return sanitizeCatalogScriptsInPrompt(
+    result.replace(/\s+/g, " ").trim(),
+    presetCatalogIds,
+  );
+}
+
+export function buildPresetWardrobeSummary(
+  options: CharacterPresetOptions,
+): string | null {
+  const labels = [
+    options.wardrobe?.trim() ||
+      getClothingLabel(options.wardrobeCatalog) ||
+      null,
+    options.footwear?.trim() ||
+      getClothingLabel(options.footwearCatalog) ||
+      null,
+    options.accessories?.trim() ||
+      getClothingLabel(options.accessoriesCatalog) ||
+      null,
+  ].filter((label): label is string => Boolean(label?.trim()));
+
+  return labels.length > 0 ? labels.join(", ") : null;
 }
 
 export function buildCharacterPresetUserDirective(

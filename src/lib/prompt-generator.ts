@@ -69,6 +69,18 @@ export type GenerateResult = {
     maxSentences: number;
     maxTokens: number;
   };
+    metadata?: {
+      wardrobeAssignments?: Array<{
+        wardrobeId?: string | null;
+        bottomId?: string | null;
+        footwearId?: string | null;
+        accessoriesId?: string | null;
+      }>;
+    };
+};
+
+export type GeneratePromptOptions = {
+  recentClothing?: string[];
 };
 
 type ChatMessage = {
@@ -524,6 +536,7 @@ function buildGenerateResult(
   mode: PromptMode,
   provider: GenerateResult["provider"],
   settings: GenerationSettings,
+  wardrobeAssignments?: GenerateWardrobeAssignment[] | null,
 ): GenerateResult {
   const limits = getDetailLimits(settings.detail, settings.model);
   const modelDef = getComfyModelDefinition(settings.model);
@@ -540,6 +553,15 @@ function buildGenerateResult(
       maxSentences: limits.maxSentences,
       maxTokens: limits.maxTokens,
     },
+    metadata: wardrobeAssignments?.length
+      ? {
+          wardrobeAssignments: wardrobeAssignments.map((assignment) => ({
+            wardrobeId: assignment.wardrobeId,
+            footwearId: assignment.footwearId,
+            accessoriesId: assignment.accessoriesId,
+          })),
+        }
+      : undefined,
   };
 }
 
@@ -547,6 +569,7 @@ export async function generatePrompt(
   input: string,
   mode: PromptMode,
   settings: GenerationSettings = DEFAULT_GENERATION_SETTINGS,
+  options?: GeneratePromptOptions,
 ): Promise<GenerateResult> {
   const trimmed = input.trim();
   if (!trimmed) {
@@ -555,7 +578,11 @@ export async function generatePrompt(
 
   const llmEnabled = process.env.LLM_ENABLED !== "false";
   const wardrobeAssignments =
-    mode === "positive" ? buildGenerateWardrobeAssignments(trimmed, settings) : null;
+    mode === "positive"
+      ? buildGenerateWardrobeAssignments(trimmed, settings, {
+          recentClothing: options?.recentClothing,
+        })
+      : null;
 
   if (llmEnabled) {
     try {
@@ -565,7 +592,7 @@ export async function generatePrompt(
         settings,
         wardrobeAssignments,
       );
-      return buildGenerateResult(prompt, mode, "llm", settings);
+      return buildGenerateResult(prompt, mode, "llm", settings, wardrobeAssignments);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown LLM error";
       const fallbackAllowed = process.env.ALLOW_TEMPLATE_FALLBACK !== "false";
@@ -583,5 +610,6 @@ export async function generatePrompt(
     mode,
     "template",
     settings,
+    wardrobeAssignments,
   );
 }

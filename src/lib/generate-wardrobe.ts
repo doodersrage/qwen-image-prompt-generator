@@ -1,5 +1,6 @@
 import {
   buildClothingCoherenceUserDirective,
+  buildClothingGuardrailLines,
   buildClothingPickFilters,
   type ClothingPickFilters,
 } from "./clothing-tags";
@@ -22,6 +23,10 @@ export type GenerateWardrobeAssignment = {
   label?: string;
   summary: string;
   filters: ClothingPickFilters;
+  wardrobeId?: string | null;
+  bottomId?: string | null;
+  footwearId?: string | null;
+  accessoriesId?: string | null;
 };
 
 const PERSON_HINT =
@@ -101,15 +106,24 @@ function assignmentLabel(
 }
 
 function collectOutfitIds(outfit: RandomCharacterOutfit): string[] {
-  return [outfit.wardrobeId, outfit.footwearId, outfit.accessoriesId].filter(
-    (id): id is string => Boolean(id),
-  );
+  return [
+    outfit.wardrobeId,
+    outfit.bottomId,
+    outfit.footwearId,
+    outfit.accessoriesId,
+  ].filter((id): id is string => Boolean(id));
 }
 
 export function buildGenerateWardrobeAssignments(
   input: string,
   settings: GenerationSettings,
-  options?: { assumePeople?: boolean },
+  options?: {
+    assumePeople?: boolean;
+    recentClothing?: readonly string[];
+    forcedCount?: number;
+    forcedDistinctPeople?: boolean;
+    forcedGender?: SubjectGender;
+  },
 ): GenerateWardrobeAssignment[] | null {
   if (
     !shouldPickGenerateWardrobe(
@@ -124,13 +138,17 @@ export function buildGenerateWardrobeAssignments(
   const trimmed = input.trim();
   const location = parseSettingHint(trimmed).location;
   const constraint = parsePeopleConstraint(trimmed);
-  const count = assignmentCount(trimmed, settings);
-  const excludeIds: string[] = [];
+  const resolvedGender = options?.forcedGender ?? constraint.gender;
+  const distinctPeople = options?.forcedDistinctPeople ?? settings.distinctPeople;
+  const count =
+    options?.forcedCount ??
+    assignmentCount(trimmed, { ...settings, distinctPeople });
+  const excludeIds: string[] = [...(options?.recentClothing ?? [])];
   const assignments: GenerateWardrobeAssignment[] = [];
 
   for (let index = 0; index < count; index += 1) {
     const filters = buildClothingPickFilters({
-      gender: assignmentGenderForSlot(index, constraint.gender),
+      gender: assignmentGenderForSlot(index, resolvedGender),
       sceneLocation: location,
       environmentSeed: trimmed,
       hints: trimmed,
@@ -143,9 +161,13 @@ export function buildGenerateWardrobeAssignments(
 
     excludeIds.push(...collectOutfitIds(outfit));
     assignments.push({
-      label: assignmentLabel(index, count, settings.distinctPeople),
+      label: assignmentLabel(index, count, distinctPeople),
       summary: outfit.summary,
       filters: outfit.filters,
+      wardrobeId: outfit.wardrobeId,
+      bottomId: outfit.bottomId,
+      footwearId: outfit.footwearId,
+      accessoriesId: outfit.accessoriesId,
     });
   }
 
@@ -172,13 +194,28 @@ export function buildGenerateWardrobeUserDirective(
     return `${who}: ${assignment.summary}`;
   });
 
+  const guardrailBlocks = assignments
+    .map((assignment) => {
+      const who = assignment.label ?? "the subject";
+      const guardrails = buildClothingGuardrailLines(assignment.filters);
+      if (guardrails.length === 0) {
+        return null;
+      }
+      return `${who} — ${guardrails.join(" ")}`;
+    })
+    .filter(Boolean);
+
   return [
     "WARDROBE COHERENCE (mandatory):",
     "Weave each assigned outfit into that person's sentence—do not add a separate wardrobe paragraph before the scene.",
     "Each person gets their own scene-appropriate outfit.",
     ...lines.map((line) => `- ${line}`),
+    ...(guardrailBlocks.length > 0
+      ? ["Per-person scene rules:", ...guardrailBlocks.map((line) => `- ${line}`)]
+      : []),
     "Keep every assigned garment type in the final prompt for each person.",
     "Use short garment labels only—not long material paragraphs.",
+    "Mention each assigned garment once—do not repeat pieces or add duplicate garment types.",
     "Do not swap to unrelated outfits or merge separate wardrobes into one blob.",
   ].join(" ");
 }

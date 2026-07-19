@@ -10,6 +10,8 @@ import {
   inferClothingContexts,
   inferClothingGender,
   normalizeClothingContextTags,
+  PROFESSION_UNIFORM_LABEL_HINTS,
+  RESTRICTED_CLOTHING_CONTEXTS,
   scoreClothingContextMatch,
   type ClothingContextTag,
   type ClothingGenderTag,
@@ -253,6 +255,10 @@ export function getClothingScript(id: string | undefined): string | null {
   return getClothingEntry(id)?.script ?? null;
 }
 
+export function getClothingLabel(id: string | undefined): string | null {
+  return getClothingEntry(id)?.label ?? null;
+}
+
 export type ClothingSelectFilters = Pick<ClothingPickFilters, "gender">;
 
 export function getClothingSelectOptions(
@@ -391,14 +397,65 @@ function filterPoolByGender(
     return neutral;
   }
 
-  return [...pool];
+  if (gender === "any") {
+    return [...pool];
+  }
+
+  return [];
 }
 
 function filterPoolByScene(
   pool: readonly EnrichedClothingEntry[],
   sceneContexts: readonly ClothingContextTag[],
+  filters?: Pick<
+    ClothingPickFilters,
+    "athleticActivity" | "workWardrobe" | "explicitCostume"
+  >,
 ): EnrichedClothingEntry[] {
-  const allowed = pool.filter((entry) =>
+  let working = [...pool];
+  const athleticActivity = filters?.athleticActivity;
+  const workWardrobe = filters?.workWardrobe;
+  const explicitCostume = filters?.explicitCostume;
+
+  if (!explicitCostume) {
+    const withoutCostume = working.filter(
+      (entry) => !entry.contexts.includes("costume"),
+    );
+    if (withoutCostume.length > 0) {
+      working = withoutCostume;
+    }
+  }
+
+  if (!workWardrobe) {
+    const withoutServiceUniform = working.filter(
+      (entry) =>
+        !entry.contexts.includes("uniform") ||
+        entry.contexts.includes("athletic"),
+    );
+    if (withoutServiceUniform.length > 0) {
+      working = withoutServiceUniform;
+    }
+  }
+
+  if (athleticActivity) {
+    const athleticOnly = working.filter(
+      (entry) =>
+        entry.contexts.includes("athletic") ||
+        (!entry.contexts.includes("costume") &&
+          !entry.contexts.includes("formalwear") &&
+          !entry.contexts.includes("formal") &&
+          !entry.contexts.includes("evening") &&
+          !entry.contexts.includes("uniform") &&
+          !entry.contexts.includes("traditional") &&
+          !entry.contexts.includes("sleepwear") &&
+          !entry.contexts.includes("intimate")),
+    );
+    if (athleticOnly.length > 0) {
+      working = athleticOnly;
+    }
+  }
+
+  const allowed = working.filter((entry) =>
     clothingAllowedInScene(entry.contexts, sceneContexts),
   );
 
@@ -406,19 +463,30 @@ function filterPoolByScene(
     return allowed;
   }
 
-  return pool.filter((entry) => !entryHasRestrictedContext(entry.contexts));
+  const sceneRequiresRestricted = sceneContexts.some((tag) =>
+    RESTRICTED_CLOTHING_CONTEXTS.includes(tag),
+  );
+  if (sceneRequiresRestricted) {
+    return [];
+  }
+
+  return working.filter((entry) => !entryHasRestrictedContext(entry.contexts));
 }
 
 function pickScoredEntry(
   pool: readonly EnrichedClothingEntry[],
   contexts: readonly ClothingContextTag[],
   exclude: readonly string[] = [],
+  filters?: Pick<
+    ClothingPickFilters,
+    "athleticActivity" | "workWardrobe" | "explicitCostume"
+  >,
 ): EnrichedClothingEntry | null {
   if (pool.length === 0) {
     return null;
   }
 
-  const scenePool = filterPoolByScene(pool, contexts);
+  const scenePool = filterPoolByScene(pool, contexts, filters);
   if (scenePool.length === 0) {
     return null;
   }
@@ -455,6 +523,84 @@ function pickScoredEntry(
   return sceneFallback ?? null;
 }
 
+function pickFilterFlags(
+  filters: ClothingPickFilters,
+): Pick<
+  ClothingPickFilters,
+  "athleticActivity" | "workWardrobe" | "explicitCostume"
+> {
+  return {
+    athleticActivity: filters.athleticActivity,
+    workWardrobe: filters.workWardrobe,
+    explicitCostume: filters.explicitCostume,
+  };
+}
+
+function shouldPreferOutfitBundle(filters: ClothingPickFilters): boolean {
+  if (filters.explicitCostume && filters.contexts.includes("costume")) {
+    return true;
+  }
+  if (filters.workProfession && filters.workWardrobe) {
+    return randomInt(100) < 78;
+  }
+  if (filters.workWardrobe && filters.contexts.includes("uniform")) {
+    return randomInt(100) < 50;
+  }
+  if (sceneAllowsFormalwear(filters.contexts)) {
+    return randomInt(100) < 28;
+  }
+  return randomInt(100) < 10;
+}
+
+function pickProfessionGarment(
+  filters: ClothingPickFilters,
+): EnrichedClothingEntry | null {
+  const profession = filters.workProfession;
+  if (!profession || !filters.workWardrobe) {
+    return null;
+  }
+
+  const labelHint = PROFESSION_UNIFORM_LABEL_HINTS[profession];
+  if (!labelHint) {
+    return null;
+  }
+
+  const categories: ClothingCategory[] = ["outfit", "outerwear", "top"];
+  for (const category of categories) {
+    const basePool = (BY_CATEGORY[category] ?? []).filter(
+      (entry) =>
+        labelHint.test(entry.label) &&
+        (entry.contexts.includes("work") || entry.contexts.includes("uniform")),
+    );
+    if (basePool.length === 0) {
+      continue;
+    }
+
+    const genderPool = filterPoolByGender(basePool, filters.gender);
+    const categoryPool = filterPoolByCategory(genderPool, category, filters);
+    const pickFlags = pickFilterFlags(filters);
+    const picked =
+      pickScoredEntry(
+        categoryPool,
+        filters.contexts,
+        filters.excludeIds,
+        pickFlags,
+      ) ??
+      pickScoredEntry(
+        genderPool,
+        filters.contexts,
+        filters.excludeIds,
+        pickFlags,
+      );
+
+    if (picked) {
+      return picked;
+    }
+  }
+
+  return null;
+}
+
 function pickWardrobeLayers(
   filters: ClothingPickFilters,
 ): {
@@ -465,17 +611,49 @@ function pickWardrobeLayers(
     return { wardrobe: null, bottom: null };
   }
 
+  if (filters.workWardrobe && filters.workProfession) {
+    const professionGarment = pickProfessionGarment(filters);
+    if (professionGarment) {
+      return { wardrobe: professionGarment, bottom: null };
+    }
+  }
+
   if (filters.contexts.includes("swimwear")) {
     const swimwear = pickFromCategory("swimwear", filters);
     if (swimwear) {
       return { wardrobe: swimwear, bottom: null };
     }
+    if (filters.swimwearOnly) {
+      return { wardrobe: null, bottom: null };
+    }
   }
 
-  if (filters.contexts.includes("intimate")) {
+  if (filters.intimateWardrobe && filters.contexts.includes("intimate")) {
     const intimate = pickFromCategory("intimate", filters);
     if (intimate) {
       return { wardrobe: intimate, bottom: null };
+    }
+  }
+
+  if (filters.athleticActivity || filters.contexts.includes("athletic")) {
+    const athletic = pickAthleticWardrobeLayers(filters);
+    if (athletic.wardrobe || athletic.bottom) {
+      return athletic;
+    }
+  }
+
+  if (
+    filters.contexts.includes("cold") &&
+    !filters.contexts.includes("warm") &&
+    !filters.athleticActivity
+  ) {
+    const outerwear = pickFromCategory("outerwear", filters);
+    const bottom = pickFromCategory("bottom", filters);
+    if (outerwear) {
+      return { wardrobe: outerwear, bottom };
+    }
+    if (bottom) {
+      return { wardrobe: pickFromCategory("top", filters), bottom };
     }
   }
 
@@ -498,25 +676,218 @@ function pickWardrobeLayers(
     }
   }
 
-  if (filters.contexts.includes("intimate") && randomInt(100) < 30) {
+  if (filters.intimateWardrobe && filters.contexts.includes("intimate") && randomInt(100) < 30) {
     const sleepwear = pickFromCategory("sleepwear", filters);
     if (sleepwear) {
       return { wardrobe: sleepwear, bottom: null };
     }
   }
 
-  const useOutfit = randomInt(100) < 42;
-  if (useOutfit) {
-    return {
-      wardrobe: pickFromCategory("outfit", filters),
-      bottom: null,
-    };
+  if (filters.athleticActivity) {
+    return pickAthleticWardrobeLayers(filters);
+  }
+
+  if (shouldPreferOutfitBundle(filters)) {
+    const outfit = pickFromCategory("outfit", filters);
+    if (outfit) {
+      return { wardrobe: outfit, bottom: null };
+    }
   }
 
   return {
     wardrobe: pickFromCategory("top", filters),
     bottom: pickFromCategory("bottom", filters),
   };
+}
+
+function filterPoolByCategory(
+  pool: readonly EnrichedClothingEntry[],
+  category: ClothingCategory,
+  filters: ClothingPickFilters,
+): readonly EnrichedClothingEntry[] {
+  if (pool.length === 0) {
+    return pool;
+  }
+
+  const contexts = filters.contexts;
+  let working = [...pool];
+
+  if (category === "footwear") {
+    if (filters.athleticActivity || contexts.includes("athletic")) {
+      const athletic = working.filter(
+        (entry) =>
+          entry.contexts.includes("athletic") ||
+          /\b(?:running|cleats|trainer|sneaker|trail runner|soccer|basketball)\b/i.test(
+            entry.label,
+          ),
+      );
+      if (athletic.length > 0) {
+        working = athletic;
+      }
+    } else if (contexts.includes("cold") || contexts.includes("wet")) {
+      const closed = working.filter(
+        (entry) =>
+          entry.contexts.includes("cold") ||
+          entry.contexts.includes("wet") ||
+          entry.contexts.includes("outdoor") ||
+          !/\b(?:sandal|flip-flop|espadrille|slide|heel)\b/i.test(entry.label),
+      );
+      if (closed.length > 0) {
+        working = closed;
+      }
+    } else if (contexts.includes("beach") || contexts.includes("swimwear")) {
+      const open = working.filter(
+        (entry) =>
+          entry.contexts.includes("warm") ||
+          entry.contexts.includes("beach") ||
+          /\b(?:sandal|flip-flop|slide|espadrille|water shoe|beach)\b/i.test(
+            entry.label,
+          ),
+      );
+      if (open.length > 0) {
+        working = open;
+      }
+    } else if (contexts.includes("formal") || contexts.includes("evening")) {
+      const formal = working.filter(
+        (entry) =>
+          entry.contexts.includes("formal") ||
+          entry.contexts.includes("evening") ||
+          /\b(?:heel|oxford|loafer|pump|stiletto|dress shoe|brogue)\b/i.test(
+            entry.label,
+          ),
+      );
+      if (formal.length > 0) {
+        working = formal;
+      }
+    } else if (filters.workWardrobe || contexts.includes("work")) {
+      const work = working.filter(
+        (entry) =>
+          entry.contexts.includes("work") ||
+          entry.contexts.includes("outdoor") ||
+          /\b(?:work boot|steel-toe|chelsea boot|derby)\b/i.test(entry.label),
+      );
+      if (work.length > 0) {
+        working = work;
+      }
+    }
+  }
+
+  if (
+    category === "headwear" &&
+    (contexts.includes("cold") || contexts.includes("wet") || contexts.includes("outdoor"))
+  ) {
+    const practical = working.filter(
+      (entry) =>
+        entry.contexts.includes("cold") ||
+        entry.contexts.includes("outdoor") ||
+        entry.contexts.includes("wet") ||
+        !entry.contexts.includes("formal"),
+    );
+    if (practical.length > 0) {
+      working = practical;
+    }
+  }
+
+  if (category === "bottom" && contexts.includes("swimwear")) {
+    const swim = working.filter(
+      (entry) =>
+        entry.contexts.includes("swimwear") ||
+        entry.contexts.includes("warm") ||
+        /\b(?:swim|board short|rash guard)\b/i.test(entry.label),
+    );
+    if (swim.length > 0) {
+      working = swim;
+    }
+  }
+
+  return working;
+}
+
+function garmentLabelsRedundant(primary: string, secondary: string): boolean {
+  const a = primary.toLowerCase().trim();
+  const b = secondary.toLowerCase().trim();
+  if (!a || !b) {
+    return false;
+  }
+
+  if (a.includes(b) || b.includes(a)) {
+    return true;
+  }
+
+  const garmentTypes = [
+    "shorts",
+    "jeans",
+    "pants",
+    "skirt",
+    "dress",
+    "robe",
+    "singlet",
+    "jersey",
+    "boots",
+    "shoes",
+    "sneakers",
+    "sandals",
+    "trunks",
+    "swimsuit",
+    "bikini",
+  ];
+
+  return garmentTypes.some((type) => a.includes(type) && b.includes(type));
+}
+
+function dedupeWardrobeLayers(
+  wardrobe: EnrichedClothingEntry | null,
+  bottom: EnrichedClothingEntry | null,
+  footwear: EnrichedClothingEntry | null,
+): {
+  wardrobe: EnrichedClothingEntry | null;
+  bottom: EnrichedClothingEntry | null;
+  footwear: EnrichedClothingEntry | null;
+} {
+  let nextWardrobe = wardrobe;
+  let nextBottom = bottom;
+  let nextFootwear = footwear;
+
+  if (nextWardrobe && nextBottom && garmentLabelsRedundant(nextWardrobe.label, nextBottom.label)) {
+    nextBottom = null;
+  }
+
+  if (nextWardrobe && nextFootwear && garmentLabelsRedundant(nextWardrobe.label, nextFootwear.label)) {
+    nextFootwear = null;
+  }
+
+  if (nextBottom && nextFootwear && garmentLabelsRedundant(nextBottom.label, nextFootwear.label)) {
+    nextFootwear = null;
+  }
+
+  return {
+    wardrobe: nextWardrobe,
+    bottom: nextBottom,
+    footwear: nextFootwear,
+  };
+}
+
+function shouldPickAccentLayer(
+  filters: ClothingPickFilters,
+  coreLayerCount: number,
+): boolean {
+  if (filters.swimwearOnly) {
+    return false;
+  }
+
+  if (filters.athleticActivity || filters.contexts.includes("swimwear")) {
+    return false;
+  }
+
+  if (filters.intimateWardrobe && !sceneAllowsFormalwear(filters.contexts)) {
+    return coreLayerCount < 3;
+  }
+
+  if (coreLayerCount >= 3 && !sceneAllowsFormalwear(filters.contexts)) {
+    return false;
+  }
+
+  return true;
 }
 
 function pickFromCategory(
@@ -529,25 +900,58 @@ function pickFromCategory(
   }
 
   const genderPool = filterPoolByGender(basePool, filters.gender);
+  const categoryPool = filterPoolByCategory(genderPool, category, filters);
+  const pickFlags = pickFilterFlags(filters);
   let picked = pickScoredEntry(
-    genderPool,
+    categoryPool,
     filters.contexts,
     filters.excludeIds,
+    pickFlags,
   );
 
-  if (!picked && filters.contexts.length > 1) {
-    picked = pickScoredEntry(genderPool, ["casual"], filters.excludeIds);
+  const sceneRequiresRestricted = filters.contexts.some((tag) =>
+    RESTRICTED_CLOTHING_CONTEXTS.includes(tag),
+  );
+
+  if (!picked && filters.contexts.length > 1 && !sceneRequiresRestricted) {
+    picked = pickScoredEntry(
+      categoryPool,
+      ["casual"],
+      filters.excludeIds,
+      pickFlags,
+    );
   }
 
-  if (!picked) {
-    picked = pickScoredEntry(genderPool, [], filters.excludeIds);
+  if (!picked && !sceneRequiresRestricted) {
+    picked = pickScoredEntry(categoryPool, [], filters.excludeIds, pickFlags);
   }
 
   return picked;
 }
 
+function pickAthleticWardrobeLayers(
+  filters: ClothingPickFilters,
+): {
+  wardrobe: EnrichedClothingEntry | null;
+  bottom: EnrichedClothingEntry | null;
+} {
+  const top = pickFromCategory("top", filters);
+  const bottom = pickFromCategory("bottom", filters);
+  if (top || bottom) {
+    return { wardrobe: top, bottom };
+  }
+
+  const outerwear = pickFromCategory("outerwear", filters);
+  if (outerwear) {
+    return { wardrobe: outerwear, bottom: null };
+  }
+
+  return { wardrobe: null, bottom: null };
+}
+
 export type RandomCharacterOutfit = {
   wardrobeId: string | null;
+  bottomId: string | null;
   footwearId: string | null;
   accessoriesId: string | null;
   wardrobe: string | null;
@@ -563,6 +967,7 @@ export function pickRandomCharacterOutfit(
   if (filters.skipWardrobeRolls) {
     return {
       wardrobeId: null,
+      bottomId: null,
       footwearId: null,
       accessoriesId: null,
       wardrobe: null,
@@ -580,28 +985,42 @@ export function pickRandomCharacterOutfit(
   };
 
   const useIntimateFootwear =
-    filters.contexts.includes("intimate") && randomInt(100) < 35;
+    filters.intimateWardrobe &&
+    filters.contexts.includes("intimate") &&
+    randomInt(100) < 35;
 
   const { wardrobe, bottom } = pickWardrobeLayers(workingFilters);
-  const footwear = useIntimateFootwear
-    ? null
-    : pickFromCategory("footwear", workingFilters);
+  let footwear =
+    useIntimateFootwear || filters.swimwearOnly
+      ? null
+      : pickFromCategory("footwear", workingFilters);
+
+  const deduped = dedupeWardrobeLayers(wardrobe, bottom, footwear);
+  const coreLayerCount = [deduped.wardrobe, deduped.bottom, deduped.footwear].filter(
+    Boolean,
+  ).length;
 
   let accent: EnrichedClothingEntry | null = null;
-  if (sceneAllowsFormalwear(filters.contexts) && randomInt(100) < 36) {
-    accent = pickFromCategory("dressy-accessory", workingFilters);
-  }
-  if (!accent && sceneAllowsHosiery(filters.contexts) && randomInt(100) < 30) {
-    accent = pickFromCategory("hosiery", workingFilters);
-  }
-  if (!accent && randomInt(100) < 22) {
-    accent = pickFromCategory("headwear", workingFilters);
-  }
-  if (!accent && randomInt(100) < 32) {
-    accent = pickFromCategory("accessory", workingFilters);
+  if (shouldPickAccentLayer(filters, coreLayerCount)) {
+    if (sceneAllowsFormalwear(filters.contexts) && randomInt(100) < 28) {
+      accent = pickFromCategory("dressy-accessory", workingFilters);
+    }
+    if (
+      !accent &&
+      sceneAllowsHosiery(filters.contexts) &&
+      randomInt(100) < 22
+    ) {
+      accent = pickFromCategory("hosiery", workingFilters);
+    }
+    if (!accent && coreLayerCount < 3 && randomInt(100) < 14) {
+      accent = pickFromCategory("headwear", workingFilters);
+    }
+    if (!accent && coreLayerCount < 3 && randomInt(100) < 18) {
+      accent = pickFromCategory("accessory", workingFilters);
+    }
   }
 
-  const layers = [wardrobe, bottom, footwear, accent].filter(
+  const layers = [deduped.wardrobe, deduped.bottom, deduped.footwear, accent].filter(
     (entry): entry is EnrichedClothingEntry => Boolean(entry),
   );
 
@@ -612,11 +1031,12 @@ export function pickRandomCharacterOutfit(
   const labels = layers.map((entry) => entry.label);
 
   return {
-    wardrobeId: wardrobe?.id ?? null,
-    footwearId: footwear?.id ?? null,
+    wardrobeId: deduped.wardrobe?.id ?? null,
+    bottomId: deduped.bottom?.id ?? null,
+    footwearId: deduped.footwear?.id ?? null,
     accessoriesId: accent?.id ?? null,
-    wardrobe: wardrobe?.script ?? null,
-    footwear: footwear?.script ?? null,
+    wardrobe: deduped.wardrobe?.script ?? null,
+    footwear: deduped.footwear?.script ?? null,
     accessories: accent?.script ?? null,
     summary: labels.join(", "),
     filters,
@@ -632,18 +1052,118 @@ export function wardrobeBudgetForPrompt(maxChars: number, peopleCount = 1): numb
 export type WardrobeAssignmentLike = {
   label?: string;
   summary: string;
+  wardrobeId?: string | null;
+  bottomId?: string | null;
+  footwearId?: string | null;
+  accessoriesId?: string | null;
 };
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function collectWardrobeEntryIds(
+  ...sources: Array<{
+    wardrobeId?: string | null;
+    bottomId?: string | null;
+    footwearId?: string | null;
+    accessoriesId?: string | null;
+  }>
+): string[] {
+  const ids: string[] = [];
+  for (const source of sources) {
+    for (const id of [
+      source.wardrobeId,
+      source.bottomId,
+      source.footwearId,
+      source.accessoriesId,
+    ]) {
+      if (id?.trim()) {
+        ids.push(id.trim());
+      }
+    }
+  }
+  return ids;
+}
+
+/** Replace leaked catalog scripts in merged prompts with short labels. */
+export function sanitizeCatalogScriptsInPrompt(
+  prompt: string,
+  entryIds?: readonly string[],
+): string {
+  if (!prompt.trim() || !entryIds?.length) {
+    return prompt.trim();
+  }
+
+  let result = prompt;
+  for (const id of entryIds) {
+    const entry = getClothingEntry(id);
+    if (!entry) {
+      continue;
+    }
+
+    const script = entry.script.trim();
+    if (script.length < 24) {
+      continue;
+    }
+
+    const fullPattern = new RegExp(escapeRegExp(script), "gi");
+    if (fullPattern.test(result)) {
+      result = result.replace(fullPattern, entry.label);
+      continue;
+    }
+
+    const withoutArticle = script.replace(/^a\s+/i, "").trim();
+    if (withoutArticle.length >= 20) {
+      const partialPattern = new RegExp(`\\ba\\s+${escapeRegExp(withoutArticle)}`, "gi");
+      result = result.replace(partialPattern, entry.label);
+    }
+  }
+
+  return result.replace(/\s{2,}/g, " ").trim();
+}
 
 function wardrobeSummaryPresent(prompt: string, summary: string): boolean {
   const normPrompt = prompt.toLowerCase();
   const chunks = summary
     .split(",")
     .map((part) => part.trim())
-    .filter((part) => part.length >= 8);
+    .filter((part) => part.length >= 5);
 
   return chunks.some((chunk) =>
     normPrompt.includes(chunk.toLowerCase().slice(0, Math.min(24, chunk.length))),
   );
+}
+
+function sentenceMatchesWardrobeLabel(sentence: string, label: string | undefined): boolean {
+  if (!label?.trim()) {
+    return false;
+  }
+
+  const lower = sentence.toLowerCase();
+  const labelLower = label.toLowerCase();
+
+  if (labelLower.includes("left") && /\b(on the left|to the left|left-hand|left side)\b/.test(lower)) {
+    return true;
+  }
+
+  if (
+    labelLower.includes("right") &&
+    /\b(on the right|to the right|right-hand|right side)\b/.test(lower)
+  ) {
+    return true;
+  }
+
+  const personNumber = labelLower.match(/person\s+(\d+)/)?.[1];
+  if (personNumber && new RegExp(`\\bperson\\s+${personNumber}\\b`, "i").test(lower)) {
+    return true;
+  }
+
+  if (personNumber === "3" && /\b(center|middle|between them)\b/.test(lower)) {
+    return true;
+  }
+
+  return false;
 }
 
 function injectWardrobeIntoSentence(sentence: string, wardrobe: string): string {
@@ -699,34 +1219,25 @@ function integrateDistinctPeopleWardrobe(
     return null;
   }
 
-  const leftSummary =
-    assignments.find((entry) => entry.label?.includes("left"))?.summary ??
-    assignments[0]?.summary;
-  const rightSummary =
-    assignments.find((entry) => entry.label?.includes("right"))?.summary ??
-    assignments[1]?.summary;
-
-  if (!leftSummary && !rightSummary) {
-    return null;
-  }
-
   const sentences = splitSentences(prompt);
   let changed = false;
 
   const updated = sentences.map((sentence) => {
-    const lower = sentence.toLowerCase();
-    if (leftSummary && /\b(on the left|to the left)\b/.test(lower)) {
-      if (!/\bwearing\b/i.test(sentence)) {
+    if (/\bwearing\b/i.test(sentence)) {
+      return sentence;
+    }
+
+    for (const assignment of assignments) {
+      if (!assignment.summary || !assignment.label) {
+        continue;
+      }
+
+      if (sentenceMatchesWardrobeLabel(sentence, assignment.label)) {
         changed = true;
-        return injectWardrobeIntoSentence(sentence, leftSummary);
+        return injectWardrobeIntoSentence(sentence, assignment.summary);
       }
     }
-    if (rightSummary && /\b(on the right|to the right)\b/.test(lower)) {
-      if (!/\bwearing\b/i.test(sentence)) {
-        changed = true;
-        return injectWardrobeIntoSentence(sentence, rightSummary);
-      }
-    }
+
     return sentence;
   });
 
@@ -770,26 +1281,31 @@ export function mergeWardrobeAssignmentsIntoPrompt(
     return trimmed;
   }
 
+  const entryIds = collectWardrobeEntryIds(...assignments);
+  const sanitize = (value: string) =>
+    entryIds.length > 0 ? sanitizeCatalogScriptsInPrompt(value, entryIds) : value;
+
   if (
     assignments.some((assignment) =>
       wardrobeSummaryPresent(trimmed, assignment.summary),
     )
   ) {
-    return trimmed;
+    return sanitize(trimmed);
   }
 
   if (assignments.length === 1 && !assignments[0]?.label) {
     const summary = assignments[0]!.summary;
-    return maxChars
+    const merged = maxChars
       ? fitWardrobeIntoPrompt(trimmed, summary, maxChars, 1)
       : integrateSinglePersonWardrobe(trimmed, summary) ??
           mergeAssignedWardrobeIntoPrompt(trimmed, summary);
+    return sanitize(merged);
   }
 
   if (maxChars) {
     const integrated = integrateDistinctPeopleWardrobe(trimmed, assignments);
     if (integrated && integrated.length <= maxChars) {
-      return integrated;
+      return sanitize(integrated);
     }
 
     const perPersonBudget = Math.max(
@@ -802,15 +1318,15 @@ export function mergeWardrobeAssignmentsIntoPrompt(
     }));
     const retry = integrateDistinctPeopleWardrobe(trimmed, compactAssignments);
     if (retry && retry.length <= maxChars) {
-      return retry;
+      return sanitize(retry);
     }
 
-    return trimmed;
+    return sanitize(trimmed);
   }
 
   const integrated = integrateDistinctPeopleWardrobe(trimmed, assignments);
   if (integrated) {
-    return integrated;
+    return sanitize(integrated);
   }
 
   const clause = assignments
@@ -820,7 +1336,7 @@ export function mergeWardrobeAssignmentsIntoPrompt(
     })
     .join("; ");
 
-  return trimmed ? `${clause}. ${trimmed}` : `${clause}.`;
+  return sanitize(trimmed ? `${clause}. ${trimmed}` : `${clause}.`);
 }
 
 export function trimWardrobeSummaryToMaxChars(
@@ -857,7 +1373,11 @@ export function trimWardrobeSummaryToMaxChars(
 export function mergeAssignedWardrobeIntoPrompt(
   prompt: string,
   wardrobeSummary: string,
-  options?: { maxWardrobeChars?: number; maxTotalChars?: number },
+  options?: {
+    maxWardrobeChars?: number;
+    maxTotalChars?: number;
+    entryIds?: readonly string[];
+  },
 ): string {
   const trimmed = prompt.trim();
   let summary = wardrobeSummary.trim();
@@ -870,25 +1390,27 @@ export function mergeAssignedWardrobeIntoPrompt(
   }
 
   if (wardrobeSummaryPresent(trimmed, summary)) {
-    return trimmed;
+    return options?.entryIds?.length
+      ? sanitizeCatalogScriptsInPrompt(trimmed, options.entryIds)
+      : trimmed;
   }
 
+  let merged: string;
   if (options?.maxTotalChars) {
-    return fitWardrobeIntoPrompt(
-      trimmed,
-      summary,
-      options.maxTotalChars,
-      1,
-    );
+    merged = fitWardrobeIntoPrompt(trimmed, summary, options.maxTotalChars, 1);
+  } else {
+    merged =
+      integrateSinglePersonWardrobe(trimmed, summary) ??
+      (trimmed
+        ? `${summary.endsWith(".") ? `wearing ${summary}` : `wearing ${summary}.`} ${trimmed}`
+        : summary.endsWith(".")
+          ? `wearing ${summary}`
+          : `wearing ${summary}.`);
   }
 
-  const integrated = integrateSinglePersonWardrobe(trimmed, summary);
-  if (integrated) {
-    return integrated;
-  }
-
-  const clause = summary.endsWith(".") ? `wearing ${summary}` : `wearing ${summary}.`;
-  return trimmed ? `${clause} ${trimmed}` : clause;
+  return options?.entryIds?.length
+    ? sanitizeCatalogScriptsInPrompt(merged, options.entryIds)
+    : merged;
 }
 
 export function mergeWardrobeRespectingLimits(
@@ -896,11 +1418,13 @@ export function mergeWardrobeRespectingLimits(
   wardrobeSummary: string,
   maxChars: number,
   peopleCount = 1,
+  entryIds?: readonly string[],
 ): string {
   const wardrobeBudget = wardrobeBudgetForPrompt(maxChars, peopleCount);
   return mergeAssignedWardrobeIntoPrompt(prompt, wardrobeSummary, {
     maxWardrobeChars: wardrobeBudget,
     maxTotalChars: maxChars,
+    entryIds,
   });
 }
 

@@ -1,5 +1,5 @@
 import { generateCharacterPrompt } from "@/lib/specialized/character-generator";
-import { normalizeSharedGenerationOptions, normalizeRecentLocations } from "@/lib/specialized/normalize";
+import { normalizeSharedGenerationOptions, normalizeRecentLocations, normalizeRecentClothing } from "@/lib/specialized/normalize";
 import {
   normalizeCharacterPresetOptions,
   type CharacterPresetOptions,
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
           : 50,
       presetOptions: normalizeCharacterPresetOptions(body.presetOptions),
       recentLocations: normalizeRecentLocations(body.recentLocations),
-      recentClothing: normalizeRecentLocations(body.recentClothing),
+      recentClothing: normalizeRecentClothing(body.recentClothing),
       alwaysIncludeClothing,
     });
 

@@ -8,6 +8,7 @@ import {
   mergeGenerateWardrobeIntoPrompt,
 } from "../generate-wardrobe";
 import { getDetailLimits } from "../detail-level";
+import { isMultiPersonInput } from "../distinct-people";
 import { DEFAULT_GENERATION_SETTINGS } from "../generation-settings";
 import { generatePrompt } from "../prompt-generator";
 import { buildRandomSceneSeed } from "./scene-pools";
@@ -28,12 +29,13 @@ export async function generateRandomScene(
   const locationBlock = buildMandatoryLocationBlock(genreHint.location);
 
   const wildness = Math.min(100, Math.max(0, options.wildness ?? 65));
+  const distinctPeople = isMultiPersonInput(seed);
   const wardrobeSettings = {
     ...DEFAULT_GENERATION_SETTINGS,
     model: options.model,
     detail: options.detail,
     alwaysIncludeClothing,
-    distinctPeople: false,
+    distinctPeople,
     variation: {
       enabled: true,
       strength: wildness,
@@ -43,6 +45,7 @@ export async function generateRandomScene(
     includePeople && alwaysIncludeClothing
       ? buildGenerateWardrobeAssignments(seed, wardrobeSettings, {
           assumePeople: true,
+          recentClothing: options.recentClothing,
         })
       : null;
   const clothingDirective = wardrobeAssignments?.length

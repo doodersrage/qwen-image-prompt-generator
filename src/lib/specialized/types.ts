@@ -28,6 +28,7 @@ export type RandomSceneOptions = SharedGenerationOptions & {
   includePeople?: boolean;
   wildness?: number;
   recentLocations?: string[];
+  recentClothing?: string[];
   alwaysIncludeClothing?: boolean;
 };
 

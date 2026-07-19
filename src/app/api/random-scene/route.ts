@@ -1,5 +1,5 @@
 import { generateRandomScene } from "@/lib/specialized/random-scene";
-import { normalizeSharedGenerationOptions, normalizeRecentLocations } from "@/lib/specialized/normalize";
+import { normalizeSharedGenerationOptions, normalizeRecentLocations, normalizeRecentClothing } from "@/lib/specialized/normalize";
 import { apiError, apiJson, apiMethodNotAllowed } from "@/lib/api/response";
 import { NextResponse } from "next/server";
 
@@ -12,6 +12,7 @@ type RandomSceneRequestBody = {
   includePeople?: boolean;
   wildness?: number;
   recentLocations?: string[];
+  recentClothing?: string[];
   alwaysIncludeClothing?: boolean;
 };
 
@@ -36,6 +37,7 @@ export async function POST(request: Request) {
           ? Math.min(100, Math.max(0, body.wildness))
           : 65,
       recentLocations: normalizeRecentLocations(body.recentLocations),
+      recentClothing: normalizeRecentClothing(body.recentClothing),
       alwaysIncludeClothing,
     });
 

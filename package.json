@@ -13,7 +13,8 @@
     "clothing:count": "node scripts/generate-clothing.mjs --count",
     "clothing:dedupe": "node scripts/dedupe-clothing.mjs",
     "clothing:generate": "node scripts/generate-clothing.mjs --add 500",
-    "clothing:generate:dry": "node scripts/generate-clothing.mjs --add 500 --dry-run"
+    "clothing:generate:dry": "node scripts/generate-clothing.mjs --add 500 --dry-run",
+    "test": "node --import tsx --test src/lib/clothing-wardrobe.test.ts"
   },
   "dependencies": {
     "next": "16.2.10",
@@ -28,6 +29,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "tailwindcss": "^4",
+    "tsx": "^4.20.3",
     "typescript": "^5"
   }
 }

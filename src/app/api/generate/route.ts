@@ -3,6 +3,7 @@ import {
   type PromptMode,
 } from "@/lib/prompt-generator";
 import { normalizeGenerationSettings } from "@/lib/generation-settings";
+import { normalizeRecentClothing } from "@/lib/specialized/normalize";
 import {
   apiError,
   apiJson,
@@ -22,6 +23,7 @@ type GenerateRequestBody = {
   detail?: string;
   distinctPeople?: boolean;
   alwaysIncludeClothing?: boolean;
+  recentClothing?: string[];
   model?: string;
 };
 
@@ -50,7 +52,9 @@ export async function POST(request: Request) {
       return apiError("Input must be 4000 characters or fewer.", 400);
     }
 
-    const result = await generatePrompt(input, mode, settings);
+    const result = await generatePrompt(input, mode, settings, {
+      recentClothing: normalizeRecentClothing(body.recentClothing),
+    });
 
     return apiJson(result);
   } catch (error) {

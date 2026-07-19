@@ -97,17 +97,304 @@ export function hintsExplicitUndergarment(hints?: string): boolean {
   return EXPLICIT_UNDERGARMENT_HINT.test(hints?.trim() ?? "");
 }
 
+/** Active sport or physical exertion—not aesthetic words like "mythic folktale style". */
+const ATHLETIC_ACTIVITY_HINT =
+  /\b(?:sprinter|sprinting|somersault|backflip|hurdler|hurdles|marathon|triathlon|decathlon|pole vault|long jump|high jump|javelin|discus|shot put|track and field|track meet|relay race|competition|competing|athlete|athletic|workout|weightlifting|crossfit|parkour|gymnast|gymnastics|basketball|soccer|tennis|boxer|fencer|figure skater|skateboarder|climber|mountain biker|cyclist|cycling|hay bale|obstacle course|finish line|starting blocks|100m dash|400m dash|top speed|running at|mid-flight|trail runner|running shoes|running shorts|running singlet|sports bra|jersey|cleats|track pants|workout gear|training gear)\b/i;
+
+const EXPLICIT_COSTUME_HINT =
+  /\b(?:wizard robe|knight armor|plate armor|chain mail|cosplay|costume party|in costume|wearing a costume|nun habit|monk robes|ballerina tutu|superhero suit|vampire cape|renaissance faire|halloween costume|elven gown|dwarven armor|circus ringmaster|magician cape|dressed as a wizard|dressed as a knight|dressed as a|dressed as the)\b/i;
+
+/** Scene/setting cues for literal costumes—not art-direction words like fantasy or stage lighting. */
+const SCENE_COSTUME_SETTING_HINT =
+  /\b(?:cosplay|larp|renaissance faire|medieval faire|halloween costume|amusement park|circus tent|circus ring|on stage in costume|performance costume|theater costume|costume party|gothic lolita)\b/i;
+
+const EXPLICIT_UNIFORM_HINT =
+  /\b(?:in uniform|wearing uniform|service uniform|dress uniform|police uniform|military uniform|firefighter turnout|pilot uniform|flight attendant uniform|nurse scrubs|postal uniform|mail carrier uniform|bellhop uniform|referee uniform|school uniform|chef whites)\b/i;
+
+const WORK_SETTING_HINT =
+  /\b(?:office|workshop|factory|kitchen|hospital|clinic|server room|warehouse|construction site|studio backlot|laboratory|courtroom|pharmacy|garage|mill|forge|bakery|butcher shop|newsroom|trading floor|barracks|police station|fire station|aircraft hangar|on duty|at work|work clothes)\b/i;
+
+const WORK_PROFESSION_HINT =
+  /\b(?:chef|nurse|doctor|mechanic|barista|butcher|baker|paramedic|pilot|flight attendant|barber|waiter|waitress|server|bartender|construction worker|warehouse worker|mail carrier|postal worker|firefighter|police officer|soldier|sailor|referee|umpire|bellhop)\b/i;
+
+export type WorkProfession =
+  | "flight attendant"
+  | "construction worker"
+  | "warehouse worker"
+  | "mail carrier"
+  | "police officer"
+  | "paramedic"
+  | "firefighter"
+  | "bellhop"
+  | "barista"
+  | "mechanic"
+  | "bartender"
+  | "barber"
+  | "butcher"
+  | "baker"
+  | "referee"
+  | "soldier"
+  | "sailor"
+  | "pilot"
+  | "chef"
+  | "nurse"
+  | "doctor"
+  | "waiter";
+
+const WORK_PROFESSION_PATTERNS: Array<{ key: WorkProfession; pattern: RegExp }> = [
+  { key: "flight attendant", pattern: /\bflight attendant\b/i },
+  { key: "construction worker", pattern: /\bconstruction worker\b/i },
+  { key: "warehouse worker", pattern: /\bwarehouse worker\b/i },
+  { key: "mail carrier", pattern: /\b(?:mail carrier|postal worker)\b/i },
+  { key: "police officer", pattern: /\b(?:police officer|police)\b/i },
+  { key: "paramedic", pattern: /\bparamedic\b/i },
+  { key: "firefighter", pattern: /\bfirefighter\b/i },
+  { key: "bellhop", pattern: /\bbellhop\b/i },
+  { key: "barista", pattern: /\bbarista\b/i },
+  { key: "mechanic", pattern: /\bmechanic\b/i },
+  { key: "bartender", pattern: /\bbartender\b/i },
+  { key: "barber", pattern: /\bbarber\b/i },
+  { key: "butcher", pattern: /\bbutcher\b/i },
+  { key: "baker", pattern: /\bbaker\b/i },
+  { key: "referee", pattern: /\b(?:referee|umpire)\b/i },
+  { key: "soldier", pattern: /\b(?:soldier|military)\b/i },
+  { key: "sailor", pattern: /\bsailor\b/i },
+  { key: "pilot", pattern: /\bpilot\b/i },
+  { key: "chef", pattern: /\bchef\b/i },
+  { key: "nurse", pattern: /\bnurse\b/i },
+  { key: "doctor", pattern: /\bdoctor\b/i },
+  { key: "waiter", pattern: /\b(?:waiter|waitress|server)\b/i },
+];
+
+/** Maps catalog label keywords for profession-aligned uniform picks. */
+export const PROFESSION_UNIFORM_LABEL_HINTS: Record<WorkProfession, RegExp> = {
+  chef: /\b(?:chef(?:'s)?\s*whites|chef\s*coat|chef\s*hat|chef\s*toque|toque)\b/i,
+  nurse: /\b(?:nurse|scrubs)\b/i,
+  doctor: /\b(?:doctor|scrubs|white coat|lab coat)\b/i,
+  mechanic: /\b(?:mechanic|coveralls?)\b/i,
+  barista: /\b(?:barista|apron)\b/i,
+  butcher: /\b(?:butcher|apron)\b/i,
+  baker: /\b(?:baker|apron)\b/i,
+  paramedic: /\b(?:paramedic|ems)\b/i,
+  pilot: /\bpilot\b/i,
+  "flight attendant": /\b(?:flight attendant|airline)\b/i,
+  barber: /\b(?:barber|smock)\b/i,
+  waiter: /\b(?:waiter|waitress|server|service outfit|black tie service)\b/i,
+  bartender: /\b(?:bartender|bar apron|service)\b/i,
+  "construction worker": /\b(?:construction|coveralls?|hi-vis|hard hat)\b/i,
+  "warehouse worker": /\b(?:warehouse|coveralls?|hi-vis)\b/i,
+  "mail carrier": /\b(?:postal|mail carrier)\b/i,
+  firefighter: /\b(?:firefighter|turnout)\b/i,
+  "police officer": /\b(?:police|duty uniform)\b/i,
+  soldier: /\b(?:soldier|military|fatigue|bdu)\b/i,
+  sailor: /\b(?:sailor|naval|deck)\b/i,
+  referee: /\b(?:referee|umpire)\b/i,
+  bellhop: /\bbellhop\b/i,
+};
+
+/** Enables lingerie/intimate catalog picks—not plain bedroom or hotel location alone. */
+const INTIMATE_WARDROBE_HINT =
+  /\b(?:boudoir|lingerie shoot|intimate apparel|intimate wear|lingerie set|getting dressed in lingerie|silk sheets and lingerie|morning after|vanity mirror and lingerie)\b/i;
+
+export function hintsDescribeAthleticActivity(hints?: string): boolean {
+  return ATHLETIC_ACTIVITY_HINT.test(hints?.trim() ?? "");
+}
+
+export function hintsExplicitCostume(hints?: string): boolean {
+  return EXPLICIT_COSTUME_HINT.test(hints?.trim() ?? "");
+}
+
+export function hintsSceneSuggestsCostume(hints?: string): boolean {
+  return SCENE_COSTUME_SETTING_HINT.test(hints?.trim() ?? "");
+}
+
+export function hintsExplicitUniform(hints?: string): boolean {
+  return EXPLICIT_UNIFORM_HINT.test(hints?.trim() ?? "");
+}
+
+export function inferWorkProfession(hints?: string): WorkProfession | null {
+  const value = hints?.trim() ?? "";
+  if (!value) {
+    return null;
+  }
+
+  for (const { key, pattern } of WORK_PROFESSION_PATTERNS) {
+    if (pattern.test(value)) {
+      return key;
+    }
+  }
+
+  return null;
+}
+
+export function hintsSwimwearOnlyMode(
+  hints: string | undefined,
+  contexts: readonly ClothingContextTag[],
+): boolean {
+  const corpus = hints?.trim() ?? "";
+  if (!contexts.includes("swimwear")) {
+    return false;
+  }
+
+  if (
+    contexts.includes("cold") &&
+    !contexts.includes("warm") &&
+    !/\b(?:heated pool|indoor pool|hot tub|jacuzzi)\b/i.test(corpus)
+  ) {
+    return false;
+  }
+
+  if (
+    contexts.includes("formal") ||
+    contexts.includes("evening") ||
+    contexts.includes("formalwear")
+  ) {
+    return false;
+  }
+
+  if (
+    hintsWorkWardrobeAllowed(corpus) &&
+    !/\b(?:beach|pool|swim|swimming|swimwear|bikini|trunks|tropical|resort|yacht|hot tub|jacuzzi|snorkel|surfer|aquatic|lakeside|board shorts|one-piece)\b/i.test(
+      corpus,
+    )
+  ) {
+    return false;
+  }
+
+  return (
+    contexts.includes("beach") ||
+    /\b(?:pool|swimming|swimwear|bikini|swim trunks|one-piece|hot tub|jacuzzi|poolside|swim briefs|board shorts|monokini|tankini|rash guard)\b/i.test(
+      corpus,
+    )
+  );
+}
+
+export function hintsWorkWardrobeAllowed(hints?: string): boolean {
+  const value = hints?.trim() ?? "";
+  if (!value) {
+    return false;
+  }
+  if (WORK_SETTING_HINT.test(value)) {
+    return true;
+  }
+  if (hintsExplicitUniform(value)) {
+    return true;
+  }
+  return WORK_PROFESSION_HINT.test(value);
+}
+
+export function hintsIntimateWardrobeAllowed(hints?: string): boolean {
+  const value = hints?.trim() ?? "";
+  return (
+    hintsExplicitUndergarment(value) ||
+    INTIMATE_WARDROBE_HINT.test(value) ||
+    /\b(?:sleepwear|nightgown|pajamas?|pyjamas?|bathrobe|dressing gown)\b/i.test(value)
+  );
+}
+
+function resolveClothingContextConflicts(
+  tags: Set<ClothingContextTag>,
+  corpus: string,
+): void {
+  const athletic = hintsDescribeAthleticActivity(corpus);
+  const explicitCostume =
+    hintsExplicitCostume(corpus) || hintsSceneSuggestsCostume(corpus);
+  const workWardrobe = hintsWorkWardrobeAllowed(corpus);
+  const intimateWardrobe = hintsIntimateWardrobeAllowed(corpus);
+
+  if (!explicitCostume) {
+    tags.delete("costume");
+  }
+
+  if (!workWardrobe) {
+    tags.delete("work");
+    tags.delete("uniform");
+  }
+
+  if (!intimateWardrobe) {
+    tags.delete("intimate");
+    tags.delete("sleepwear");
+    tags.delete("underwear");
+  }
+
+  if (tags.has("swimwear") || tags.has("beach")) {
+    tags.delete("formal");
+    tags.delete("formalwear");
+    tags.delete("evening");
+    if (!explicitCostume) {
+      tags.delete("costume");
+    }
+  }
+
+  const coldCue =
+    tags.has("cold") ||
+    /\b(?:snow|frost|winter|blizzard|ice|freezing|subzero|arctic)\b/i.test(corpus);
+  const warmCue =
+    tags.has("warm") ||
+    /\b(?:desert|tropical|sahara|midsummer|heat haze|arid|dry heat|humid summer)\b/i.test(
+      corpus,
+    );
+
+  if (coldCue && warmCue) {
+    if (/\b(?:snow|frost|winter|blizzard|ice|freezing|subzero|arctic)\b/i.test(corpus)) {
+      tags.delete("warm");
+    } else if (/\b(?:desert|tropical|sahara|midsummer|arid|dry heat)\b/i.test(corpus)) {
+      tags.delete("cold");
+    }
+  }
+
+  const aestheticFormalOnly =
+    (tags.has("formal") || tags.has("evening") || tags.has("formalwear")) &&
+    !/\b(?:formal|gala|ballroom|black tie|cocktail|evening gown|opera|wedding reception|red carpet|premiere|skirt suit|formalwear|banquet)\b/i.test(
+      corpus,
+    ) &&
+    !/\b(?:ballroom|gala|black tie|wedding reception|red carpet|opera house)\b/i.test(
+      corpus,
+    );
+
+  if (
+    aestheticFormalOnly &&
+    (athletic ||
+      tags.has("swimwear") ||
+      tags.has("beach") ||
+      tags.has("outdoor") ||
+      tags.has("athletic"))
+  ) {
+    tags.delete("formal");
+    tags.delete("formalwear");
+    tags.delete("evening");
+  }
+
+  if (athletic) {
+    tags.add("athletic");
+    tags.delete("casual");
+    if (!explicitCostume) {
+      tags.delete("costume");
+      tags.delete("formalwear");
+      tags.delete("formal");
+      tags.delete("evening");
+    }
+    if (!workWardrobe && !hintsExplicitUniform(corpus)) {
+      tags.delete("uniform");
+    }
+  }
+
+  if (tags.size === 0) {
+    tags.add("casual");
+  }
+}
+
 const CONTEXT_RULES: Array<{ tag: ClothingContextTag; pattern: RegExp }> = [
-  { tag: "athletic", pattern: /\b(?:jersey|running|jogger|yoga|gym|cycling|soccer|cleats|track pants|sweatpants|sport|ski jacket|climbing|trail runner|basketball|fencing|dance kit|triathlon|workout|compression|goalkeeper|baseball uniform|hockey|swim|snorkel|cleats|mogul|parkour)\b/i },
+  { tag: "athletic", pattern: /\b(?:jersey|running|jogger|yoga|gym|cycling|soccer|cleats|track pants|sweatpants|sport|ski jacket|climbing|trail runner|basketball|fencing|dance kit|triathlon|workout|compression|goalkeeper|baseball uniform|hockey|swimming|swimmer|swim meet|swim team|snorkel|mogul|parkour|sprinter|sprinting|somersault|athlete|marathon|hurdles|gymnast|competition|hay bale|obstacle course|finish line)\b/i },
   { tag: "formal", pattern: /\b(?:suit|tuxedo|gown|cocktail|blazer|oxford dress|brogues|monk strap|evening wear|wedding|pencil skirt|sport coat|tailcoat|formal wear|three-piece|evening gown|cocktail dress|skirt suit|twinset|formalwear|opera gloves|fascinator)\b/i },
   { tag: "evening", pattern: /\b(?:cocktail|evening gown|sequin|silk slip|stiletto|heels|gown|tuxedo|smoking jacket|ballroom|satin slip|pearl necklace|clutch|opera gloves|fascinator|minaudiere|stole|tiara)\b/i },
   { tag: "outdoor", pattern: /\b(?:hiking|trail|parka|puffer|anorak|fleece|gore-tex|windbreaker|cargo pants|work boots|mountain shell|rain slicker|field jacket|cagoule|poncho|bandana|sun hat|straw hat|backpack|climbing|camp|safari|gorpcore)\b/i },
   { tag: "cold", pattern: /\b(?:parka|puffer|wool|fleece|peacoat|duffle coat|shearling|down|beanie|scarf|mittens|balaclava|moon boots|overcoat|quilted|insulated|ear muffs|winter)\b/i },
   { tag: "warm", pattern: /\b(?:shorts|sandals|flip-flops|tank top|linen|hawaiian shirt|board shorts|muscle tank|racerback|espadrilles|sun hat|crop top|sleeveless|mesh jersey|sleeveless)\b/i },
   { tag: "wet", pattern: /\b(?:rain|slicker|wellington|rubber boots|gore-tex|poncho|oilskin|waterproof|hardshell|rain boots|cagoule|packable shell)\b/i },
-  { tag: "work", pattern: /\b(?:coveralls|overalls|workbench|apron|hi-vis|safety vest|tool belt|mechanic|chef|barista|warehouse|scrubs|lab coat|barber|butcher|forge|paint-stained|work boots|steel-toe|utilitarian|chore coat|boiler suit)\b/i },
-  { tag: "uniform", pattern: /\b(?:uniform|kit|gi|dobok|judogi|karate|scrubs|police|military|firefighter|turnout|pilot|flight attendant|nurse|paramedic|chef whites|server room|bellhop|postal|mail carrier|referee|umpire)\b/i },
-  { tag: "costume", pattern: /\b(?:wizard|knight|armor|circus|magician|monk robes|nun habit|cosplay|vampire|steampunk|elven|dwarven|halloween|renaissance faire|mermaid|superhero|ballerina tutu)\b/i },
+  { tag: "work", pattern: /\b(?:coveralls|overalls|workbench|apron|hi-vis|safety vest|tool belt|warehouse|scrubs|lab coat|forge|paint-stained|work boots|steel-toe|utilitarian|chore coat|boiler suit)\b/i },
+  { tag: "uniform", pattern: EXPLICIT_UNIFORM_HINT },
+  { tag: "costume", pattern: EXPLICIT_COSTUME_HINT },
   { tag: "beach", pattern: /\b(?:board shorts|flip-flops|sarong|snorkel|bikini|swim trunks|rash guard|beach|shoreline|seaside|poolside|kaftan cover-up)\b/i },
   { tag: "swimwear", pattern: /\b(?:bikini|one-piece swimsuit|tankini|swim trunks|swim briefs|rash guard|cut-out swimsuit|bandeau bikini|high-waist bikini|sport swimsuit|swim set|monokini|swim top|swim bottom|competitive swim)\b/i },
   { tag: "intimate", pattern: EXPLICIT_UNDERGARMENT_HINT },
@@ -126,15 +413,14 @@ const SCENE_CONTEXT_RULES: Array<{ tag: ClothingContextTag; pattern: RegExp }> =
   { tag: "wet", pattern: /\b(?:rain|monsoon|drizzle|downpour|puddle|storm|wet pavement|after a recent rain|spray|misty rain|showers)\b/i },
   { tag: "beach", pattern: /\b(?:beach|seaside|shoreline|oceanfront|boardwalk|tidal pool|sandy beach|rocky shore|surf break|beach club|poolside|black sand beach|tropical reef|overwater|harbor quay|snorkel(?:ing)?|lagoon)\b/i },
   { tag: "swimwear", pattern: /\b(?:pool|swimming|swim\b|aquatic|hot tub|jacuzzi|yacht deck|lakeside|water park|infinity pool|rooftop pool|spa pool|snorkeling|surfing|tropical resort|beach club pool)\b/i },
-  { tag: "intimate", pattern: /\b(?:bedroom|boudoir|master suite|hotel room|hotel suite|ensuite|dressing room|vanity mirror|silk sheets|canopy bed|candlelit|bathtub|soaking tub|spa suite|private suite|morning light through curtains|getting ready|lingerie shoot|penthouse bed)\b/i },
   { tag: "outdoor", pattern: /\b(?:forest|mountain|trail|meadow|field|garden|canyon|lake|river|farm|barn|countryside|hiking|pine|valley|cliff|rooftop garden|park|orchard|vineyard|steppe|prairie|wetland|marsh|glade|fjord)\b/i },
   { tag: "formal", pattern: /\b(?:ballroom|gala|opera house|wedding|cathedral|courthouse|formal hall|banquet|black tie|reception|palais|palace hall|symphony|orchestra pit|red carpet|premiere)\b/i },
-  { tag: "evening", pattern: /\b(?:midnight|dusk|twilight|blue hour|night|after hours|neon|jazz club|speakeasy|bar\b|night market|moonlit|starry|late evening|sunset|golden hour window)\b/i },
-  { tag: "work", pattern: /\b(?:office|workshop|factory|kitchen|hospital|clinic|server room|warehouse|construction|studio backlot|laboratory|courtroom|pharmacy|garage|mill|forge|bakery|butcher|studio|newsroom|trading floor)\b/i },
+  { tag: "evening", pattern: /\b(?:midnight|dusk|twilight|blue hour|night|after hours|neon|jazz club|speakeasy|wine bar|cocktail bar|rooftop bar|night market|moonlit|starry|late evening|sunset|golden hour window)\b/i },
+  { tag: "work", pattern: WORK_SETTING_HINT },
   { tag: "urban", pattern: /\b(?:alley|street|city|downtown|metro|subway|skyline|urban|neon|cyberpunk|penthouse|loft|brick facade|shophouse|bodega|parking garage|overpass)\b/i },
   { tag: "athletic", pattern: /\b(?:gym|dojo|stadium|arena|court|track|rink|pool deck|skate park|climbing gym|yoga studio|boxing gym|ballet studio|soccer|baseball field|ferry deck running)\b/i },
   { tag: "uniform", pattern: /\b(?:barracks|prison|dungeon|military|naval|submarine|aircraft hangar|police station|fire station|hospital ward|monastery|convent|academy|school campus|parade ground)\b/i },
-  { tag: "costume", pattern: /\b(?:fantasy|medieval|wizard|dragon|enchanted|fairy|gothic library|amusement park|circus|stage|theater fly|renaissance|myth|cosplay|larp)\b/i },
+  { tag: "costume", pattern: SCENE_COSTUME_SETTING_HINT },
 ];
 
 const PRESET_ATMOSPHERE_CONTEXT: Record<string, ClothingContextTag[]> = {
@@ -219,6 +505,8 @@ export function inferClothingContexts(text: string): ClothingContextTag[] {
     tags.delete("casual");
   }
 
+  resolveClothingContextConflicts(tags, value);
+
   return [...tags];
 }
 
@@ -252,7 +540,7 @@ export function inferSceneClothingContexts(input: {
   if (hintsAllowSwimwearCatalog(input.hints)) {
     tags.add("swimwear");
   }
-  if (hintsAllowIntimateCatalog(input.hints) || hintsExplicitUndergarment(input.hints)) {
+  if (hintsIntimateWardrobeAllowed(corpus)) {
     tags.add("intimate");
   }
   if (hintsAllowFormalwearCatalog(input.hints)) {
@@ -300,20 +588,38 @@ export function inferSceneClothingContexts(input: {
     tags.add("casual");
   }
 
+  resolveClothingContextConflicts(tags, corpus);
+
   return [...tags];
 }
 
 const CLOTHING_HINT =
   /\b(?:wearing|dressed|outfit|wardrobe|shirt|blouse|tee|t-shirt|top|jacket|coat|hoodie|sweater|dress|skirt|pants|jeans|shorts|boots|sneakers|shoes|heels|sandals|suit|uniform|apron|overalls|vest|blazer|cardigan|leggings|romper|jumpsuit|kimono|robe|armor|gown|tuxedo|scrubs|bikini|swimsuit|swim trunks|stockings|pantyhose|tights|fascinator|opera gloves|twinset|skirt suit)\b/i;
 
+const EXPLICIT_PRIMARY_GARMENT_PHRASE =
+  /\b(?:bikini|one-piece swimsuit|tankini|swim trunks|swim briefs|evening gown|cocktail dress|wedding dress|ball gown|jumpsuit|romper|cheongsam|qipao|tuxedo|three-piece suit|chef whites|nurse scrubs|lab coat|ballerina tutu|wizard robe|knight armor|plate armor|monokini|rash guard|board shorts|high-waist bikini|lingerie set|pajama set|nightgown|dress suit|skirt suit|coveralls|mechanic coveralls|firefighter turnout|police duty uniform|pilot uniform|waiter black tie|summer dress|maxi dress|mini dress|sheath dress|denim jacket|leather jacket|track suit|running shorts)\b/i;
+
+const EXPLICIT_WEARING_PHRASE =
+  /\b(?:wearing|dressed in|wears a|wears an|outfit is|outfit:)\s+[^,.\n;]{4,}/i;
+
 export function hintsMentionClothing(hints?: string): boolean {
   const value = hints?.trim() ?? "";
   return CLOTHING_HINT.test(value) || hintsExplicitUndergarment(value);
 }
 
-/** Input already names core clothing (e.g. bikini, dress)—random picks must not override it. */
+/** Input names a specific core garment—random primary layers must not override it. */
 export function hintsLockPrimaryGarment(hints?: string): boolean {
-  return hintsMentionClothing(hints);
+  const value = hints?.trim() ?? "";
+  if (!value) {
+    return false;
+  }
+  if (hintsExplicitUndergarment(value)) {
+    return true;
+  }
+  if (EXPLICIT_WEARING_PHRASE.test(value)) {
+    return true;
+  }
+  return EXPLICIT_PRIMARY_GARMENT_PHRASE.test(value);
 }
 
 /** Input specifies underwear—do not add random footwear, outer layers, or accessories. */
@@ -327,6 +633,12 @@ export type ClothingPickFilters = {
   excludeIds?: readonly string[];
   lockPrimaryGarment?: boolean;
   skipWardrobeRolls?: boolean;
+  athleticActivity?: boolean;
+  intimateWardrobe?: boolean;
+  workWardrobe?: boolean;
+  workProfession?: WorkProfession | null;
+  swimwearOnly?: boolean;
+  explicitCostume?: boolean;
 };
 
 export function buildClothingPickFilters(input: {
@@ -342,16 +654,27 @@ export function buildClothingPickFilters(input: {
     input.gender === "women" || input.gender === "men"
       ? input.gender
       : inferSubjectGenderFromHints(hintCorpus) ?? input.gender;
+  const contexts = inferSceneClothingContexts({
+    sceneLocation: input.sceneLocation,
+    environmentSeed: input.environmentSeed,
+    hints: input.hints,
+    presetOptions: input.presetOptions,
+  });
 
   return {
     gender: subjectGenderToClothingGender(resolvedGender),
-    contexts: inferSceneClothingContexts({
-      sceneLocation: input.sceneLocation,
-      environmentSeed: input.environmentSeed,
-      hints: input.hints,
-      presetOptions: input.presetOptions,
-    }),
+    contexts,
     excludeIds: input.excludeIds,
+    athleticActivity: hintsDescribeAthleticActivity(hintCorpus),
+    intimateWardrobe: hintsIntimateWardrobeAllowed(hintCorpus),
+    workWardrobe: hintsWorkWardrobeAllowed(hintCorpus),
+    workProfession: inferWorkProfession(hintCorpus),
+    swimwearOnly:
+      !hintsSkipWardrobeRolls(input.hints) &&
+      !hintsLockPrimaryGarment(input.hints) &&
+      hintsSwimwearOnlyMode(hintCorpus, contexts),
+    explicitCostume:
+      hintsExplicitCostume(hintCorpus) || hintsSceneSuggestsCostume(hintCorpus),
     skipWardrobeRolls: hintsSkipWardrobeRolls(input.hints),
     lockPrimaryGarment:
       hintsLockPrimaryGarment(input.hints) &&
@@ -432,9 +755,6 @@ export function clothingAllowedInScene(
 const SWIMWEAR_HINT =
   /\b(?:beach|pool|swim|swimming|swimwear|bikini|trunks|tropical|resort|yacht|hot tub|jacuzzi|snorkel|surfer|aquatic|lakeside|board shorts|one-piece)\b/i;
 
-const INTIMATE_HINT =
-  /\b(?:bedroom|boudoir|lingerie shoot|intimate|silk sheets|hotel room|hotel suite|vanity|bathtub|soaking tub|getting dressed|morning after|private suite|dressing room|robe only|sleepwear|nightgown)\b/i;
-
 const FORMALWEAR_HINT =
   /\b(?:formal|gala|ballroom|black tie|cocktail|evening gown|opera|wedding reception|red carpet|premiere|skirt suit|pants suit|twinset|fascinator|opera gloves|formalwear|dress suit|banquet|charity ball)\b/i;
 
@@ -446,8 +766,7 @@ export function hintsAllowSwimwearCatalog(hints?: string): boolean {
 }
 
 export function hintsAllowIntimateCatalog(hints?: string): boolean {
-  const value = hints?.trim() ?? "";
-  return INTIMATE_HINT.test(value) || hintsExplicitUndergarment(value);
+  return hintsIntimateWardrobeAllowed(hints);
 }
 
 export function hintsAllowFormalwearCatalog(hints?: string): boolean {
@@ -506,6 +825,40 @@ export function scoreClothingContextMatch(
   return score;
 }
 
+export function buildClothingGuardrailLines(
+  filters: ClothingPickFilters,
+): string[] {
+  return [
+    filters.athleticActivity
+      ? "Athletic activity is happening—use practical sport or training attire (singlet, shorts, running shoes, jersey, track gear). No costumes, wizard robes, formalwear, or unrelated uniforms."
+      : null,
+    filters.workWardrobe
+      ? filters.workProfession
+        ? `Work context applies—keep assigned ${filters.workProfession} workwear or uniform coherent with the job and setting.`
+        : "Work or uniform context applies—keep assigned workwear or uniform coherent with the job and setting."
+      : filters.contexts.includes("work") || filters.contexts.includes("uniform")
+        ? "Do not add unrelated service uniforms or work coveralls unless the scene clearly calls for them."
+        : null,
+    !filters.intimateWardrobe
+      ? "This is not an intimate-apparel scene—do not add lingerie, sleepwear, or underwear unless already specified in the brief."
+      : null,
+    filters.contexts.includes("swimwear") && !filters.lockPrimaryGarment
+      ? filters.swimwearOnly
+        ? "Swim or beach context—use swimwear only (no street clothes, jackets, or dress shoes layered on top)."
+        : "Swimwear is appropriate here—keep coverage and styling realistic for a swim or poolside setting."
+      : null,
+    filters.contexts.includes("intimate") && filters.intimateWardrobe
+      ? "Intimate apparel is appropriate in this private setting—keep fabrics, fit, and mood coherent with the scene."
+      : null,
+    filters.contexts.includes("formalwear") || filters.contexts.includes("formal")
+      ? "Formal or dressy attire fits this setting—keep tailoring, fabric weight, and accessories coherent with an elevated occasion."
+      : null,
+    filters.contexts.includes("hosiery")
+      ? "Hosiery is appropriate here—render sheer or opaque texture, seam detail, and fit naturally with the rest of the outfit."
+      : null,
+  ].filter((line): line is string => Boolean(line));
+}
+
 export function buildClothingCoherenceUserDirective(
   filters: ClothingPickFilters,
   outfitSummary: string,
@@ -528,25 +881,14 @@ export function buildClothingCoherenceUserDirective(
       ? "The scene brief already specifies what the subject wears—keep that garment. Weave assigned accent pieces only; do not add a second outfit, uniform, outer layer, or extra garment hanging nearby."
       : "Weave these garments into the subject's description—do not open with a separate wardrobe paragraph.",
     "Name each garment briefly in the final prompt—short labels only, not long material paragraphs.",
+    "Mention each assigned garment once—do not repeat the same piece or stack duplicate garment types.",
     filters.lockPrimaryGarment
       ? "Keep every assigned footwear or accessory in the final prompt."
       : "Keep every assigned garment type in the final prompt.",
     filters.lockPrimaryGarment
       ? null
       : "Adjust fit, layering, or weather-appropriate styling only when needed so clothing matches the subject's gender and the environment—do not swap to unrelated outfits.",
-    filters.contexts.includes("swimwear") && !filters.lockPrimaryGarment
-      ? "Swimwear is appropriate here—keep coverage and styling realistic for a swim or poolside setting."
-      : null,
-    filters.contexts.includes("intimate")
-      ? "Intimate apparel is appropriate in this private setting—keep fabrics, fit, and mood coherent with the scene."
-      : null,
-    filters.contexts.includes("formalwear") ||
-      filters.contexts.includes("formal")
-      ? "Formal or dressy attire fits this setting—keep tailoring, fabric weight, and accessories coherent with an elevated occasion."
-      : null,
-    filters.contexts.includes("hosiery")
-      ? "Hosiery is appropriate here—render sheer or opaque texture, seam detail, and fit naturally with the rest of the outfit."
-      : null,
+    ...buildClothingGuardrailLines(filters),
   ]
     .filter(Boolean)
     .join(" ");

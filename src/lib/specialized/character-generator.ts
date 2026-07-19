@@ -3,6 +3,7 @@ import {
   buildCharacterPresetSanitizeContext,
   buildCharacterPresetUserDirective,
   buildPoseAnchorUserDirective,
+  buildPresetWardrobeSummary,
   countCharacterPresetSelections,
   hasCharacterPresetOptions,
   hasPoseAnchor,
@@ -29,8 +30,13 @@ import {
   subjectGenderToClothingGender,
 } from "../clothing-tags";
 import {
-  mergeWardrobeRespectingLimits,
-  pickRandomCharacterOutfit,
+  buildGenerateWardrobeAssignments,
+  buildGenerateWardrobeUserDirective,
+  mergeGenerateWardrobeIntoPrompt,
+} from "../generate-wardrobe";
+import { DEFAULT_GENERATION_SETTINGS } from "../generation-settings";
+import {
+  hasWardrobeCatalogSelection,
   shouldPickRandomCharacterOutfit,
 } from "../clothing-catalog";
 import { getDetailLimits } from "../detail-level";
@@ -78,16 +84,42 @@ export async function generateCharacterPrompt(
     presetOptions,
     excludeIds: options.recentClothing,
   });
-  const randomOutfit = shouldPickRandomCharacterOutfit({
+  const wardrobeCorpus = [options.hints, seed].filter(Boolean).join(", ");
+  const wardrobeAssignments = shouldPickRandomCharacterOutfit({
     presetOptions,
     hints: options.hints,
     alwaysIncludeClothing,
   })
-    ? pickRandomCharacterOutfit(clothingFilters)
+    ? buildGenerateWardrobeAssignments(
+        wardrobeCorpus,
+        {
+          ...DEFAULT_GENERATION_SETTINGS,
+          distinctPeople: duoMode,
+          alwaysIncludeClothing: true,
+        },
+        {
+          assumePeople: true,
+          forcedCount: duoMode ? 2 : 1,
+          forcedDistinctPeople: duoMode,
+          forcedGender: duoMode ? "mixed" : undefined,
+          recentClothing: options.recentClothing,
+        },
+      )
     : null;
-  const environmentSeed = randomOutfit
-    ? `${seed}, wearing ${randomOutfit.summary}`
-    : seed;
+  const presetWardrobeSummary = hasWardrobeCatalogSelection(presetOptions)
+    ? buildPresetWardrobeSummary(presetOptions)
+    : null;
+  const environmentSeed =
+    wardrobeAssignments?.length
+      ? `${seed}, ${wardrobeAssignments
+          .map(
+            (assignment) =>
+              `${assignment.label ?? "the subject"} wearing ${assignment.summary}`,
+          )
+          .join("; ")}`
+      : presetWardrobeSummary
+        ? `${seed}, wearing ${presetWardrobeSummary}`
+        : seed;
   const identitySeed = pickCharacterIdentitySeed(parsed);
   const mandatoryBlock = buildCharacterMandatoryBlock(parsed);
   const locationBlock = buildMandatoryLocationBlock(settingHint.location);
@@ -130,16 +162,23 @@ ${soloRules}
 - Do not default to bald or shaved hair unless the mandatory block explicitly requests it.`;
 
   const poseAnchorDirective = buildPoseAnchorUserDirective(presetOptions);
-  const clothingDirective =
-    randomOutfit?.summary != null
+  const clothingDirective = wardrobeAssignments?.length
+    ? wardrobeAssignments.length === 1 && !wardrobeAssignments[0]?.label
       ? buildClothingCoherenceUserDirective(
-          randomOutfit.filters,
-          randomOutfit.summary,
+          wardrobeAssignments[0]!.filters,
+          wardrobeAssignments[0]!.summary,
+        )
+      : buildGenerateWardrobeUserDirective(wardrobeAssignments)
+    : presetWardrobeSummary
+      ? buildClothingCoherenceUserDirective(
+          clothingFilters,
+          presetWardrobeSummary,
         )
       : null;
 
   const needsWardrobePostProcess =
-    Boolean(randomOutfit?.summary) ||
+    Boolean(wardrobeAssignments?.length) ||
+    Boolean(presetWardrobeSummary) ||
     hasPresets ||
     hasPoseAnchor(presetOptions);
 
@@ -147,12 +186,25 @@ ${soloRules}
     ? (prompt: string) => {
         const { maxChars } = getDetailLimits(detail, options.model);
         let result = prompt;
-        if (randomOutfit?.summary) {
-          result = mergeWardrobeRespectingLimits(
+        if (wardrobeAssignments?.length) {
+          result = mergeGenerateWardrobeIntoPrompt(
             result,
-            randomOutfit.summary,
+            wardrobeAssignments,
             maxChars,
-            duoMode ? 2 : 1,
+          );
+        } else if (presetWardrobeSummary) {
+          result = mergeGenerateWardrobeIntoPrompt(
+            result,
+            [
+              {
+                summary: presetWardrobeSummary,
+                filters: clothingFilters,
+                wardrobeId: presetOptions.wardrobeCatalog,
+                footwearId: presetOptions.footwearCatalog,
+                accessoriesId: presetOptions.accessoriesCatalog,
+              },
+            ],
+            maxChars,
           );
         }
         if (hasPresets || hasPoseAnchor(presetOptions)) {
@@ -205,13 +257,18 @@ ${soloRules}
         identitySeed,
         presetOptions,
       );
-      if (randomOutfit?.summary) {
-        const { maxChars } = getDetailLimits(detail, options.model);
-        prompt = mergeWardrobeRespectingLimits(
+      const { maxChars } = getDetailLimits(detail, options.model);
+      if (wardrobeAssignments?.length) {
+        prompt = mergeGenerateWardrobeIntoPrompt(
           prompt,
-          randomOutfit.summary,
+          wardrobeAssignments,
           maxChars,
-          duoMode ? 2 : 1,
+        );
+      } else if (presetWardrobeSummary) {
+        prompt = mergeGenerateWardrobeIntoPrompt(
+          prompt,
+          [{ summary: presetWardrobeSummary, filters: clothingFilters }],
+          maxChars,
         );
       }
       return prompt;
@@ -228,7 +285,8 @@ ${soloRules}
       location: settingHint.location,
       sceneLocation,
       seed: environmentSeed,
-      randomOutfit,
+      wardrobeAssignments,
+      randomOutfit: wardrobeAssignments ?? null,
       alwaysIncludeClothing,
       identitySeed,
       parsedHints: parsed,

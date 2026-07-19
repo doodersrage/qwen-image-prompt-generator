@@ -5,7 +5,9 @@ import PromptResultPanel from "@/components/PromptResultPanel";
 import SharedToolControls from "@/components/SharedToolControls";
 import { useCachedSettings } from "@/hooks/useCachedSettings";
 import { useRecentLocations } from "@/hooks/useRecentLocations";
+import { useRecentClothing } from "@/hooks/useRecentClothing";
 import { readSceneLocationFromMetadata } from "@/lib/recent-locations";
+import { readClothingIdsFromMetadata } from "@/lib/recent-clothing";
 import { getComfyModelDefinition } from "@/lib/comfy-models";
 import {
   DEFAULT_RANDOM_SCENE_TOOL_CACHE,
@@ -17,6 +19,7 @@ export default function RandomSceneTool() {
   const { mounted, shared, toolSettings, updateShared, updateToolSettings } =
     useCachedSettings("randomScene", DEFAULT_RANDOM_SCENE_TOOL_CACHE);
   const { getRecent, record } = useRecentLocations();
+  const { getRecent: getRecentClothing, record: recordClothing } = useRecentClothing();
   const [output, setOutput] = useState("");
   const [provider, setProvider] = useState<ToolGenerateResult["provider"] | null>(
     null,
@@ -47,6 +50,7 @@ export default function RandomSceneTool() {
           includePeople: toolSettings.includePeople,
           wildness: toolSettings.wildness,
           recentLocations: getRecent(),
+          recentClothing: getRecentClothing(),
           alwaysIncludeClothing: shared.alwaysIncludeClothing !== false,
         }),
       });
@@ -60,6 +64,7 @@ export default function RandomSceneTool() {
       }
 
       record(readSceneLocationFromMetadata(data.metadata));
+      recordClothing(readClothingIdsFromMetadata(data.metadata));
 
       setOutput(data.prompt);
       setProvider(data.provider);
@@ -74,7 +79,7 @@ export default function RandomSceneTool() {
     } finally {
       setLoading(false);
     }
-  }, [shared, toolSettings, getRecent, record]);
+  }, [shared, toolSettings, getRecent, record, getRecentClothing, recordClothing]);
 
   const copyOutput = useCallback(async () => {
     if (!output) return;

@@ -136,6 +136,7 @@ You are adapting an EXISTING prompt draft for ${modelDef.label} (${modelDef.comf
 - Preserve the user's subjects, actions, mood, and key details—do not invent unrelated content.
 - Rewrite structure and phrasing to match the target model's format.
 - Remove tag soup, labels, markdown, and meta commentary.
+- Never prefix output with model names or phrases like "the prompt adapted for…"—start directly with the prompt prose.
 - ${fluxNegativeNote}
 ${buildModelClarityAddendum(settings.detail, settings.model)}
 

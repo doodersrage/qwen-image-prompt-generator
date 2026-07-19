@@ -8,6 +8,7 @@ import { useCachedSettings } from "@/hooks/useCachedSettings";
 import { useRecentLocations } from "@/hooks/useRecentLocations";
 import { useRecentClothing } from "@/hooks/useRecentClothing";
 import { readSceneLocationFromMetadata } from "@/lib/recent-locations";
+import { readClothingIdsFromMetadata } from "@/lib/recent-clothing";
 import { getComfyModelDefinition } from "@/lib/comfy-models";
 import { presetOptionsFromCache } from "@/lib/character-options";
 import { DEFAULT_CHARACTER_TOOL_CACHE } from "@/lib/settings-cache";
@@ -65,21 +66,7 @@ export default function CharacterTool() {
       }
 
       recordLocation(readSceneLocationFromMetadata(data.metadata));
-      const randomOutfit = data.metadata?.randomOutfit as
-        | {
-            wardrobeId?: string | null;
-            footwearId?: string | null;
-            accessoriesId?: string | null;
-          }
-        | undefined;
-      recordClothing([
-        randomOutfit?.wardrobeId,
-        randomOutfit?.footwearId,
-        randomOutfit?.accessoriesId,
-        presetOptionsFromCache(toolSettings).wardrobeCatalog,
-        presetOptionsFromCache(toolSettings).footwearCatalog,
-        presetOptionsFromCache(toolSettings).accessoriesCatalog,
-      ]);
+      recordClothing(readClothingIdsFromMetadata(data.metadata));
 
       setOutput(data.prompt);
       setProvider(data.provider);
