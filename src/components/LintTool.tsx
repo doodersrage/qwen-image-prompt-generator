@@ -12,6 +12,17 @@ import { getComfyModelDefinition } from "@/lib/comfy-models";
 import { getDetailLimits } from "@/lib/detail-level";
 import { getReformatTargetLabel, getReformatTargetModel } from "@/lib/reformat-target";
 import { DEFAULT_FORMAT_TOOL_CACHE } from "@/lib/settings-cache";
+import {
+  ToolBadge,
+  ToolLayout,
+  ToolSection,
+  accentButtonClass,
+  accentFocusClass,
+} from "@/components/ui/ToolPageShell";
+import { FieldLabel, TextArea } from "@/components/ui/Field";
+import { PrimaryButton } from "@/components/ui/Button";
+
+const ACCENT = "amber" as const;
 
 export default function LintTool() {
   const { mounted, shared, updateShared } = useCachedSettings(
@@ -52,60 +63,57 @@ export default function LintTool() {
   }, [prompt]);
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8 sm:px-6">
-      <header className="space-y-3">
-        <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-amber-300">
+    <ToolLayout
+      accent={ACCENT}
+      badge={
+        <ToolBadge accent={ACCENT}>
           Lint playground · {selectedModel.comfyNode}
-        </div>
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-50 sm:text-4xl">
-          Prompt Lint & Fix
-        </h1>
-        <p className="max-w-2xl text-base leading-relaxed text-zinc-400">
+        </ToolBadge>
+      }
+      title="Prompt Lint & Fix"
+      description={
+        <>
           Paste hints and a finished prompt to run sport/duo/helmet diagnostics,
           apply rule fixes, compact to model limits, or copy a prompt pair — without
           generating a new scene.
-        </p>
-      </header>
-
-      <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-xl shadow-black/20">
+        </>
+      }
+      sidebar={
         <SharedToolControls
           shared={shared}
           onModelChange={(model) => updateShared({ model })}
           onDetailChange={(detail) => updateShared({ detail })}
           onWorkflowPresetChange={(id) => updateShared({ selectedWorkflowFileId: id })}
         />
+      }
+    >
+      <ToolSection>
+        <FieldLabel>Hints</FieldLabel>
+        <TextArea
+          value={hints}
+          onChange={(event) => setHints(event.target.value)}
+          placeholder="two female gravel cyclists in fierce competition"
+          rows={2}
+          className={accentFocusClass(ACCENT)}
+        />
 
-        <div className="space-y-3 border-t border-zinc-800 pt-4">
-          <label className="text-sm font-medium text-zinc-200">Hints</label>
-          <textarea
-            value={hints}
-            onChange={(event) => setHints(event.target.value)}
-            placeholder="two female gravel cyclists in fierce competition"
-            rows={2}
-            className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-zinc-100"
-          />
-        </div>
-
-        <div className="space-y-3">
-          <label className="text-sm font-medium text-zinc-200">Prompt</label>
-          <textarea
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-            placeholder="Paste generated or hand-written prompt to lint…"
-            rows={8}
-            className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 font-mono text-sm text-emerald-300"
-          />
-        </div>
+        <FieldLabel>Prompt</FieldLabel>
+        <TextArea
+          value={prompt}
+          onChange={(event) => setPrompt(event.target.value)}
+          placeholder="Paste generated or hand-written prompt to lint…"
+          rows={8}
+          className={`font-mono text-emerald-300 ${accentFocusClass(ACCENT)}`}
+        />
 
         <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
+          <PrimaryButton
+            accentClassName={accentButtonClass(ACCENT)}
             onClick={() => void runLint()}
             disabled={!mounted || !prompt.trim()}
-            className="rounded-xl bg-amber-600 px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
           >
             Run lint
-          </button>
+          </PrimaryButton>
           <button
             type="button"
             onClick={() => void actions.fixPrompt(prompt, setPrompt, hints)}
@@ -128,7 +136,7 @@ export default function LintTool() {
           />
         </div>
         {importStatus && <p className="text-xs text-zinc-500">{importStatus}</p>}
-      </section>
+      </ToolSection>
 
       <PromptDiagnosticsPanel diagnostics={actions.diagnostics} />
 
@@ -164,6 +172,6 @@ export default function LintTool() {
         comfyUiPreviewUrl={actions.comfyUiPreviewUrl}
         pairCopied={actions.pairCopied}
       />
-    </div>
+    </ToolLayout>
   );
 }

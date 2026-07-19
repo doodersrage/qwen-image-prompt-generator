@@ -22,6 +22,18 @@ import { DEFAULT_COMPOSE_TOOL_CACHE } from "@/lib/settings-cache";
 import type { EnrichedToolGenerateResult } from "@/lib/specialized/types";
 import { readVariationSeedFromResult } from "@/lib/variation-seed-metadata";
 import { variationStrengthLabel } from "@/lib/variation-settings";
+import {
+  ToolBadge,
+  ToolLayout,
+  ToolSection,
+  accentButtonClass,
+  accentFocusClass,
+  accentRingClass,
+} from "@/components/ui/ToolPageShell";
+import { FieldDivider, FieldError, FieldLabel, TextArea } from "@/components/ui/Field";
+import { PrimaryButton } from "@/components/ui/Button";
+
+const ACCENT = "cyan" as const;
 
 export default function ComposeTool() {
   const { mounted, shared, toolSettings, updateShared, updateToolSettings } =
@@ -145,21 +157,21 @@ export default function ComposeTool() {
   }, [output]);
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8 sm:px-6">
-      <header className="space-y-3">
-        <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-cyan-300">
+    <ToolLayout
+      accent={ACCENT}
+      badge={
+        <ToolBadge accent={ACCENT}>
           Compose · {selectedModel.comfyNode}
-        </div>
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-50 sm:text-4xl">
-          Scene Composer
-        </h1>
-        <p className="max-w-2xl text-base leading-relaxed text-zinc-400">
+        </ToolBadge>
+      }
+      title="Scene Composer"
+      description={
+        <>
           Generates a background and subject prompt, then merges them into one
           scene-ready block—subjects plus environment, lighting, and materials.
-        </p>
-      </header>
-
-      <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-xl shadow-black/20">
+        </>
+      }
+      sidebar={
         <SharedToolControls
           shared={shared}
           onModelChange={(model) => updateShared({ model })}
@@ -186,63 +198,65 @@ export default function ComposeTool() {
           autoFixRules={shared.autoFixRules !== false}
           onAutoFixRulesChange={(value) => updateShared({ autoFixRules: value })}
         />
-
-        <div className="space-y-3 border-t border-zinc-800 pt-4">
-          <p className="text-sm font-medium text-zinc-200">Subject mode</p>
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                { label: "Solo character", value: "character" },
-                { label: "Duo / sport", value: "duo" },
-              ] as const
-            ).map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => updateToolSettings({ subjectMode: option.value })}
-                className={`rounded-lg border px-3 py-2 text-xs font-medium ${
-                  (toolSettings.subjectMode ?? "duo") === option.value
-                    ? "border-cyan-500 bg-cyan-500/15 text-cyan-200"
-                    : "border-zinc-700 text-zinc-400"
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+      }
+    >
+      <ToolSection>
+        <FieldLabel>Subject mode</FieldLabel>
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              { label: "Solo character", value: "character" },
+              { label: "Duo / sport", value: "duo" },
+            ] as const
+          ).map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => updateToolSettings({ subjectMode: option.value })}
+              className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                (toolSettings.subjectMode ?? "duo") === option.value
+                  ? "border-cyan-500 bg-cyan-500/15 text-cyan-200"
+                  : "border-zinc-700 text-zinc-400"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
 
-        <div className="grid gap-3 border-t border-zinc-800 pt-4 sm:grid-cols-3">
+        <FieldDivider />
+
+        <div className="grid gap-3 sm:grid-cols-3">
           <input
             value={toolSettings.settingType ?? ""}
             onChange={(e) => updateToolSettings({ settingType: e.target.value })}
             placeholder="Background type (optional)"
-            className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+            className={`ui-input px-3 py-2 text-sm ${accentFocusClass(ACCENT)}`}
           />
           <input
             value={toolSettings.timeOfDay ?? ""}
             onChange={(e) => updateToolSettings({ timeOfDay: e.target.value })}
             placeholder="Time / lighting"
-            className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+            className={`ui-input px-3 py-2 text-sm ${accentFocusClass(ACCENT)}`}
           />
           <input
             value={toolSettings.mood ?? ""}
             onChange={(e) => updateToolSettings({ mood: e.target.value })}
             placeholder="Mood"
-            className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+            className={`ui-input px-3 py-2 text-sm ${accentFocusClass(ACCENT)}`}
           />
         </div>
 
-        <div className="space-y-3 border-t border-zinc-800 pt-4">
-          <label className="text-sm font-medium text-zinc-200">Subject hints</label>
-          <textarea
-            value={toolSettings.hints ?? ""}
-            onChange={(e) => updateToolSettings({ hints: e.target.value })}
-            placeholder="two female gravel cyclists in fierce competition"
-            rows={3}
-            className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-zinc-100"
-          />
-        </div>
+        <FieldDivider />
+
+        <FieldLabel>Subject hints</FieldLabel>
+        <TextArea
+          value={toolSettings.hints ?? ""}
+          onChange={(e) => updateToolSettings({ hints: e.target.value })}
+          placeholder="two female gravel cyclists in fierce competition"
+          rows={3}
+          className={accentFocusClass(ACCENT)}
+        />
 
         <BackgroundPresetControls
           mounted={mounted}
@@ -260,68 +274,65 @@ export default function ComposeTool() {
           }
         />
 
-        <div className="space-y-3 border-t border-zinc-800 pt-4">
-          <p className="text-sm font-medium text-zinc-200">Merge style</p>
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                { label: "Layered sections", value: "layered" },
-                { label: "Inline prose", value: "inline" },
-              ] as const
-            ).map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => updateToolSettings({ composeStyle: option.value })}
-                className={`rounded-lg border px-3 py-2 text-xs font-medium ${
-                  (toolSettings.composeStyle ?? "layered") === option.value
-                    ? "border-cyan-500 bg-cyan-500/15 text-cyan-200"
-                    : "border-zinc-700 text-zinc-400"
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+        <FieldDivider />
+
+        <FieldLabel>Merge style</FieldLabel>
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              { label: "Layered sections", value: "layered" },
+              { label: "Inline prose", value: "inline" },
+            ] as const
+          ).map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => updateToolSettings({ composeStyle: option.value })}
+              className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                (toolSettings.composeStyle ?? "layered") === option.value
+                  ? "border-cyan-500 bg-cyan-500/15 text-cyan-200"
+                  : "border-zinc-700 text-zinc-400"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
 
-        <div className="space-y-3 border-t border-zinc-800 pt-4">
-          <div className="flex items-center justify-between text-xs text-zinc-400">
-            <span>Stable</span>
-            <span className="font-medium text-cyan-300">
-              {variationStrengthLabel(toolSettings.variationStrength ?? 50)} (
-              {toolSettings.variationStrength ?? 50})
-            </span>
-            <span>Varied</span>
-          </div>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={5}
-            value={toolSettings.variationStrength ?? 50}
-            onChange={(e) =>
-              updateToolSettings({ variationStrength: Number(e.target.value) })
-            }
-            className="h-2 w-full accent-cyan-500"
-          />
-        </div>
+        <FieldDivider />
 
-        <button
-          type="button"
+        <div className="flex items-center justify-between text-xs text-zinc-400">
+          <span>Stable</span>
+          <span className="font-medium text-cyan-300">
+            {variationStrengthLabel(toolSettings.variationStrength ?? 50)} (
+            {toolSettings.variationStrength ?? 50})
+          </span>
+          <span>Varied</span>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={5}
+          value={toolSettings.variationStrength ?? 50}
+          onChange={(e) =>
+            updateToolSettings({ variationStrength: Number(e.target.value) })
+          }
+          className={`h-2 w-full ${accentRingClass(ACCENT)}`}
+        />
+
+        <PrimaryButton
+          accentClassName={accentButtonClass(ACCENT)}
           onClick={() => void generate()}
-          disabled={!mounted || loading}
-          className="inline-flex h-11 items-center justify-center rounded-xl bg-cyan-600 px-6 text-sm font-semibold text-white hover:bg-cyan-500 disabled:opacity-50"
+          disabled={!mounted}
+          loading={loading}
+          loadingLabel="Composing scene prompt"
         >
-          {loading ? "Composing scene…" : "Compose scene prompt"}
-        </button>
+          Compose scene prompt
+        </PrimaryButton>
 
-        {error && (
-          <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
-            {error}
-          </p>
-        )}
-      </section>
+        <FieldError>{error}</FieldError>
+      </ToolSection>
 
       <EnhancedPromptResult
         output={output}
@@ -382,6 +393,6 @@ export default function ComposeTool() {
         historySaved={actions.historySaved}
         pairCopied={actions.pairCopied}
       />
-    </div>
+    </ToolLayout>
   );
 }

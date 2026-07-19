@@ -26,6 +26,18 @@ import {
 } from "@/lib/scene-preset-url";
 import { getSportPreset } from "@/lib/sport-presets";
 import { variationStrengthLabel } from "@/lib/variation-settings";
+import {
+  CollapsibleSection,
+  ToolBadge,
+  ToolLayout,
+  ToolSection,
+  accentButtonClass,
+  accentFocusClass,
+} from "@/components/ui/ToolPageShell";
+import { FieldDivider, FieldError, FieldLabel, TextArea } from "@/components/ui/Field";
+import { PrimaryButton } from "@/components/ui/Button";
+
+const ACCENT = "violet" as const;
 
 type PromptMode = "positive" | "negative";
 
@@ -246,121 +258,148 @@ export default function PromptGenerator() {
   }, [output]);
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
-      <header className="space-y-3">
-        <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-violet-300">
+    <ToolLayout
+      accent={ACCENT}
+      badge={
+        <ToolBadge accent={ACCENT}>
           ComfyUI · {selectedModel.comfyNode}
-        </div>
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-50 sm:text-4xl">
-          ComfyUI Image Prompt Generator
-        </h1>
-        <p className="max-w-2xl text-base leading-relaxed text-zinc-400">
+        </ToolBadge>
+      }
+      title="ComfyUI Image Prompt Generator"
+      description={
+        <>
           Enter a topic or keywords. The generator formats natural-language
-          prompts for your chosen ComfyUI image model—
+          prompts for your chosen ComfyUI image model—{" "}
           <code className="rounded bg-zinc-800 px-1.5 py-0.5 text-sm text-violet-300">
             {selectedModel.comfyNode}
           </code>
           , ready to paste and run.
-        </p>
-      </header>
-
-      <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-xl shadow-black/20 backdrop-blur">
-        <div className="space-y-3">
-          <div>
-            <p className="text-sm font-medium text-zinc-200">Target model</p>
-            <p className="mt-1 text-xs text-zinc-500">
-              Prompt style and size limits depend on the model and detail level
-              you choose.
-            </p>
+        </>
+      }
+      sidebarTitle="Generation settings"
+      sidebarDescription="Model, detail, and wardrobe options for this run."
+      sidebar={
+        <>
+          <div className="space-y-4">
+            <FieldLabel hint="Prompt style and size limits depend on the model and detail level you choose.">
+              Target model
+            </FieldLabel>
+            <ModelSelector value={qwenModel} onChange={setQwenModel} />
           </div>
-          <ModelSelector value={qwenModel} onChange={setQwenModel} />
-        </div>
 
+          <FieldDivider />
+
+          <div className="space-y-3">
+            <FieldLabel hint="More detail adds texture and atmosphere to the same scene.">
+              Prompt detail
+            </FieldLabel>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  { label: "Concise", value: "concise" },
+                  { label: "Balanced", value: "balanced" },
+                  { label: "Rich", value: "rich" },
+                ] as const
+              ).map((preset) => (
+                <button
+                  key={preset.value}
+                  type="button"
+                  onClick={() => setDetail(preset.value)}
+                  className={`rounded-xl border px-3.5 py-2 text-xs font-medium transition ${
+                    detail === preset.value
+                      ? "border-violet-500/70 bg-violet-500/15 text-violet-100"
+                      : "border-zinc-700/80 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {mode === "positive" && (
+            <>
+              <FieldDivider />
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={alwaysIncludeClothing}
+                  onChange={(e) =>
+                    updateShared({ alwaysIncludeClothing: e.target.checked })
+                  }
+                  className="mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-violet-500"
+                />
+                <span className="space-y-1">
+                  <span className="text-sm font-medium text-zinc-100">
+                    Always include wardrobe
+                  </span>
+                  <span className="block text-xs leading-relaxed text-zinc-500">
+                    Rolls catalog outfits when people appear in keywords.
+                  </span>
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={autoFixRules}
+                  onChange={(e) => updateShared({ autoFixRules: e.target.checked })}
+                  className="mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-violet-500"
+                />
+                <span className="space-y-1">
+                  <span className="text-sm font-medium text-zinc-100">
+                    Auto-fix lint errors
+                  </span>
+                  <span className="block text-xs leading-relaxed text-zinc-500">
+                    Apply rule-based fixes when lint reports errors.
+                  </span>
+                </span>
+              </label>
+            </>
+          )}
+
+          {(shared.lockedLocation ||
+            shared.lockedWardrobeId ||
+            shared.lockedVariationSeed) && (
+            <>
+              <FieldDivider />
+              <div className="flex flex-wrap gap-2 text-xs">
+                {shared.lockedLocation && (
+                  <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-amber-200">
+                    Locked location: {shared.lockedLocation}
+                  </span>
+                )}
+                {shared.lockedWardrobeId && (
+                  <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-2.5 py-1 text-sky-200">
+                    Locked kit: {shared.lockedWardrobeId}
+                  </span>
+                )}
+                {shared.lockedVariationSeed && (
+                  <span
+                    className="max-w-full truncate rounded-full border border-violet-500/40 bg-violet-500/10 px-2.5 py-1 text-violet-200"
+                    title={shared.lockedVariationSeed}
+                  >
+                    Locked seed:{" "}
+                    {shared.lockedVariationSeed.length > 48
+                      ? `${shared.lockedVariationSeed.slice(0, 48)}…`
+                      : shared.lockedVariationSeed}
+                  </span>
+                )}
+              </div>
+            </>
+          )}
+        </>
+      }
+    >
+      <ToolSection title="Scene prompt" description="Describe what you want to generate, then tune variation options below.">
         {mode === "positive" && (
-          <div className="space-y-3 border-t border-zinc-800 pt-4">
-            <label className="flex cursor-pointer items-start gap-3">
-              <input
-                type="checkbox"
-                checked={alwaysIncludeClothing}
-                onChange={(e) =>
-                  updateShared({ alwaysIncludeClothing: e.target.checked })
-                }
-                className="mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-violet-500"
-              />
-              <span className="space-y-1">
-                <span className="text-sm font-medium text-zinc-200">
-                  Always include wardrobe
-                </span>
-                <span className="block text-xs leading-relaxed text-zinc-500">
-                  When your keywords mention people, rolls catalog outfits and
-                  appends assigned clothing if the model omits it. Shared with
-                  Character and Random Scene.
-                </span>
-              </span>
-            </label>
-          </div>
-        )}
-
-        {mode === "positive" && (
-          <div className="space-y-3 border-t border-zinc-800 pt-4">
-            <label className="flex cursor-pointer items-start gap-3">
-              <input
-                type="checkbox"
-                checked={autoFixRules}
-                onChange={(e) => updateShared({ autoFixRules: e.target.checked })}
-                className="mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-violet-500"
-              />
-              <span className="space-y-1">
-                <span className="text-sm font-medium text-zinc-200">
-                  Auto-fix lint errors
-                </span>
-                <span className="block text-xs leading-relaxed text-zinc-500">
-                  After generation, apply rule-based fixes when lint reports errors.
-                </span>
-              </span>
-            </label>
-          </div>
-        )}
-
-        {(shared.lockedLocation ||
-          shared.lockedWardrobeId ||
-          shared.lockedVariationSeed) && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-zinc-800 pt-4 text-xs">
-            {shared.lockedLocation && (
-              <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-amber-200">
-                Locked location: {shared.lockedLocation}
-              </span>
-            )}
-            {shared.lockedWardrobeId && (
-              <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-1 text-sky-200">
-                Locked kit: {shared.lockedWardrobeId}
-              </span>
-            )}
-            {shared.lockedVariationSeed && (
-              <span
-                className="max-w-full truncate rounded-full border border-violet-500/40 bg-violet-500/10 px-2 py-1 text-violet-200"
-                title={shared.lockedVariationSeed}
-              >
-                Locked seed:{" "}
-                {shared.lockedVariationSeed.length > 48
-                  ? `${shared.lockedVariationSeed.slice(0, 48)}…`
-                  : shared.lockedVariationSeed}
-              </span>
-            )}
-          </div>
-        )}
-
-        {mode === "positive" && (
-          <div className="space-y-3 border-t border-zinc-800 pt-4">
-            <SportPresetChips
-              mode="all"
-              selectedId={toolSettings.sportPresetId}
-              onSelect={(preset) => {
-                updateToolSettings({ sportPresetId: preset.id });
-                setInput(preset.hints);
-              }}
-            />
-          </div>
+          <SportPresetChips
+            mode="all"
+            selectedId={toolSettings.sportPresetId}
+            onSelect={(preset) => {
+              updateToolSettings({ sportPresetId: preset.id });
+              setInput(preset.hints);
+            }}
+          />
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -393,7 +432,7 @@ export default function PromptGenerator() {
           </div>
         </div>
 
-        <textarea
+        <TextArea
           id="edit-input"
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -408,8 +447,8 @@ export default function PromptGenerator() {
               ? "e.g. neon alley, rain, black cat — any topic or words to paint into a scene"
               : "e.g. do not change face, skin tone, or pose"
           }
-          rows={4}
-          className="w-full resize-y rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-base text-zinc-100 placeholder:text-zinc-600 outline-none transition focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20"
+          rows={5}
+          className={`text-base ${accentFocusClass(ACCENT)}`}
         />
 
         <div className="flex flex-wrap gap-2">
@@ -426,25 +465,22 @@ export default function PromptGenerator() {
         </div>
 
         {mode === "positive" && (
-          <div className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+          <CollapsibleSection
+            title="Generation options"
+            summary="People handling and variation strength."
+          >
             <div className="space-y-3">
-              <div>
-                <p className="text-sm font-medium text-zinc-200">
-                  People in scene
-                </p>
-                <p className="mt-1 text-xs text-zinc-500">
-                  Choose how multiple people (e.g. two men, two women, a pair)
-                  are written into the prompt.
-                </p>
-              </div>
+              <FieldLabel hint="Choose how multiple people are written into the prompt.">
+                People in scene
+              </FieldLabel>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => setDistinctPeople(true)}
-                  className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
+                  className={`rounded-xl border px-3.5 py-2 text-xs font-medium transition ${
                     distinctPeople
-                      ? "border-violet-500 bg-violet-500/15 text-violet-200"
-                      : "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+                      ? "border-violet-500/70 bg-violet-500/15 text-violet-100"
+                      : "border-zinc-700/80 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
                   }`}
                 >
                   Distinct individuals
@@ -452,77 +488,29 @@ export default function PromptGenerator() {
                 <button
                   type="button"
                   onClick={() => setDistinctPeople(false)}
-                  className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
+                  className={`rounded-xl border px-3.5 py-2 text-xs font-medium transition ${
                     !distinctPeople
-                      ? "border-violet-500 bg-violet-500/15 text-violet-200"
-                      : "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+                      ? "border-violet-500/70 bg-violet-500/15 text-violet-100"
+                      : "border-zinc-700/80 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
                   }`}
                 >
                   Grouped / couple
                 </button>
               </div>
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs leading-relaxed text-zinc-500">
                 {distinctPeople
                   ? "Splits two men / two women into separate left-right descriptions. Gender from your input is enforced."
                   : "Writes pairs as one unified couple or ensemble—not split into separate people."}
               </p>
             </div>
 
-            <div className="border-t border-zinc-800 pt-4">
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm font-medium text-zinc-200">
-                    Prompt detail
-                  </p>
-                  <p className="mt-1 text-xs text-zinc-500">
-                    More detail adds texture and atmosphere to the same scene.
-                    Rich can jumble if your keywords list too many unrelated
-                    ideas.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {(
-                    [
-                      { label: "Concise", value: "concise" },
-                      { label: "Balanced", value: "balanced" },
-                      { label: "Rich", value: "rich" },
-                    ] as const
-                  ).map((preset) => (
-                    <button
-                      key={preset.value}
-                      type="button"
-                      onClick={() => setDetail(preset.value)}
-                      className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
-                        detail === preset.value
-                          ? "border-violet-500 bg-violet-500/15 text-violet-200"
-                          : "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
-                      }`}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-xs text-zinc-500">
-                  {detail === "concise" &&
-                    `Shortest output for ${selectedModel.label}—up to ${activeLimits.maxSentences} sentences, ~${activeLimits.maxChars} chars.`}
-                  {detail === "balanced" &&
-                    `Default for ${selectedModel.label}—${activeLimits.minSentences}–${activeLimits.maxSentences} sentences, ~${activeLimits.minChars ?? Math.round(activeLimits.maxChars * 0.65)}–${activeLimits.maxChars} chars.`}
-                  {detail === "rich" &&
-                    `Most descriptive for ${selectedModel.label}—${activeLimits.minSentences}–${activeLimits.maxSentences} sentences${activeLimits.minChars ? `, at least ${activeLimits.minChars} chars (max ${activeLimits.maxChars})` : `, ~${activeLimits.maxChars} chars`}.`}
-                </p>
-              </div>
-            </div>
+            <FieldDivider />
 
-            <div className="border-t border-zinc-800 pt-4">
+            <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-zinc-200">
-                  Variation seed
-                </p>
-                <p className="mt-1 text-xs text-zinc-500">
-                  Randomize people, lighting, framing, and palette each run.
-                </p>
-              </div>
+              <FieldLabel hint="Randomize people, lighting, framing, and palette each run.">
+                Variation seed
+              </FieldLabel>
               <label className="inline-flex cursor-pointer items-center gap-2">
                 <span className="text-xs text-zinc-400">
                   {variationEnabled ? "On" : "Off"}
@@ -581,30 +569,28 @@ export default function PromptGenerator() {
               </div>
             )}
             </div>
-          </div>
+          </CollapsibleSection>
         )}
 
-        <button
+        <PrimaryButton
+          accentClassName={accentButtonClass(ACCENT)}
           type="button"
           onClick={() => void generate()}
           disabled={submitDisabled}
+          loading={loading}
+          loadingLabel="Generating scene prompt"
           title={submitDisabledReason ?? undefined}
           aria-disabled={submitDisabled}
-          className="inline-flex h-11 items-center justify-center rounded-xl bg-violet-600 px-6 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {loading ? "Painting scene…" : "Generate scene prompt"}
-        </button>
+          Generate scene prompt
+        </PrimaryButton>
 
         {submitDisabledReason && !loading && (
-          <p className="text-xs text-zinc-500">{submitDisabledReason}</p>
+          <FieldError>{submitDisabledReason}</FieldError>
         )}
 
-        {error && (
-          <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
-            {error}
-          </p>
-        )}
-      </section>
+        {error && <FieldError>{error}</FieldError>}
+      </ToolSection>
 
       {output && mode === "positive" && (
         <EnhancedPromptResult
@@ -692,9 +678,9 @@ export default function PromptGenerator() {
         </p>
       )}
 
-      <section className="rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-5 text-sm text-zinc-500">
-        <h3 className="mb-2 font-medium text-zinc-300">How it works</h3>
-        <ul className="list-inside list-disc space-y-1 leading-relaxed">
+      <ToolSection className="text-sm text-zinc-500">
+        <h3 className="font-medium text-zinc-300">How it works</h3>
+        <ul className="mt-3 list-inside list-disc space-y-2 leading-relaxed">
           <li>
             Pick your{" "}
             <strong className="font-medium text-zinc-400">target model</strong>
@@ -744,7 +730,7 @@ export default function PromptGenerator() {
             the surroundings are repainted in words.
           </li>
         </ul>
-      </section>
-    </div>
+      </ToolSection>
+    </ToolLayout>
   );
 }

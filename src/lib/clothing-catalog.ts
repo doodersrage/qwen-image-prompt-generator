@@ -1109,9 +1109,14 @@ function pickSportWardrobeLayers(
   const top = profile.topLabels?.length
     ? pickFromCategoryMatchingAnyLabel("top", filters, profile.topLabels)
     : null;
-  const bottom = profile.bottomLabels?.length
+  let bottom = profile.bottomLabels?.length
     ? pickFromCategoryMatchingAnyLabel("bottom", filters, profile.bottomLabels)
     : null;
+  if (top && !bottom && profile.bottomLabels?.length) {
+    bottom =
+      pickFromCategoryMatchingAnyLabel("bottom", filters, profile.bottomLabels) ??
+      pickFromCategory("bottom", filters);
+  }
   if (top || bottom) {
     return { wardrobe: top, bottom };
   }

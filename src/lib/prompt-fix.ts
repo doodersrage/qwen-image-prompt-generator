@@ -1,4 +1,5 @@
 import {
+  ensureAthleticBottomInPrompt,
   ensureCyclingHelmetInPrompt,
   inferCyclingDiscipline,
   stripForeignSportActionsFromPrompt,
@@ -8,8 +9,10 @@ import {
 import { inferAthleticSport } from "./athletic-sport-profiles";
 import {
   stripStreetClothingFromAthleticPeoplePrompt,
+  isMultiPersonInput,
 } from "./distinct-people";
 import { lintPrompt, type PromptDiagnosticIssue } from "./prompt-diagnostics";
+import { ensureSinglePersonPrompt } from "./single-person";
 
 export type PromptFixChange = {
   code: string;
@@ -71,6 +74,26 @@ export function fixPromptRules(input: {
       changes.push({
         code: "cycling.add_helmet",
         description: "Added discipline-appropriate cycling helmets.",
+      });
+    }
+  } else if (sport) {
+    const beforeBottom = prompt;
+    prompt = ensureAthleticBottomInPrompt(prompt, sport, { hints: corpus });
+    if (prompt !== beforeBottom) {
+      changes.push({
+        code: "sport.add_bottom_layer",
+        description: "Added missing athletic shorts or pants.",
+      });
+    }
+  }
+
+  if (!isMultiPersonInput(corpus)) {
+    const beforeSolo = prompt;
+    prompt = ensureSinglePersonPrompt(prompt);
+    if (prompt !== beforeSolo) {
+      changes.push({
+        code: "solo.strip_extra_people",
+        description: "Removed split-screen or extra-person wording for a solo scene.",
       });
     }
   }

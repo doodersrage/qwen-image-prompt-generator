@@ -7,6 +7,18 @@ import { useCachedSettings } from "@/hooks/useCachedSettings";
 import { usePromptResultActions } from "@/hooks/usePromptResultActions";
 import { DEFAULT_NEGATIVE_TOOL_CACHE } from "@/lib/settings-cache";
 import { SPORT_PRESETS } from "@/lib/sport-presets";
+import {
+  ToolBadge,
+  ToolLayout,
+  ToolSection,
+  accentButtonClass,
+  accentFocusClass,
+  accentRingClass,
+} from "@/components/ui/ToolPageShell";
+import { FieldError, FieldLabel, TextArea } from "@/components/ui/Field";
+import { PrimaryButton } from "@/components/ui/Button";
+
+const ACCENT = "rose" as const;
 
 export default function NegativeTool() {
   const { mounted, shared, toolSettings, updateShared, updateToolSettings } =
@@ -77,21 +89,17 @@ export default function NegativeTool() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8 sm:px-6">
-      <header className="space-y-3">
-        <div className="inline-flex items-center gap-2 rounded-full border border-rose-500/30 bg-rose-500/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-rose-300">
-          Negative / preserve
-        </div>
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-50 sm:text-4xl">
-          Negative Prompt Builder
-        </h1>
-        <p className="max-w-2xl text-base leading-relaxed text-zinc-400">
+    <ToolLayout
+      accent={ACCENT}
+      badge={<ToolBadge accent={ACCENT}>Negative / preserve</ToolBadge>}
+      title="Negative Prompt Builder"
+      description={
+        <>
           Sport-aware negative prompts for SD-family models. Use preserve mode
           when refining an existing subject in Qwen edit workflows.
-        </p>
-      </header>
-
-      <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-xl shadow-black/20">
+        </>
+      }
+      sidebar={
         <SharedToolControls
           shared={shared}
           onModelChange={(model) => updateShared({ model })}
@@ -99,24 +107,24 @@ export default function NegativeTool() {
           onWorkflowPresetChange={(id) => updateShared({ selectedWorkflowFileId: id })}
           detailHelp="Detail level affects compact-to-limit when trimming long negatives."
         />
-
-        <div className="space-y-2 border-t border-zinc-800 pt-4">
-          <label className="text-sm font-medium text-zinc-200">Sport context</label>
-          <select
-            value={toolSettings.sport ?? ""}
-            onChange={(event) =>
-              updateToolSettings({ sport: event.target.value })
-            }
-            className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm text-zinc-100"
-          >
-            <option value="">Auto / general</option>
-            {SPORT_PRESETS.map((preset) => (
-              <option key={preset.id} value={preset.category}>
-                {preset.label} ({preset.category})
-              </option>
-            ))}
-          </select>
-        </div>
+      }
+    >
+      <ToolSection>
+        <FieldLabel>Sport context</FieldLabel>
+        <select
+          value={toolSettings.sport ?? ""}
+          onChange={(event) =>
+            updateToolSettings({ sport: event.target.value })
+          }
+          className="ui-input w-full px-4 py-2 text-sm"
+        >
+          <option value="">Auto / general</option>
+          {SPORT_PRESETS.map((preset) => (
+            <option key={preset.id} value={preset.category}>
+              {preset.label} ({preset.category})
+            </option>
+          ))}
+        </select>
 
         <label className="flex cursor-pointer items-start gap-3">
           <input
@@ -125,7 +133,7 @@ export default function NegativeTool() {
             onChange={(event) =>
               updateToolSettings({ preserveSubject: event.target.checked })
             }
-            className="mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-rose-500"
+            className={`mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-950 ${accentRingClass(ACCENT)}`}
           />
           <span className="space-y-1">
             <span className="text-sm font-medium text-zinc-200">
@@ -137,34 +145,28 @@ export default function NegativeTool() {
           </span>
         </label>
 
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-zinc-200">Extra negatives</label>
-          <textarea
-            rows={3}
-            value={toolSettings.extra ?? ""}
-            onChange={(event) =>
-              updateToolSettings({ extra: event.target.value })
-            }
-            placeholder="watermark, text, duplicate limbs"
-            className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-zinc-100"
-          />
-        </div>
+        <FieldLabel>Extra negatives</FieldLabel>
+        <TextArea
+          rows={3}
+          value={toolSettings.extra ?? ""}
+          onChange={(event) =>
+            updateToolSettings({ extra: event.target.value })
+          }
+          placeholder="watermark, text, duplicate limbs"
+          className={accentFocusClass(ACCENT)}
+        />
 
-        <button
-          type="button"
+        <PrimaryButton
+          accentClassName={accentButtonClass(ACCENT)}
           onClick={generate}
-          disabled={loading}
-          className="inline-flex h-11 items-center rounded-xl bg-rose-600 px-5 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:opacity-50"
+          loading={loading}
+          loadingLabel="Building negative prompt"
         >
-          {loading ? "Building…" : "Build negative prompt"}
-        </button>
+          Build negative prompt
+        </PrimaryButton>
 
-        {error && (
-          <p className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
-            {error}
-          </p>
-        )}
-      </section>
+        <FieldError>{error}</FieldError>
+      </ToolSection>
 
       <EnhancedPromptResult
         output={output}
@@ -183,6 +185,6 @@ export default function NegativeTool() {
         compactStatus={actions.compactStatus}
         historySaved={actions.historySaved}
       />
-    </div>
+    </ToolLayout>
   );
 }

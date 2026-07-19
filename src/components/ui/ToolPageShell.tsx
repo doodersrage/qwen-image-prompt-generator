@@ -1,0 +1,269 @@
+import type { ReactNode } from "react";
+import {
+  ROUTE_TINT_CLASSES,
+  type ToolAccent,
+} from "@/lib/tool-theme";
+
+export type ToolPageWidth = "default" | "wide" | "full";
+export type ToolSectionVariant = "primary" | "secondary";
+
+const widthClasses: Record<ToolPageWidth, string> = {
+  default: "max-w-5xl",
+  wide: "max-w-6xl",
+  full: "max-w-7xl",
+};
+
+const sectionSurfaceClasses: Record<ToolSectionVariant, string> = {
+  primary: "ui-card",
+  secondary: "ui-meta-panel shadow-none",
+};
+
+export function ToolBadge({
+  accent = "violet",
+  children,
+}: {
+  accent?: ToolAccent;
+  children: ReactNode;
+}) {
+  const theme = ROUTE_TINT_CLASSES[accent];
+  return (
+    <div
+      className={`type-overline inline-flex max-w-full items-center gap-2 rounded-[var(--radius-full)] border px-3 py-1 ${theme.badge}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function ToolPageHeader({
+  badge,
+  title,
+  description,
+}: {
+  badge?: ReactNode;
+  title: string;
+  description?: ReactNode;
+}) {
+  return (
+    <header className="space-y-5">
+      {badge}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:items-end lg:gap-8">
+        <h1 className="type-display">{title}</h1>
+        {description ? (
+          <div className="ui-meta-panel type-body-lg lg:mb-1">{description}</div>
+        ) : null}
+      </div>
+    </header>
+  );
+}
+
+export function ToolMetaPanel({
+  children,
+  className = "",
+  title,
+}: {
+  children: ReactNode;
+  className?: string;
+  title?: string;
+}) {
+  return (
+    <div className={`ui-meta-panel ${className}`.trim()}>
+      {title ? <h3 className="type-heading mb-4">{title}</h3> : null}
+      <div className="ui-block-group">{children}</div>
+    </div>
+  );
+}
+
+export function ToolContentPanel({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return <div className={`ui-content-panel ${className}`.trim()}>{children}</div>;
+}
+
+export function ToolBlockGroup({
+  children,
+  title,
+  className = "",
+}: {
+  children: ReactNode;
+  title?: string;
+  className?: string;
+}) {
+  return (
+    <section className={`ui-block-group ${className}`.trim()}>
+      {title ? <h3 className="type-heading">{title}</h3> : null}
+      {children}
+    </section>
+  );
+}
+
+export function ToolSection({
+  children,
+  className = "",
+  padded = true,
+  title,
+  description,
+  variant = "primary",
+}: {
+  children: ReactNode;
+  className?: string;
+  padded?: boolean;
+  title?: string;
+  description?: string;
+  variant?: ToolSectionVariant;
+}) {
+  return (
+    <section
+      className={`${sectionSurfaceClasses[variant]} ${padded ? "p-[var(--card-padding)] sm:p-[var(--card-padding-lg)]" : ""} ${className}`.trim()}
+    >
+      {title ? (
+        <div className="mb-6 space-y-2">
+          <h2 className={variant === "primary" ? "type-title" : "type-heading"}>
+            {title}
+          </h2>
+          {description ? <p className="type-caption">{description}</p> : null}
+        </div>
+      ) : null}
+      <div className="ui-block-group">{children}</div>
+    </section>
+  );
+}
+
+export function CollapsibleSection({
+  title,
+  summary,
+  defaultOpen = true,
+  children,
+  className = "",
+}: {
+  title: string;
+  summary?: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <details
+      open={defaultOpen}
+      className={`ui-collapsible group ${className}`.trim()}
+    >
+      <summary className="list-none marker:content-none [&::-webkit-details-marker]:hidden">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 space-y-1.5">
+            <p className="type-heading">{title}</p>
+            {summary ? <p className="type-caption">{summary}</p> : null}
+          </div>
+          <span
+            aria-hidden
+            className="type-caption mt-0.5 shrink-0 transition group-open:rotate-180"
+          >
+            ▾
+          </span>
+        </div>
+      </summary>
+      <div className="ui-collapsible-body ui-block-group">{children}</div>
+    </details>
+  );
+}
+
+export function ActionButtonBar({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`grid gap-3 sm:grid-cols-2 xl:grid-cols-3 ${className}`.trim()}
+    >
+      {children}
+    </div>
+  );
+}
+
+export const actionButtonClassName = "ui-btn-secondary ui-btn-full";
+
+export function ToolPageShell({
+  children,
+  width = "default",
+  className = "",
+}: {
+  children: ReactNode;
+  width?: ToolPageWidth;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`mx-auto flex w-full flex-col gap-[var(--section-gap)] px-[var(--page-gutter)] py-10 sm:py-12 lg:py-14 ${widthClasses[width]} ${className}`.trim()}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function ToolLayout({
+  accent = "violet",
+  width = "default",
+  badge,
+  title,
+  description,
+  sidebar,
+  sidebarTitle = "Shared settings",
+  sidebarDescription = "Model, detail, wardrobe, and workflow selection persist across tools.",
+  children,
+}: {
+  accent?: ToolAccent;
+  width?: ToolPageWidth;
+  badge: ReactNode;
+  title: string;
+  description?: ReactNode;
+  sidebar?: ReactNode;
+  sidebarTitle?: string | false;
+  sidebarDescription?: string;
+  children: ReactNode;
+}) {
+  return (
+    <ToolPageShell width={width}>
+      <ToolPageHeader badge={badge} title={title} description={description} />
+
+      <div
+        className={
+          sidebar
+            ? "grid items-start gap-[var(--block-gap)] xl:grid-cols-[minmax(0,1fr)_380px] xl:gap-12"
+            : "ui-section-stack"
+        }
+      >
+        <div className="ui-section-stack min-w-0">{children}</div>
+
+        {sidebar ? (
+          <aside className="xl:sticky xl:top-24">
+            <ToolSection
+              variant="secondary"
+              title={sidebarTitle === false ? undefined : sidebarTitle}
+              description={
+                sidebarTitle === false ? undefined : sidebarDescription
+              }
+              className="sidebar-scroll xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto"
+            >
+              {sidebar}
+            </ToolSection>
+          </aside>
+        ) : null}
+      </div>
+    </ToolPageShell>
+  );
+}
+
+export {
+  accentButtonClass,
+  accentFocusClass,
+  accentRingClass,
+} from "@/lib/tool-theme";
+
+/** @deprecated Use ROUTE_TINT_CLASSES */
+export { ROUTE_TINT_CLASSES as TOOL_ACCENT_CLASSES } from "@/lib/tool-theme";

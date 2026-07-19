@@ -9,6 +9,7 @@ type NegativeRequestBody = {
   hints?: string;
   sport?: string;
   preserveSubject?: boolean;
+  soloSubject?: boolean;
   extra?: string;
 };
 
@@ -28,6 +29,7 @@ export async function POST(request: Request) {
     const prompt = buildNegativePrompt({
       sport,
       preserveSubject: body.preserveSubject === true,
+      soloSubject: body.soloSubject === true,
       extra: body.extra,
     });
 

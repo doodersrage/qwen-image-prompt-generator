@@ -113,6 +113,12 @@ describe("negative and templates", () => {
     assert.match(prompt, /helmet|dress/i);
   });
 
+  it("builds running negatives with bottom coverage", () => {
+    const prompt = buildNegativePrompt({ sport: "running", soloSubject: true });
+    assert.match(prompt, /missing running shorts|split screen/i);
+    assert.match(prompt, /second person|wrong gender/i);
+  });
+
   it("fills template slots", () => {
     const template = getPromptTemplate("duo-sport-race");
     assert.ok(template);

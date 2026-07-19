@@ -541,6 +541,125 @@ export function ensureCyclingHelmetInPrompt(
   return `${prompt.replace(/\.$/, "")}, each wearing a ${helmet}.`;
 }
 
+const BOTTOM_LAYER_PRESENT =
+  /\b(?:running shorts|track pants|shorts|pants|trousers|skirt|bib shorts|yoga pants|leggings|leotard|unitard|breeches|chinos|golf pants|soccer shorts|basketball shorts|rugby shorts|tennis skirt)\b/i;
+
+const TOP_ONLY_ATHLETIC =
+  /\b(?:running singlet|singlet|mesh jersey|sports bra|tank top|jersey|running top)\b/i;
+
+const DEFAULT_BOTTOM_BY_SPORT: Partial<Record<AthleticSport, string>> = {
+  running: "running shorts",
+  track_field: "running shorts",
+  basketball: "basketball shorts",
+  soccer: "soccer shorts",
+  tennis: "tennis skirt",
+  golf: "golf shorts",
+  martial_arts: "martial arts pants",
+  fencing: "fencing breeches",
+  rugby: "rugby shorts",
+  yoga: "yoga pants",
+};
+
+const SPORTS_REQUIRING_BOTTOM: AthleticSport[] = [
+  "running",
+  "track_field",
+  "basketball",
+  "soccer",
+  "tennis",
+  "golf",
+  "martial_arts",
+  "fencing",
+  "rugby",
+  "yoga",
+];
+
+function bottomLabelFromSummary(summary: string, sport: AthleticSport): string | null {
+  const profile = getAthleticSportProfile(sport);
+  if (!profile?.bottomLabels?.length) {
+    return null;
+  }
+
+  for (const part of summary.split(",")) {
+    const trimmed = part.trim();
+    if (!trimmed) {
+      continue;
+    }
+    if (profile.bottomLabels.some((pattern) => pattern.test(trimmed))) {
+      return trimmed;
+    }
+  }
+
+  return null;
+}
+
+export function promptMissingAthleticBottom(
+  prompt: string,
+  sport: AthleticSport,
+): boolean {
+  if (!SPORTS_REQUIRING_BOTTOM.includes(sport)) {
+    return false;
+  }
+
+  if (BOTTOM_LAYER_PRESENT.test(prompt)) {
+    return false;
+  }
+
+  return TOP_ONLY_ATHLETIC.test(prompt) || /\b(?:runner|sprinter|marathon|jogger|athlete)\b/i.test(prompt);
+}
+
+export function ensureAthleticBottomInPrompt(
+  prompt: string,
+  sport: AthleticSport,
+  options?: { hints?: string; wardrobeSummary?: string },
+): string {
+  if (!SPORTS_REQUIRING_BOTTOM.includes(sport)) {
+    return prompt;
+  }
+
+  if (!promptMissingAthleticBottom(prompt, sport)) {
+    return prompt;
+  }
+
+  const bottom =
+    bottomLabelFromSummary(options?.wardrobeSummary ?? "", sport) ??
+    DEFAULT_BOTTOM_BY_SPORT[sport] ??
+    "shorts";
+
+  const sentences = prompt.split(/(?<=[.!?])\s+/);
+  let changed = false;
+
+  const updated = sentences.map((sentence) => {
+    const mentionsAthlete =
+      TOP_ONLY_ATHLETIC.test(sentence) ||
+      /\b(?:runner|sprinter|marathon|jogger|athlete|player|tennis|basketball|soccer)\b/i.test(
+        sentence,
+      );
+
+    if (!mentionsAthlete || BOTTOM_LAYER_PRESENT.test(sentence)) {
+      return sentence;
+    }
+
+    changed = true;
+    if (/\bwearing\b/i.test(sentence)) {
+      return sentence.replace(/\bwearing\b/i, `wearing ${bottom} and`);
+    }
+
+    const trimmed = sentence.trim().replace(/\.$/, "");
+    return `${trimmed}, wearing ${bottom}.`;
+  });
+
+  if (changed) {
+    return updated.join(" ").replace(/\s{2,}/g, " ").trim();
+  }
+
+  const corpus = [options?.hints, prompt].filter(Boolean).join(" ");
+  if (!/\b(?:runner|sprinter|marathon|jogger|athlete)\b/i.test(corpus)) {
+    return prompt;
+  }
+
+  return `${prompt.replace(/\.$/, "")}, wearing ${bottom}.`;
+}
+
 function cyclingDisciplineOverlay(hints?: string): CyclingDisciplineOverlay {
   return CYCLING_DISCIPLINE_OVERLAYS[inferCyclingDiscipline(hints)];
 }

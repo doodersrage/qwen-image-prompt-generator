@@ -2,9 +2,9 @@
 
 import type { ComfyImageModel } from "./comfy-models";
 import {
-  pollComfyGalleryJob,
   registerComfyGalleryJob,
 } from "./comfyui-gallery-client";
+import { scheduleComfyGalleryPoll } from "./comfyui-gallery-poller";
 import { resolveComfyUiRuntime } from "./comfyui-runtime";
 import { modelUsesNegativePrompt } from "./prompt-pair";
 
@@ -113,7 +113,10 @@ export async function requeueComfyJob(
       model: input.model,
       comfyUrl: data.comfyUrl ?? "http://127.0.0.1:8188",
     });
-    void pollComfyGalleryJob(data.promptId, input.onStatus);
+    void scheduleComfyGalleryPoll(data.promptId, {
+      comfyUrl: data.comfyUrl ?? "http://127.0.0.1:8188",
+      onStatus: input.onStatus,
+    });
   }
 
   return {

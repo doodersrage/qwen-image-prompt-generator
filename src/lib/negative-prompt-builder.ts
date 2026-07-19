@@ -1,12 +1,16 @@
 import type { AthleticSport } from "./athletic-sport-profiles";
 
 const BASE_NEGATIVE =
-  "blurry, low quality, watermark, text, logo, deformed, bad anatomy, extra limbs";
+  "blurry, low quality, watermark, text, logo, deformed, bad anatomy, extra limbs, nude, topless, bottomless, missing shorts, exposed buttocks, underwear visible, split screen, diptych, collage panels, side by side comparison, multiple unrelated subjects";
+
+const SOLO_SUBJECT_NEGATIVE =
+  "second person, extra face, crowd, duo, pair, twins, wrong gender, elderly man, split frame";
 
 const SPORT_NEGATIVE: Partial<Record<AthleticSport, string>> = {
   cycling:
     "bare head, no helmet, dress, street clothes, track pants, running shoes, javelin, wrong sport",
-  running: "cycling kit, bicycle, cleats on bike, dress shoes",
+  running:
+    "cycling kit, bicycle, cleats on bike, dress shoes, sports bra only, missing running shorts, no pants, panties visible",
   basketball: "cycling kit, soccer cleats, baseball uniform",
   soccer: "cycling kit, basketball hoop indoors only, American football",
   track_field: "bicycle, cycling kit, basketball, unrelated sport gear",
@@ -15,9 +19,14 @@ const SPORT_NEGATIVE: Partial<Record<AthleticSport, string>> = {
 export function buildNegativePrompt(input: {
   sport?: AthleticSport | null;
   preserveSubject?: boolean;
+  soloSubject?: boolean;
   extra?: string;
 }): string {
   const parts = [BASE_NEGATIVE];
+
+  if (input.soloSubject) {
+    parts.push(SOLO_SUBJECT_NEGATIVE);
+  }
 
   if (input.preserveSubject) {
     parts.push(

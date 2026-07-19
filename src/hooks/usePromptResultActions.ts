@@ -18,10 +18,8 @@ import { resolveComfyUiRuntime } from "@/lib/comfyui-runtime";
 import {
   galleryEntryPrimaryViewUrl,
 } from "@/lib/comfyui-gallery";
-import {
-  pollComfyGalleryJob,
-  registerComfyGalleryJob,
-} from "@/lib/comfyui-gallery-client";
+import { scheduleComfyGalleryPoll } from "@/lib/comfyui-gallery-poller";
+import { registerComfyGalleryJob } from "@/lib/comfyui-gallery-client";
 import { fetchWorkflowPreview } from "@/lib/comfyui-requeue";
 
 export type PromptResultActionsConfig = {
@@ -87,7 +85,10 @@ export function usePromptResultActions(config: PromptResultActionsConfig) {
         comfyUrl: input.comfyUrl,
       });
 
-      void pollComfyGalleryJob(input.promptId, setComfyUiStatus).then((entry) => {
+      void scheduleComfyGalleryPoll(input.promptId, {
+        comfyUrl: input.comfyUrl,
+        onStatus: setComfyUiStatus,
+      }).then((entry) => {
         if (!entry) {
           return;
         }

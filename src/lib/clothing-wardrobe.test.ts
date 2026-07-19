@@ -26,12 +26,14 @@ import {
 import { summaryMatchesSportWardrobe } from "./athletic-sport-profiles";
 import {
   appendCyclingHelmetToSummary,
+  ensureAthleticBottomInPrompt,
   ensureCyclingHelmetInPrompt,
   inferCyclingDiscipline,
   resolveAthleticSportForWardrobe,
   stripForeignSportActionsFromPrompt,
   stripIncompatibleCyclingVenuesFromPrompt,
 } from "./athletic-sport-actions";
+import { fixPromptRules } from "./prompt-fix";
 import { buildRandomCharacterSeed } from "./specialized/scene-pools";
 import { pickDistinctIdentitySeeds } from "./variation-seed";
 import { paintDistinctPeopleScene, stripStreetClothingFromAthleticPeoplePrompt } from "./distinct-people";
@@ -375,6 +377,23 @@ describe("character action seeds", () => {
     const cleaned = stripForeignSportActionsFromPrompt(prompt, "running");
     assert.doesNotMatch(cleaned, /pedals?|pedaling|handlebars|cyclist/i);
     assert.match(cleaned, /runner|stride|singlet|race bib/i);
+  });
+
+  it("adds running shorts when a runner prompt omits bottoms", () => {
+    const prompt =
+      "A fit female marathon runner in a race bib and frost wool running singlet strides across a bridge footpath at dawn.";
+    const fixed = ensureAthleticBottomInPrompt(prompt, "running");
+    assert.match(fixed, /running shorts|track pants|shorts/i);
+  });
+
+  it("fixPromptRules adds missing running bottoms", () => {
+    const result = fixPromptRules({
+      hints: "female marathon runner",
+      prompt:
+        "A woman marathon runner wearing a frost wool running singlet sprints through morning fog on a riverside path.",
+    });
+    assert.match(result.prompt, /running shorts|track pants|shorts/i);
+    assert.ok(result.changes.some((change) => change.code === "sport.add_bottom_layer"));
   });
 
   it("keeps cycling intent when the model hallucinates a javelin throw", () => {

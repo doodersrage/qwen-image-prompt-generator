@@ -250,7 +250,7 @@ export const ATHLETIC_SPORT_PROFILES: readonly AthleticSportProfile[] = [
     footwearLabels: [/\b(?:running shoes|trail runner|trainer)\b/i],
     excludeLabels: [WRONG_CYCLING, WRONG_SOCCER, /\b(?:soccer cleats|cycling shoes)\b/i],
     guardrail:
-      "Running activity—use a running singlet or top with running shorts or track pants and running shoes. No cycling bibs, soccer cleats, or formalwear.",
+      "Running activity—use a running singlet or top with visible running shorts or track pants and running shoes. Never a topless, bottomless, or sports-bra-only look. No cycling bibs, soccer cleats, or formalwear.",
   },
 ];
 

@@ -26,8 +26,18 @@ import {
   parseScenePresetFromSearch,
 } from "@/lib/scene-preset-url";
 import { getSportPreset } from "@/lib/sport-presets";
+import {
+  ToolBadge,
+  ToolLayout,
+  ToolSection,
+  accentButtonClass,
+  accentFocusClass,
+  accentRingClass,
+} from "@/components/ui/ToolPageShell";
+import { FieldDivider, FieldError, FieldLabel, TextArea } from "@/components/ui/Field";
+import { PrimaryButton } from "@/components/ui/Button";
 
-const labelClassName = "text-sm font-medium text-zinc-200";
+const ACCENT = "sky" as const;
 
 export default function CharacterTool() {
   const { mounted, shared, toolSettings, updateShared, updateToolSettings } =
@@ -154,15 +164,16 @@ export default function CharacterTool() {
   }, [output]);
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8 sm:px-6">
-      <header className="space-y-3">
-        <div className="inline-flex items-center gap-2 rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-sky-300">
+    <ToolLayout
+      accent={ACCENT}
+      badge={
+        <ToolBadge accent={ACCENT}>
           Character · {selectedModel.comfyNode}
-        </div>
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-50 sm:text-4xl">
-          Character Generator
-        </h1>
-        <p className="max-w-2xl text-base leading-relaxed text-zinc-400">
+        </ToolBadge>
+      }
+      title="Character Generator"
+      description={
+        <>
           Builds a detailed single-person prompt—face, hair, clothing, pose, and
           expression. Include sex/gender and age in hints; they are treated as
           mandatory. Add a place with{" "}
@@ -170,10 +181,9 @@ export default function CharacterTool() {
           after a comma, or <code className="text-sky-300">location: …</code>.
           Expand optional presets below for composition, lighting, and pose
           anchors.
-        </p>
-      </header>
-
-      <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-xl shadow-black/20">
+        </>
+      }
+      sidebar={
         <SharedToolControls
           shared={shared}
           onModelChange={(model) => updateShared({ model })}
@@ -201,7 +211,9 @@ export default function CharacterTool() {
           autoFixRules={shared.autoFixRules !== false}
           onAutoFixRulesChange={(value) => updateShared({ autoFixRules: value })}
         />
-
+      }
+    >
+      <ToolSection>
         <SportPresetChips
           mode="solo"
           onSelect={(preset) => {
@@ -212,16 +224,16 @@ export default function CharacterTool() {
           }}
         />
 
-        <div className="space-y-3 border-t border-zinc-800 pt-4">
-          <label className={labelClassName}>Character hints (optional)</label>
-          <textarea
-            value={toolSettings.hints ?? ""}
-            onChange={(e) => updateToolSettings({ hints: e.target.value })}
-            placeholder="e.g. young woman in her twenties, long dark hair; on a Tokyo rooftop at night"
-            rows={3}
-            className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-sky-500"
-          />
-        </div>
+        <FieldDivider />
+
+        <FieldLabel>Character hints (optional)</FieldLabel>
+        <TextArea
+          value={toolSettings.hints ?? ""}
+          onChange={(e) => updateToolSettings({ hints: e.target.value })}
+          placeholder="e.g. young woman in her twenties, long dark hair; on a Tokyo rooftop at night"
+          rows={3}
+          className={accentFocusClass(ACCENT)}
+        />
 
         <CharacterPresetControls
           mounted={mounted}
@@ -229,71 +241,68 @@ export default function CharacterTool() {
           onChange={updateToolSettings}
         />
 
-        <div className="space-y-3 border-t border-zinc-800 pt-4">
-          <p className={labelClassName}>Framing</p>
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                { label: "Portrait", value: "portrait" },
-                { label: "Full body", value: "full-body" },
-                { label: "Action", value: "action" },
-              ] as const
-            ).map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() =>
-                  updateToolSettings({ portraitStyle: option.value })
-                }
-                className={`rounded-lg border px-3 py-2 text-xs font-medium ${
-                  toolSettings.portraitStyle === option.value
-                    ? "border-sky-500 bg-sky-500/15 text-sky-200"
-                    : "border-zinc-700 text-zinc-400"
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+        <FieldDivider />
+
+        <FieldLabel>Framing</FieldLabel>
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              { label: "Portrait", value: "portrait" },
+              { label: "Full body", value: "full-body" },
+              { label: "Action", value: "action" },
+            ] as const
+          ).map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() =>
+                updateToolSettings({ portraitStyle: option.value })
+              }
+              className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                toolSettings.portraitStyle === option.value
+                  ? "border-sky-500 bg-sky-500/15 text-sky-200"
+                  : "border-zinc-700 text-zinc-400"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
 
-        <div className="space-y-3 border-t border-zinc-800 pt-4">
-          <div className="flex items-center justify-between text-xs text-zinc-400">
-            <span>Stable</span>
-            <span className="font-medium text-sky-300">
-              {variationStrengthLabel(toolSettings.variationStrength ?? 50)} (
-              {toolSettings.variationStrength ?? 50})
-            </span>
-            <span>Varied</span>
-          </div>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={5}
-            value={toolSettings.variationStrength ?? 50}
-            onChange={(e) =>
-              updateToolSettings({ variationStrength: Number(e.target.value) })
-            }
-            className="h-2 w-full accent-sky-500"
-          />
-        </div>
+        <FieldDivider />
 
-        <button
-          type="button"
+        <div className="flex items-center justify-between text-xs text-zinc-400">
+          <span>Stable</span>
+          <span className="font-medium text-sky-300">
+            {variationStrengthLabel(toolSettings.variationStrength ?? 50)} (
+            {toolSettings.variationStrength ?? 50})
+          </span>
+          <span>Varied</span>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={5}
+          value={toolSettings.variationStrength ?? 50}
+          onChange={(e) =>
+            updateToolSettings({ variationStrength: Number(e.target.value) })
+          }
+          className={`h-2 w-full ${accentRingClass(ACCENT)}`}
+        />
+
+        <PrimaryButton
+          accentClassName={accentButtonClass(ACCENT)}
           onClick={() => void generate()}
-          disabled={!mounted || loading}
-          className="inline-flex h-11 items-center justify-center rounded-xl bg-sky-600 px-6 text-sm font-semibold text-white hover:bg-sky-500 disabled:opacity-50"
+          disabled={!mounted}
+          loading={loading}
+          loadingLabel="Generating character prompt"
         >
-          {loading ? "Building character…" : "Generate character prompt"}
-        </button>
+          Generate character prompt
+        </PrimaryButton>
 
-        {error && (
-          <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
-            {error}
-          </p>
-        )}
-      </section>
+        <FieldError>{error}</FieldError>
+      </ToolSection>
 
       <EnhancedPromptResult
         output={output}
@@ -354,6 +363,6 @@ export default function CharacterTool() {
         historySaved={actions.historySaved}
         pairCopied={actions.pairCopied}
       />
-    </div>
+    </ToolLayout>
   );
 }

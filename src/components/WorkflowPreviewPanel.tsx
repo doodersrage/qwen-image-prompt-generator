@@ -1,5 +1,7 @@
 "use client";
 
+import { Skeleton, Spinner } from "@/components/ui/Button";
+
 type WorkflowPreviewPanelProps = {
   loading?: boolean;
   error?: string | null;
@@ -30,11 +32,25 @@ export default function WorkflowPreviewPanel({
   preview,
 }: WorkflowPreviewPanelProps) {
   if (loading) {
-    return <p className="text-xs text-zinc-500">Building workflow preview…</p>;
+    return (
+      <div
+        className="ui-surface space-y-3 p-4"
+        role="status"
+        aria-label="Building workflow preview"
+      >
+        <div className="flex items-center gap-2">
+          <Spinner size="sm" />
+          <Skeleton className="ui-skeleton-title flex-1" />
+        </div>
+        <Skeleton className="ui-skeleton-row w-full" />
+        <Skeleton className="ui-skeleton-row w-5/6" />
+        <Skeleton className="ui-skeleton-block w-full" />
+      </div>
+    );
   }
 
   if (error) {
-    return <p className="text-xs text-rose-300">{error}</p>;
+    return <p className="ui-alert-danger type-caption">{error}</p>;
   }
 
   if (!preview) {
@@ -42,26 +58,28 @@ export default function WorkflowPreviewPanel({
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-cyan-900/40 bg-zinc-950/50 p-4">
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
+    <div className="ui-surface space-y-3 p-4">
+      <div className="flex flex-wrap gap-x-4 gap-y-1 type-caption">
         <span>
           Source:{" "}
-          <span className="text-zinc-300">{preview.workflowSource ?? "unknown"}</span>
+          <span className="text-[var(--text-primary)]">
+            {preview.workflowSource ?? "unknown"}
+          </span>
         </span>
         {preview.replacements && (
           <span>
             Replacements:{" "}
-            <span className="text-zinc-300">
+            <span className="text-[var(--text-primary)]">
               {preview.replacements.positive} positive
               {preview.replacements.negative > 0
                 ? ` · ${preview.replacements.negative} negative`
                 : ""}
-                {preview.replacements.params &&
-                Object.keys(preview.replacements.params).length > 0
-                  ? ` · params ${Object.entries(preview.replacements.params)
-                      .map(([key, count]) => `${key}:${count}`)
-                      .join(", ")}`
-                  : ""}
+              {preview.replacements.params &&
+              Object.keys(preview.replacements.params).length > 0
+                ? ` · params ${Object.entries(preview.replacements.params)
+                    .map(([key, count]) => `${key}:${count}`)
+                    .join(", ")}`
+                : ""}
               {preview.replacements.custom &&
               Object.keys(preview.replacements.custom).length > 0
                 ? ` · custom ${Object.entries(preview.replacements.custom)
@@ -74,7 +92,7 @@ export default function WorkflowPreviewPanel({
         {preview.resolvedParams && (
           <span>
             Params:{" "}
-            <span className="font-mono text-cyan-200/90">
+            <span className="type-code !bg-transparent !p-0 text-[var(--tint-info-text)]">
               seed={preview.resolvedParams.seed} · {preview.resolvedParams.width}×
               {preview.resolvedParams.height} · cfg {preview.resolvedParams.cfg} · steps{" "}
               {preview.resolvedParams.steps}
@@ -84,19 +102,21 @@ export default function WorkflowPreviewPanel({
       </div>
 
       {preview.snippets && preview.snippets.length > 0 && (
-        <ul className="space-y-1 text-xs">
+        <ul className="space-y-1 type-caption">
           {preview.snippets.map((snippet) => (
             <li key={`${snippet.path}-${snippet.value.slice(0, 24)}`}>
-              <span className="font-mono text-violet-300">{snippet.path}</span>
-              <span className="text-zinc-600"> → </span>
-              <span className="font-mono text-emerald-200/90">{snippet.value}</span>
+              <span className="type-code text-[var(--accent-text)]">{snippet.path}</span>
+              <span className="text-[var(--text-muted)]"> → </span>
+              <span className="type-code !bg-transparent !p-0 text-[var(--tint-success-text)]">
+                {snippet.value}
+              </span>
             </li>
           ))}
         </ul>
       )}
 
       {preview.workflowJson && (
-        <pre className="max-h-72 overflow-auto rounded-lg border border-zinc-800 bg-zinc-950 p-3 font-mono text-[11px] leading-relaxed text-zinc-300">
+        <pre className="type-code max-h-72 overflow-auto rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--bg-muted)] p-3 !text-[var(--text-secondary)]">
           {preview.workflowJson}
           {preview.truncated ? "\n… (truncated)" : ""}
         </pre>

@@ -25,6 +25,7 @@ import {
 import {
   buildSinglePersonSystemAddendum,
   buildSinglePersonUserDirective,
+  buildSoloSubjectLockDirective,
 } from "../single-person";
 import {
   buildDistinctPeopleUserDirective,
@@ -48,6 +49,7 @@ import {
   getSportActionInstructions,
   stripIncompatibleSportActionsFromPrompt,
   ensureCyclingHelmetInPrompt,
+  ensureAthleticBottomInPrompt,
 } from "../athletic-sport-actions";
 import { DEFAULT_GENERATION_SETTINGS } from "../generation-settings";
 import {
@@ -300,6 +302,12 @@ ${soloRules}
     if (cyclingHelmetRequired) {
       result = ensureCyclingHelmetInPrompt(result, intentCorpus);
     }
+    if (intentSport && intentSport !== "cycling") {
+      result = ensureAthleticBottomInPrompt(result, intentSport, {
+        hints: intentCorpus,
+        wardrobeSummary: wardrobeAssignments?.[0]?.summary ?? presetWardrobeSummary ?? undefined,
+      });
+    }
     return result;
   };
 
@@ -332,7 +340,7 @@ ${soloRules}
       : null,
     duoMode
       ? "DUO MODE (mandatory): exactly two interacting people in frame. No third person, crowd, or background faces."
-      : buildSinglePersonUserDirective(),
+      : buildSoloSubjectLockDirective(effectiveHints) ?? buildSinglePersonUserDirective(),
     duoFromHints ? buildDistinctPeopleUserDirective(options.hints ?? "") : null,
     "Write one model-ready character prompt.",
   ].filter(Boolean);

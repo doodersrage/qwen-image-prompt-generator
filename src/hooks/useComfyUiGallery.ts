@@ -15,7 +15,7 @@ import {
   type ComfyGalleryFilter,
   uniqueGalleryTools,
 } from "@/lib/comfyui-gallery";
-import { pollComfyGalleryJob } from "@/lib/comfyui-gallery-client";
+import { scheduleComfyGalleryPoll } from "@/lib/comfyui-gallery-poller";
 
 export function useComfyUiGallery(initialFilter?: ComfyGalleryFilter) {
   const [mounted, setMounted] = useState(false);
@@ -87,7 +87,9 @@ export function useComfyUiGallery(initialFilter?: ComfyGalleryFilter) {
     );
 
     await Promise.all(
-      pending.map((entry) => pollComfyGalleryJob(entry.promptId)),
+      pending.map((entry) =>
+        scheduleComfyGalleryPoll(entry.promptId, { comfyUrl: entry.comfyUrl }),
+      ),
     );
 
     refresh();

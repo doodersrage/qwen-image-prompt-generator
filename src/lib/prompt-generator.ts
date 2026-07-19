@@ -43,7 +43,13 @@ import { inferAthleticSport } from "./athletic-sport-profiles";
 import {
   formatSportActionInstructions,
   stripForeignSportActionsFromPrompt,
+  ensureAthleticBottomInPrompt,
 } from "./athletic-sport-actions";
+import {
+  buildSinglePersonSystemAddendum,
+  buildSoloSubjectLockDirective,
+  ensureSinglePersonPrompt,
+} from "./single-person";
 import {
   DEFAULT_GENERATION_SETTINGS,
   type GenerationSettings,
@@ -182,6 +188,13 @@ function buildUserMessage(
     }
   }
 
+  if (!isMultiPersonInput(trimmed) && !settings.distinctPeople) {
+    const soloLock = buildSoloSubjectLockDirective(trimmed);
+    if (soloLock) {
+      extras.push(soloLock);
+    }
+  }
+
   const wardrobeDirective = wardrobeAssignments?.length
     ? buildGenerateWardrobeUserDirective(wardrobeAssignments)
     : null;
@@ -289,22 +302,48 @@ function finalizePrompt(
     mode === "positive"
       ? (() => {
           const sport = inferAthleticSport(input);
-          return sport
-            ? stripForeignSportActionsFromPrompt(formatted, sport, input)
-            : formatted;
+          let result = formatted;
+          if (sport) {
+            result = stripForeignSportActionsFromPrompt(result, sport, input);
+            if (sport !== "cycling") {
+              result = ensureAthleticBottomInPrompt(result, sport, {
+                hints: input,
+                wardrobeSummary: wardrobeAssignments?.[0]?.summary,
+              });
+            }
+          }
+          return result;
         })()
       : formatted;
   if (!wardrobeAssignments?.length) {
+    if (
+      mode === "positive" &&
+      !settings.distinctPeople &&
+      !isMultiPersonInput(input)
+    ) {
+      const profile = getComfyModelDefinition(settings.model).profile;
+      return ensureSinglePersonPrompt(sportAware, profile);
+    }
     return sportAware;
   }
 
   const { maxChars } = getDetailLimits(settings.detail, settings.model);
-  const merged = mergeGenerateWardrobeIntoPrompt(
+  let merged = mergeGenerateWardrobeIntoPrompt(
     sportAware,
     wardrobeAssignments,
     maxChars,
     input,
   );
+  if (
+    mode === "positive" &&
+    !settings.distinctPeople &&
+    !isMultiPersonInput(input)
+  ) {
+    merged = ensureSinglePersonPrompt(
+      merged,
+      getComfyModelDefinition(settings.model).profile,
+    );
+  }
   const profile = getComfyModelDefinition(settings.model).profile;
   return trimPromptToMaxChars(compactPromptForProfile(merged, profile), maxChars);
 }
@@ -327,6 +366,8 @@ export async function generateWithLlm(
       } else {
         systemPrompt = `${systemPrompt}\n\n${buildGroupedPeopleSystemAddendum(input.trim())}`;
       }
+    } else if (!settings.distinctPeople) {
+      systemPrompt = `${systemPrompt}\n\n${buildSinglePersonSystemAddendum()}`;
     }
   }
 

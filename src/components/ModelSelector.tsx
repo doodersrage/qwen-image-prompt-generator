@@ -45,14 +45,14 @@ export default function ModelSelector({ value, onChange, id }: ModelSelectorProp
 
   return (
     <div className="space-y-3" id={id}>
-      <div className="flex flex-col gap-3 sm:flex-row">
+      <div className="flex flex-col gap-3">
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search models…"
+          placeholder="Search models by name, id, or node…"
           aria-label="Search ComfyUI models"
-          className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none transition focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 sm:flex-1"
+          className="ui-input min-h-11 w-full px-[var(--input-padding-x)] py-[var(--input-padding-y)] type-body-lg"
         />
         <select
           value={category}
@@ -60,7 +60,7 @@ export default function ModelSelector({ value, onChange, id }: ModelSelectorProp
             setCategory(e.target.value as ComfyModelCategory | "all")
           }
           aria-label="Filter by model family"
-          className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200 outline-none transition focus:border-violet-500"
+          className="ui-input min-h-11 w-full px-3 py-[var(--input-padding-y)] type-body"
         >
           <option value="all">All families ({COMFY_IMAGE_MODELS.length})</option>
           {COMFY_MODEL_CATEGORIES.map((entry) => (
@@ -71,19 +71,19 @@ export default function ModelSelector({ value, onChange, id }: ModelSelectorProp
         </select>
       </div>
 
-      <p className="text-xs text-zinc-500">
+      <p className="type-caption">
         {filteredModels.length} model{filteredModels.length === 1 ? "" : "s"}
         {category !== "all" &&
           ` in ${COMFY_MODEL_CATEGORIES.find((entry) => entry.id === category)?.label ?? category}`}
         {query.trim() ? ` matching “${query.trim()}”` : ""}
         {" · "}
         Selected:{" "}
-        <span className="text-zinc-400">{selected.label}</span>
+        <span className="text-[var(--text-secondary)]">{selected.label}</span>
       </p>
 
-      <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+      <div className="sidebar-scroll max-h-80 space-y-2 overflow-y-auto pr-1">
         {filteredModels.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-zinc-700 px-4 py-6 text-center text-sm text-zinc-500">
+          <p className="type-caption rounded-[var(--radius-md)] border border-dashed border-[var(--border-default)] px-4 py-6 text-center">
             No models match your search.
           </p>
         ) : (
@@ -92,27 +92,26 @@ export default function ModelSelector({ value, onChange, id }: ModelSelectorProp
               key={entry.id}
               type="button"
               onClick={() => onChange(entry.id)}
-              className={`w-full rounded-xl border px-4 py-3 text-left transition ${
-                value === entry.id
-                  ? "border-violet-500 bg-violet-500/10"
-                  : "border-zinc-700 hover:border-zinc-500"
+              data-active={value === entry.id ? "true" : "false"}
+              className={`ui-chip w-full px-4 py-3 text-left ${
+                value === entry.id ? "" : "!items-start"
               }`}
             >
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex w-full flex-wrap items-center justify-between gap-2">
                 <span
-                  className={`text-sm font-medium ${
-                    value === entry.id ? "text-violet-200" : "text-zinc-200"
+                  className={`type-heading ${
+                    value === entry.id
+                      ? "text-[var(--accent-text)]"
+                      : "text-[var(--text-primary)]"
                   }`}
                 >
                   {entry.label}
                 </span>
-                <span className="font-mono text-[11px] text-zinc-500">
+                <span className="type-overline !normal-case !tracking-normal font-mono">
                   {entry.comfyNode}
                 </span>
               </div>
-              <p className="mt-1 text-xs leading-relaxed text-zinc-500">
-                {entry.description}
-              </p>
+              <p className="type-caption mt-1 w-full">{entry.description}</p>
             </button>
           ))
         )}

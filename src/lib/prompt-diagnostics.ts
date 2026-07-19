@@ -1,13 +1,14 @@
 import {
   inferCyclingDiscipline,
   promptContainsForeignSportActions,
+  promptMissingAthleticBottom,
   type CyclingDiscipline,
 } from "./athletic-sport-actions";
 import {
   inferAthleticSport,
   type AthleticSport,
 } from "./athletic-sport-profiles";
-import { parsePeopleConstraint } from "./distinct-people";
+import { parsePeopleConstraint, isMultiPersonInput } from "./distinct-people";
 import { hintsDescribeAthleticDuoCompetition } from "./generate-wardrobe";
 
 export type DiagnosticSeverity = "error" | "warn" | "info";
@@ -107,6 +108,31 @@ export function analyzePromptDiagnostics(
       code: "sport.foreign_actions",
       message: "Prompt mixes in actions or gear from another sport.",
     });
+  }
+
+  if (
+    sport &&
+    prompt &&
+    (sport === "running" || sport === "track_field") &&
+    promptMissingAthleticBottom(prompt, sport)
+  ) {
+    issues.push({
+      severity: "error",
+      code: "running.missing_bottom",
+      message: "Runner prompt lacks visible shorts or track pants.",
+    });
+    suggestions.push("Add running shorts or track pants to the outfit description.");
+  }
+
+  if (prompt && !duoMode && isMultiPersonInput(text) === false) {
+    if (/\bon the left\b/i.test(prompt) && /\bon the right\b/i.test(prompt)) {
+      issues.push({
+        severity: "error",
+        code: "solo.split_screen",
+        message: "Solo prompt uses left/right split framing—likely to produce a diptych or two subjects.",
+      });
+      suggestions.push("Describe one unified subject in one continuous scene.");
+    }
   }
 
   if (duoMode && prompt && !/\bon the (?:left|right)\b/i.test(prompt)) {

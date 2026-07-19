@@ -13,6 +13,7 @@ import {
   resolveAthleticSportForWardrobe,
   stripIncompatibleSportActionsFromPrompt,
   ensureCyclingHelmetInPrompt,
+  ensureAthleticBottomInPrompt,
   appendCyclingHelmetToSummary,
 } from "./athletic-sport-actions";
 import {
@@ -375,7 +376,14 @@ export function mergeGenerateWardrobeIntoPrompt(
     refreshSportWardrobeAssignmentForPrompt(working, assignment, intentHints),
   );
   const merged = mergeWardrobeAssignmentsIntoPrompt(working, refreshed, maxChars);
-  return sport === "cycling"
-    ? ensureCyclingHelmetInPrompt(merged, intentHints ?? "")
-    : merged;
+  if (sport === "cycling") {
+    return ensureCyclingHelmetInPrompt(merged, intentHints ?? "");
+  }
+  if (sport) {
+    return ensureAthleticBottomInPrompt(merged, sport, {
+      hints: intentHints,
+      wardrobeSummary: refreshed[0]?.summary,
+    });
+  }
+  return merged;
 }

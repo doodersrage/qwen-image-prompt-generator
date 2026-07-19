@@ -847,6 +847,9 @@ export function buildClothingGuardrailLines(
       : filters.athleticActivity
         ? "Athletic activity is happening—use practical sport or training attire matched to the activity. No costumes, wizard robes, formalwear, or unrelated uniforms."
         : null,
+    filters.athleticSport === "running" || filters.athleticSport === "track_field"
+      ? "Runners must wear visible shorts or track pants—never a topless or bottomless look."
+      : null,
     filters.workWardrobe
       ? filters.workProfession
         ? `Work context applies—keep assigned ${filters.workProfession} workwear or uniform coherent with the job and setting.`

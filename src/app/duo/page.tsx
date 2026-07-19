@@ -1,5 +1,10 @@
+import PageCanvas from "@/components/ui/PageCanvas";
 import DuoTool from "@/components/DuoTool";
 
 export default function DuoPage() {
-  return <DuoTool />;
+  return (
+    <PageCanvas accent="emerald">
+      <DuoTool />
+    </PageCanvas>
+  );
 }

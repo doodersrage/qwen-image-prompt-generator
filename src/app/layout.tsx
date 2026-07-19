@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import AppNav from "@/components/AppNav";
+import ComfyGalleryBackgroundPoller from "@/components/ComfyGalleryBackgroundPoller";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -29,9 +30,12 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col overflow-x-hidden bg-zinc-950 text-zinc-100">
-        <AppNav />
-        {children}
+      <body className="min-h-full overflow-x-hidden bg-[var(--bg-base)] text-[var(--text-primary)]">
+        <div className="min-h-full lg:pl-[var(--sidebar-width)]">
+          <AppNav />
+          <ComfyGalleryBackgroundPoller />
+          {children}
+        </div>
       </body>
     </html>
   );

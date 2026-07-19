@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import SharedToolControls from "@/components/SharedToolControls";
 import EnhancedPromptResult from "@/components/EnhancedPromptResult";
@@ -59,6 +60,35 @@ import {
   parseStudioBackupFile,
 } from "@/lib/studio-backup";
 import type { EnrichedToolGenerateResult } from "@/lib/specialized/types";
+import {
+  ToolBadge,
+  ToolBlockGroup,
+  ToolContentPanel,
+  ToolLayout,
+  ToolMetaPanel,
+  ToolSection,
+  accentButtonClass,
+  accentFocusClass,
+} from "@/components/ui/ToolPageShell";
+import { ChipButton, FieldLabel, TextArea } from "@/components/ui/Field";
+import { Button, PrimaryButton } from "@/components/ui/Button";
+import {
+  DataList,
+  DataListActions,
+  DataListPrimary,
+  DataListRow,
+} from "@/components/ui/DataList";
+import {
+  CompareCardsSkeleton,
+  DataListSkeleton,
+  EmptyState,
+  ErrorState,
+  isLikelyErrorStatus,
+  StudioTabSkeleton,
+  SuccessBanner,
+} from "@/components/ui/ViewState";
+
+const ACCENT = "violet" as const;
 
 type StudioTab = "history" | "compare" | "catalog" | "templates" | "presets" | "diff";
 
@@ -87,6 +117,8 @@ export default function StudioTool() {
 
   const [tab, setTab] = useState<StudioTab>("history");
   const [catalogQuery, setCatalogQuery] = useState("");
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   const [catalogClothing, setCatalogClothing] = useState<CatalogClothing[]>([]);
   const [catalogLocations, setCatalogLocations] = useState<CatalogLocation[]>([]);
   const [compareHints, setCompareHints] = useState(
@@ -95,6 +127,7 @@ export default function StudioTool() {
   const [compareA, setCompareA] = useState<EnrichedToolGenerateResult | null>(null);
   const [compareB, setCompareB] = useState<EnrichedToolGenerateResult | null>(null);
   const [compareLoading, setCompareLoading] = useState(false);
+  const [compareError, setCompareError] = useState<string | null>(null);
   const [blocklist, setBlocklist] = useState<string[]>([]);
   const [copied, setCopied] = useState(false);
   const [backupStatus, setBackupStatus] = useState<string | null>(null);
@@ -144,16 +177,31 @@ export default function StudioTool() {
   }, []);
 
   const loadCatalog = useCallback(async (query: string) => {
-    const params = query.trim()
-      ? `?q=${encodeURIComponent(query.trim())}`
-      : "?limit=80";
-    const response = await fetch(`/api/catalog${params}`);
-    const data = (await response.json()) as {
-      clothing?: CatalogClothing[];
-      locations?: CatalogLocation[];
-    };
-    setCatalogClothing(data.clothing ?? []);
-    setCatalogLocations(data.locations ?? []);
+    setCatalogLoading(true);
+    setCatalogError(null);
+    try {
+      const params = query.trim()
+        ? `?q=${encodeURIComponent(query.trim())}`
+        : "?limit=80";
+      const response = await fetch(`/api/catalog${params}`);
+      if (!response.ok) {
+        throw new Error("Could not load catalog data.");
+      }
+      const data = (await response.json()) as {
+        clothing?: CatalogClothing[];
+        locations?: CatalogLocation[];
+      };
+      setCatalogClothing(data.clothing ?? []);
+      setCatalogLocations(data.locations ?? []);
+    } catch (err) {
+      setCatalogClothing([]);
+      setCatalogLocations([]);
+      setCatalogError(
+        err instanceof Error ? err.message : "Could not load catalog data.",
+      );
+    } finally {
+      setCatalogLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -164,6 +212,7 @@ export default function StudioTool() {
 
   const runCompare = useCallback(async () => {
     setCompareLoading(true);
+    setCompareError(null);
     try {
       const payload = {
         hints: compareHints,
@@ -188,8 +237,18 @@ export default function StudioTool() {
         }),
       ]);
 
+      if (!responseA.ok || !responseB.ok) {
+        throw new Error("Model comparison failed. Check your settings and try again.");
+      }
+
       setCompareA((await responseA.json()) as EnrichedToolGenerateResult);
       setCompareB((await responseB.json()) as EnrichedToolGenerateResult);
+    } catch (err) {
+      setCompareA(null);
+      setCompareB(null);
+      setCompareError(
+        err instanceof Error ? err.message : "Model comparison failed.",
+      );
     } finally {
       setCompareLoading(false);
     }
@@ -240,7 +299,17 @@ export default function StudioTool() {
   }, [diffLeft, diffRight]);
 
   if (!mounted) {
-    return null;
+    return (
+      <ToolLayout
+        accent={ACCENT}
+        width="wide"
+        badge={<ToolBadge accent={ACCENT}>Studio</ToolBadge>}
+        title="Prompt Studio"
+        description="History, model comparison, catalog browser, and template slots."
+      >
+        <StudioTabSkeleton />
+      </ToolLayout>
+    );
   }
 
   const tabs: { id: StudioTab; label: string }[] = [
@@ -253,254 +322,269 @@ export default function StudioTool() {
   ];
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 sm:px-6">
-      <header className="space-y-3">
-        <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-violet-300">
-          Studio
+    <ToolLayout
+      accent={ACCENT}
+      width="wide"
+      badge={<ToolBadge accent={ACCENT}>Studio</ToolBadge>}
+      title="Prompt Studio"
+      description="History, model comparison, catalog browser, and template slots."
+    >
+      <ToolMetaPanel title="Studio views">
+        <div className="flex flex-wrap gap-2">
+          {tabs.map((entry) => (
+            <ChipButton
+              key={entry.id}
+              active={tab === entry.id}
+              onClick={() => setTab(entry.id)}
+            >
+              {entry.label}
+            </ChipButton>
+          ))}
         </div>
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-50 sm:text-4xl">
-          Prompt Studio
-        </h1>
-        <p className="max-w-2xl text-base leading-relaxed text-zinc-400">
-          History, model comparison, catalog browser, and template slots.
-        </p>
-      </header>
-
-      <div className="flex flex-wrap gap-2">
-        {tabs.map((entry) => (
-          <button
-            key={entry.id}
-            type="button"
-            onClick={() => setTab(entry.id)}
-            className={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
-              tab === entry.id
-                ? "border-violet-500 bg-violet-500/15 text-violet-200"
-                : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
-            }`}
-          >
-            {entry.label}
-          </button>
-        ))}
-      </div>
+      </ToolMetaPanel>
 
       {tab === "history" && (
-        <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-sm font-medium text-zinc-200">
-              Saved prompts ({filteredEntries.length}
-              {filteredEntries.length !== entries.length
-                ? ` of ${entries.length}`
-                : ""}
-              )
-            </h2>
-            <div className="flex flex-wrap gap-2 text-xs">
-              {favoriteEntries.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    void actions.sendBatchComfyUi(
-                      favoriteEntries.map((entry) => entry.prompt),
-                    )
-                  }
-                  className="text-violet-400 hover:text-violet-300"
-                >
-                  Queue favorites to ComfyUI ({favoriteEntries.length})
-                </button>
-              )}
-              {entries.length > 0 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => downloadHistoryExport(filteredEntries)}
-                    className="text-zinc-500 hover:text-zinc-300"
-                  >
-                    Export filtered
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => downloadHistoryExport(entries)}
-                    className="text-zinc-500 hover:text-zinc-300"
-                  >
-                    Export all
-                  </button>
-                  <button
-                    type="button"
-                    onClick={clearHistory}
-                    className="text-zinc-500 hover:text-zinc-300"
-                  >
-                    Clear all
-                  </button>
-                </>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  downloadStudioBackup();
-                  setBackupStatus("Studio backup downloaded.");
-                }}
-                className="text-zinc-500 hover:text-zinc-300"
-              >
-                Export backup
-              </button>
-              <label className="cursor-pointer text-zinc-500 hover:text-zinc-300">
-                Import backup
-                <input
-                  type="file"
-                  accept="application/json,.json"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) {
-                      void handleImportBackup(file);
+        <ToolSection title="Saved prompts">
+          <ToolMetaPanel>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <p className="type-heading">
+                {filteredEntries.length}
+                {filteredEntries.length !== entries.length
+                  ? ` of ${entries.length}`
+                  : ""}{" "}
+                entries
+              </p>
+              <div className="ui-list-actions">
+                {favoriteEntries.length > 0 && (
+                  <Button
+                    variant="accent-outline"
+                    className="!min-h-9"
+                    onClick={() =>
+                      void actions.sendBatchComfyUi(
+                        favoriteEntries.map((entry) => entry.prompt),
+                      )
                     }
-                    event.target.value = "";
+                  >
+                    Queue favorites ({favoriteEntries.length})
+                  </Button>
+                )}
+                {entries.length > 0 && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      className="!min-h-9"
+                      onClick={() => downloadHistoryExport(filteredEntries)}
+                    >
+                      Export filtered
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="!min-h-9"
+                      onClick={() => downloadHistoryExport(entries)}
+                    >
+                      Export all
+                    </Button>
+                    <Button variant="ghost" className="!min-h-9" onClick={clearHistory}>
+                      Clear all
+                    </Button>
+                  </>
+                )}
+                <Button
+                  variant="ghost"
+                  className="!min-h-9"
+                  onClick={() => {
+                    downloadStudioBackup();
+                    setBackupStatus("Studio backup downloaded.");
                   }}
-                />
-              </label>
-            </div>
-          </div>
-
-          {entries.length > 0 && (
-            <div className="flex flex-wrap items-end gap-3 border-b border-zinc-800 pb-4 text-xs">
-              <div className="space-y-1">
-                <label className="text-zinc-500">Search</label>
-                <input
-                  value={historyFilter.query ?? ""}
-                  onChange={(event) =>
-                    setHistoryFilter((previous) => ({
-                      ...previous,
-                      query: event.target.value || undefined,
-                    }))
-                  }
-                  placeholder="prompt, hints, tool…"
-                  className="w-48 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1 text-zinc-200"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-zinc-500">Tool</label>
-                <select
-                  value={historyFilter.tool ?? "all"}
-                  onChange={(event) =>
-                    setHistoryFilter((previous) => ({
-                      ...previous,
-                      tool:
-                        event.target.value === "all"
-                          ? undefined
-                          : event.target.value,
-                    }))
-                  }
-                  className="rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1 text-zinc-200"
                 >
-                  <option value="all">All tools</option>
-                  {uniqueHistoryTools(entries).map((tool) => (
-                    <option key={tool} value={tool}>
-                      {tool}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-zinc-500">Model</label>
-                <select
-                  value={historyFilter.model ?? "all"}
-                  onChange={(event) =>
-                    setHistoryFilter((previous) => ({
-                      ...previous,
-                      model:
-                        event.target.value === "all"
-                          ? undefined
-                          : event.target.value,
-                    }))
-                  }
-                  className="rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1 text-zinc-200"
-                >
-                  <option value="all">All models</option>
-                  {uniqueHistoryModels(entries).map((model) => (
-                    <option key={model} value={model}>
-                      {model}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-zinc-500">Tag</label>
-                <select
-                  value={historyFilter.tag ?? "all"}
-                  onChange={(event) =>
-                    setHistoryFilter((previous) => ({
-                      ...previous,
-                      tag:
-                        event.target.value === "all"
-                          ? undefined
-                          : event.target.value,
-                    }))
-                  }
-                  className="rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1 text-zinc-200"
-                >
-                  <option value="all">All tags</option>
-                  {uniqueHistoryTags(entries).map((tag) => (
-                    <option key={tag} value={tag}>
-                      {tag}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <label className="flex items-center gap-2 text-zinc-400">
-                <input
-                  type="checkbox"
-                  checked={historyFilter.favoritesOnly === true}
-                  onChange={(event) =>
-                    setHistoryFilter((previous) => ({
-                      ...previous,
-                      favoritesOnly: event.target.checked || undefined,
-                    }))
-                  }
-                  className="h-3.5 w-3.5 rounded border-zinc-600 bg-zinc-950 accent-violet-500"
-                />
-                Favorites only
-              </label>
-              <div className="space-y-1">
-                <label className="text-zinc-500">Min rating</label>
-                <select
-                  value={historyFilter.minRating ?? 0}
-                  onChange={(event) => {
-                    const value = Number(event.target.value);
-                    setHistoryFilter((previous) => ({
-                      ...previous,
-                      minRating: value > 0 ? value : undefined,
-                    }));
-                  }}
-                  className="rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1 text-zinc-200"
-                >
-                  <option value={0}>Any</option>
-                  {[1, 2, 3, 4, 5].map((rating) => (
-                    <option key={rating} value={rating}>
-                      {rating}+ stars
-                    </option>
-                  ))}
-                </select>
+                  Export backup
+                </Button>
+                <label className="ui-btn-ghost inline-flex !min-h-9 cursor-pointer items-center px-4">
+                  Import backup
+                  <input
+                    type="file"
+                    accept="application/json,.json"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) {
+                        void handleImportBackup(file);
+                      }
+                      event.target.value = "";
+                    }}
+                  />
+                </label>
               </div>
             </div>
-          )}
 
-          {backupStatus && (
-            <p className="text-xs text-zinc-500">{backupStatus}</p>
-          )}
+            {entries.length > 0 && (
+              <div className="grid gap-4 pt-2 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="space-y-2">
+                  <FieldLabel htmlFor="history-search">Search</FieldLabel>
+                  <input
+                    id="history-search"
+                    value={historyFilter.query ?? ""}
+                    onChange={(event) =>
+                      setHistoryFilter((previous) => ({
+                        ...previous,
+                        query: event.target.value || undefined,
+                      }))
+                    }
+                    placeholder="prompt, hints, tool…"
+                    className="ui-input px-[var(--input-padding-x)] py-[var(--input-padding-y)] type-body"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <FieldLabel htmlFor="history-tool">Tool</FieldLabel>
+                  <select
+                    id="history-tool"
+                    value={historyFilter.tool ?? "all"}
+                    onChange={(event) =>
+                      setHistoryFilter((previous) => ({
+                        ...previous,
+                        tool:
+                          event.target.value === "all"
+                            ? undefined
+                            : event.target.value,
+                      }))
+                    }
+                    className="ui-input px-3 py-[var(--input-padding-y)] type-body"
+                  >
+                    <option value="all">All tools</option>
+                    {uniqueHistoryTools(entries).map((tool) => (
+                      <option key={tool} value={tool}>
+                        {tool}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <FieldLabel htmlFor="history-model">Model</FieldLabel>
+                  <select
+                    id="history-model"
+                    value={historyFilter.model ?? "all"}
+                    onChange={(event) =>
+                      setHistoryFilter((previous) => ({
+                        ...previous,
+                        model:
+                          event.target.value === "all"
+                            ? undefined
+                            : event.target.value,
+                      }))
+                    }
+                    className="ui-input px-3 py-[var(--input-padding-y)] type-body"
+                  >
+                    <option value="all">All models</option>
+                    {uniqueHistoryModels(entries).map((model) => (
+                      <option key={model} value={model}>
+                        {model}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <FieldLabel htmlFor="history-tag">Tag</FieldLabel>
+                  <select
+                    id="history-tag"
+                    value={historyFilter.tag ?? "all"}
+                    onChange={(event) =>
+                      setHistoryFilter((previous) => ({
+                        ...previous,
+                        tag:
+                          event.target.value === "all"
+                            ? undefined
+                            : event.target.value,
+                      }))
+                    }
+                    className="ui-input px-3 py-[var(--input-padding-y)] type-body"
+                  >
+                    <option value="all">All tags</option>
+                    {uniqueHistoryTags(entries).map((tag) => (
+                      <option key={tag} value={tag}>
+                        {tag}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <label className="flex items-center gap-3 self-end pb-1 type-body">
+                  <input
+                    type="checkbox"
+                    checked={historyFilter.favoritesOnly === true}
+                    onChange={(event) =>
+                      setHistoryFilter((previous) => ({
+                        ...previous,
+                        favoritesOnly: event.target.checked || undefined,
+                      }))
+                    }
+                    className={`h-4 w-4 rounded-[var(--radius-sm)] ${accentFocusClass()}`}
+                  />
+                  Favorites only
+                </label>
+                <div className="space-y-2">
+                  <FieldLabel htmlFor="history-rating">Min rating</FieldLabel>
+                  <select
+                    id="history-rating"
+                    value={historyFilter.minRating ?? 0}
+                    onChange={(event) => {
+                      const value = Number(event.target.value);
+                      setHistoryFilter((previous) => ({
+                        ...previous,
+                        minRating: value > 0 ? value : undefined,
+                      }));
+                    }}
+                    className="ui-input px-3 py-[var(--input-padding-y)] type-body"
+                  >
+                    <option value={0}>Any</option>
+                    {[1, 2, 3, 4, 5].map((rating) => (
+                      <option key={rating} value={rating}>
+                        {rating}+ stars
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+          </ToolMetaPanel>
 
+          {backupStatus &&
+            (isLikelyErrorStatus(backupStatus) ? (
+              <ErrorState
+                compact
+                title="Action failed"
+                description={backupStatus}
+                action={{
+                  label: "Dismiss",
+                  onClick: () => setBackupStatus(null),
+                }}
+              />
+            ) : (
+              <SuccessBanner message={backupStatus} />
+            ))}
           {actions.comfyUiStatus && (
-            <p className="text-xs text-violet-400">{actions.comfyUiStatus}</p>
+            <p className="type-caption text-[var(--accent-text)]">
+              {actions.comfyUiStatus}
+            </p>
           )}
 
           {entries.length === 0 ? (
-            <p className="text-sm text-zinc-500">
-              Generate prompts in Duo or other tools, then save them here.
-            </p>
+            <EmptyState
+              icon="inbox"
+              title="No saved prompts yet"
+              description="Generate a scene in Duo or another tool, then use Save to history on the result panel. Your prompts will appear here for re-queue, export, and diff."
+              action={{ label: "Open Duo", href: "/duo" }}
+            />
           ) : filteredEntries.length === 0 ? (
-            <p className="text-sm text-zinc-500">
-              No history entries match the current filters.
-            </p>
+            <EmptyState
+              icon="search"
+              title="No matches for these filters"
+              description="Try a broader search term or remove tool, model, tag, or rating filters to see more history entries."
+              action={{
+                label: "Clear filters",
+                onClick: () => setHistoryFilter({}),
+              }}
+            />
           ) : (
-            <div className="space-y-3">
+            <ToolBlockGroup className="mt-[var(--block-gap)]">
               {filteredEntries.map((entry) => (
                 <HistoryCard
                   key={entry.id}
@@ -568,13 +652,13 @@ export default function StudioTool() {
                   }}
                 />
               ))}
-            </div>
+            </ToolBlockGroup>
           )}
-        </section>
+        </ToolSection>
       )}
 
       {tab === "compare" && (
-        <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+        <ToolSection>
           <SharedToolControls
             shared={shared}
             onModelChange={(model) => updateShared({ model })}
@@ -584,11 +668,11 @@ export default function StudioTool() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-200">Model A</label>
+          <FieldLabel>Model A</FieldLabel>
               <p className="text-xs text-zinc-500">{shared.model}</p>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-200">Model B</label>
+              <FieldLabel>Model B</FieldLabel>
               <input
                 value={toolSettings.compareModelB ?? "flux-2-klein"}
                 onChange={(event) =>
@@ -599,22 +683,37 @@ export default function StudioTool() {
             </div>
           </div>
 
-          <textarea
+          <TextArea
             rows={3}
             value={compareHints}
             onChange={(event) => setCompareHints(event.target.value)}
-            className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm"
+            className={accentFocusClass(ACCENT)}
           />
 
-          <button
-            type="button"
+          <PrimaryButton
+            accentClassName={accentButtonClass(ACCENT)}
             onClick={runCompare}
-            disabled={compareLoading}
-            className="rounded-xl bg-violet-600 px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            loading={compareLoading}
+            loadingLabel="Comparing models"
           >
-            {compareLoading ? "Comparing…" : "Compare models"}
-          </button>
+            Compare models
+          </PrimaryButton>
 
+          {compareError && (
+            <ErrorState
+              compact
+              title="Comparison failed"
+              description={compareError}
+              action={{
+                label: "Try again",
+                onClick: () => void runCompare(),
+              }}
+            />
+          )}
+
+          {compareLoading ? (
+            <CompareCardsSkeleton />
+          ) : compareA || compareB ? (
           <div className="grid gap-4 lg:grid-cols-2">
             {compareA && (
               <CompareCard title={`Model A · ${shared.model}`} result={compareA} />
@@ -626,106 +725,183 @@ export default function StudioTool() {
               />
             )}
           </div>
-        </section>
+          ) : (
+            <EmptyState
+              icon="compare"
+              title="Run a side-by-side comparison"
+              description="Enter shared hints above, choose Model B, then compare how each architecture writes the same duo scene."
+              action={{
+                label: "Compare models",
+                onClick: () => void runCompare(),
+              }}
+            />
+          )}
+        </ToolSection>
       )}
 
       {tab === "catalog" && (
-        <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+        <ToolSection title="Catalog browser">
           <input
             value={catalogQuery}
             onChange={(event) => setCatalogQuery(event.target.value)}
             placeholder="Search clothing or locations…"
-            className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm"
+            className="ui-input px-[var(--input-padding-x)] py-[var(--input-padding-y)] type-body"
           />
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div>
-              <h3 className="mb-2 text-sm font-medium text-zinc-200">Clothing</h3>
-              <ul className="max-h-80 space-y-1 overflow-y-auto text-xs text-zinc-400">
+          <div className="mt-[var(--block-gap)] grid gap-[var(--block-gap)] lg:grid-cols-2">
+            {catalogError ? (
+              <div className="lg:col-span-2">
+                <ErrorState
+                  title="Catalog unavailable"
+                  description={catalogError}
+                  action={{
+                    label: "Retry",
+                    onClick: () => void loadCatalog(catalogQuery),
+                  }}
+                />
+              </div>
+            ) : catalogLoading ? (
+              <>
+                <ToolBlockGroup title="Clothing">
+                  <DataListSkeleton rows={6} />
+                </ToolBlockGroup>
+                <ToolBlockGroup title="Locations">
+                  <DataListSkeleton rows={6} />
+                </ToolBlockGroup>
+              </>
+            ) : (
+              <>
+            <ToolBlockGroup title="Clothing">
+              {catalogClothing.length === 0 ? (
+                <EmptyState
+                  compact
+                  icon="catalog"
+                  title="No clothing found"
+                  description={
+                    catalogQuery.trim()
+                      ? "Nothing matched your search. Try a shorter query or clear the filter."
+                      : "The catalog returned no wardrobe entries."
+                  }
+                  action={
+                    catalogQuery.trim()
+                      ? {
+                          label: "Clear search",
+                          onClick: () => setCatalogQuery(""),
+                        }
+                      : {
+                          label: "Reload catalog",
+                          onClick: () => void loadCatalog(""),
+                        }
+                  }
+                />
+              ) : (
+              <DataList>
                 {catalogClothing.map((entry) => (
-                  <li
-                    key={entry.id}
-                    className="flex items-center justify-between gap-2 rounded border border-zinc-800 px-2 py-1"
-                  >
-                    <span>
-                      <span className="text-zinc-200">{entry.label}</span>
-                      <span className="text-zinc-600"> · {entry.category}</span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => updateShared({ lockedWardrobeId: entry.id })}
-                      className={`shrink-0 rounded px-2 py-0.5 text-[10px] ${
-                        shared.lockedWardrobeId === entry.id
-                          ? "bg-sky-500/20 text-sky-200"
-                          : "text-zinc-500 hover:text-sky-300"
-                      }`}
-                    >
-                      {shared.lockedWardrobeId === entry.id ? "Locked" : "Lock kit"}
-                    </button>
-                  </li>
+                  <DataListRow key={entry.id}>
+                    <DataListPrimary
+                      title={entry.label}
+                      subtitle={entry.category}
+                    />
+                    <DataListActions>
+                      <Button
+                        variant={
+                          shared.lockedWardrobeId === entry.id
+                            ? "info"
+                            : "ghost"
+                        }
+                        className="!min-h-8 px-3 type-caption"
+                        onClick={() => updateShared({ lockedWardrobeId: entry.id })}
+                      >
+                        {shared.lockedWardrobeId === entry.id ? "Locked" : "Lock kit"}
+                      </Button>
+                    </DataListActions>
+                  </DataListRow>
                 ))}
-              </ul>
-            </div>
-            <div>
-              <h3 className="mb-2 text-sm font-medium text-zinc-200">
-                Locations · blocklist ({blocklist.length})
-              </h3>
-              <ul className="max-h-80 space-y-1 overflow-y-auto text-xs">
+              </DataList>
+              )}
+            </ToolBlockGroup>
+            <ToolBlockGroup title={`Locations · blocklist (${blocklist.length})`}>
+              {catalogLocations.length === 0 ? (
+                <EmptyState
+                  compact
+                  icon="catalog"
+                  title="No locations found"
+                  description={
+                    catalogQuery.trim()
+                      ? "Nothing matched your search. Try a different keyword or clear the filter."
+                      : "The catalog returned no location entries."
+                  }
+                  action={
+                    catalogQuery.trim()
+                      ? {
+                          label: "Clear search",
+                          onClick: () => setCatalogQuery(""),
+                        }
+                      : {
+                          label: "Reload catalog",
+                          onClick: () => void loadCatalog(""),
+                        }
+                  }
+                />
+              ) : (
+              <DataList>
                 {catalogLocations.map((entry) => {
                   const blocked = blocklist.includes(entry.label);
                   const locked = shared.lockedLocation === entry.label;
                   return (
-                    <li
-                      key={entry.id}
-                      className="flex items-center justify-between gap-2 rounded border border-zinc-800 px-2 py-1"
-                    >
+                    <DataListRow key={entry.id}>
                       <button
                         type="button"
                         onClick={() => toggleBlockLocation(entry.label)}
-                        className={`flex-1 text-left transition ${
-                          blocked
-                            ? "text-rose-200"
-                            : "text-zinc-400 hover:text-zinc-200"
-                        }`}
+                        className="ui-list-primary text-left transition hover:text-[var(--text-primary)]"
                       >
-                        {entry.label}
-                        {blocked ? " · blocked" : ""}
+                        <p
+                          className={`type-heading ui-truncate ${
+                            blocked
+                              ? "text-[var(--tint-danger-text)]"
+                              : "text-[var(--text-primary)]"
+                          }`}
+                        >
+                          {entry.label}
+                          {blocked ? " · blocked" : ""}
+                        </p>
                       </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updateShared({
-                            lockedLocation:
-                              locked ? undefined : entry.label,
-                          })
-                        }
-                        className={`shrink-0 rounded px-2 py-0.5 text-[10px] ${
-                          locked
-                            ? "bg-amber-500/20 text-amber-200"
-                            : "text-zinc-500 hover:text-amber-300"
-                        }`}
-                      >
-                        {locked ? "Locked" : "Lock location"}
-                      </button>
-                    </li>
+                      <DataListActions>
+                        <Button
+                          variant={locked ? "secondary" : "ghost"}
+                          className="!min-h-8 px-3 type-caption"
+                          onClick={() =>
+                            updateShared({
+                              lockedLocation: locked ? undefined : entry.label,
+                            })
+                          }
+                        >
+                          {locked ? "Locked" : "Lock location"}
+                        </Button>
+                      </DataListActions>
+                    </DataListRow>
                   );
                 })}
-              </ul>
-            </div>
+              </DataList>
+              )}
+            </ToolBlockGroup>
+              </>
+            )}
           </div>
-        </section>
+        </ToolSection>
       )}
 
       {tab === "templates" && (
-        <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+        <ToolSection>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-zinc-200">Template</label>
+            <FieldLabel htmlFor="studio-template-select">Template</FieldLabel>
             <select
+              id="studio-template-select"
               value={toolSettings.templateId ?? "duo-sport-race"}
               onChange={(event) =>
                 updateToolSettings({ templateId: event.target.value })
               }
-              className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm"
+              className="ui-input w-full px-[var(--input-padding-x)] py-[var(--input-padding-y)] type-body"
             >
               <optgroup label="Built-in">
                 {BUILTIN_PROMPT_TEMPLATES.map((entry) => (
@@ -746,21 +922,34 @@ export default function StudioTool() {
             </select>
           </div>
 
-          <div className="grid gap-3 border-t border-zinc-800 pt-4 sm:grid-cols-2">
+          {!template ? (
+            <EmptyState
+              icon="template"
+              title="Template not found"
+              description="The selected template may have been deleted. Choose a built-in template from the list above to continue editing slots and preview."
+              action={{
+                label: "Use default template",
+                onClick: () => updateToolSettings({ templateId: "duo-sport-race" }),
+              }}
+            />
+          ) : (
+            <>
+          <div className="grid gap-3 border-t border-[var(--border-subtle)] pt-4 sm:grid-cols-2">
             <input
+              id="studio-custom-template-name"
               value={customTemplateName}
               onChange={(event) => setCustomTemplateName(event.target.value)}
               placeholder="Custom template name"
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+              className="ui-input px-[var(--input-padding-x)] py-[var(--input-padding-y)] type-body"
             />
-            <button
-              type="button"
+            <PrimaryButton
+              accentClassName={accentButtonClass(ACCENT)}
               disabled={!customTemplateName.trim() || !filledTemplate.trim()}
               onClick={() => {
                 const created = createUserTemplate({
                   name: customTemplateName,
                   template: filledTemplate,
-                  defaultPortraitStyle: template?.defaultPortraitStyle,
+                  defaultPortraitStyle: template.defaultPortraitStyle,
                 });
                 upsertUserTemplate(created);
                 setUserTemplates(loadUserTemplates());
@@ -768,74 +957,96 @@ export default function StudioTool() {
                 setCustomTemplateName("");
                 setBackupStatus(`Saved custom template “${created.label}”.`);
               }}
-              className="rounded-lg border border-violet-700/60 px-3 py-2 text-sm text-violet-200 disabled:opacity-50"
             >
               Save preview as custom template
-            </button>
+            </PrimaryButton>
           </div>
 
-          {template && userTemplates.some((entry) => entry.id === template.id) && (
-            <button
-              type="button"
+          {userTemplates.some((entry) => entry.id === template.id) && (
+            <Button
+              variant="danger"
+              className="!min-h-8 px-3 type-caption"
               onClick={() => {
                 deleteUserTemplate(template.id);
                 setUserTemplates(loadUserTemplates());
                 updateToolSettings({ templateId: "duo-sport-race" });
                 setBackupStatus(`Deleted template “${template.label}”.`);
               }}
-              className="text-xs text-rose-400 hover:text-rose-300"
             >
               Delete custom template
-            </button>
+            </Button>
           )}
 
-          {template && (
-            <>
-              <p className="font-mono text-xs text-zinc-500">{template.template}</p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {Array.from(
-                  template.template.matchAll(/\{\{(\w+)\}\}/g),
-                  (match) => match[1]!,
-                ).map((slot) => (
-                  <div key={slot} className="space-y-1">
-                    <label className="text-xs text-zinc-400">{slot}</label>
-                    <input
-                      value={toolSettings.templateSlots?.[slot] ?? ""}
-                      onChange={(event) =>
-                        updateToolSettings({
-                          templateSlots: {
-                            ...toolSettings.templateSlots,
-                            [slot]: event.target.value,
-                          },
-                        })
-                      }
-                      className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
-                    />
-                  </div>
-                ))}
-              </div>
+          <ToolContentPanel>
+            <p className="type-code whitespace-pre-wrap !bg-transparent !p-0 text-[var(--text-secondary)]">
+              {template.template}
+            </p>
+          </ToolContentPanel>
 
-              <EnhancedPromptResult
-                output={filledTemplate}
-                provider={null}
-                copied={copied}
-                onCopy={() => copyText(filledTemplate)}
-                extraMeta="template preview"
-              />
+          {Array.from(
+            template.template.matchAll(/\{\{(\w+)\}\}/g),
+            (match) => match[1]!,
+          ).length === 0 ? (
+            <EmptyState
+              compact
+              icon="template"
+              title="No template slots"
+              description="This template has no {{slot}} placeholders. Edit the template text or pick another template to fill variables."
+              action={{
+                label: "Browse built-ins",
+                onClick: () =>
+                  document.getElementById("studio-template-select")?.focus(),
+              }}
+            />
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {Array.from(
+                template.template.matchAll(/\{\{(\w+)\}\}/g),
+                (match) => match[1]!,
+              ).map((slot) => (
+                <div key={slot} className="space-y-2">
+                  <FieldLabel htmlFor={`studio-template-slot-${slot}`}>
+                    {slot}
+                  </FieldLabel>
+                  <input
+                    id={`studio-template-slot-${slot}`}
+                    value={toolSettings.templateSlots?.[slot] ?? ""}
+                    onChange={(event) =>
+                      updateToolSettings({
+                        templateSlots: {
+                          ...toolSettings.templateSlots,
+                          [slot]: event.target.value,
+                        },
+                      })
+                    }
+                    className="ui-input w-full px-[var(--input-padding-x)] py-[var(--input-padding-y)] type-body"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
 
-              <a
-                href={`/duo?hints=${encodeURIComponent(filledTemplate)}`}
-                className="inline-flex text-sm text-emerald-400 hover:text-emerald-300"
-              >
-                Open in Duo generator →
-              </a>
+          <EnhancedPromptResult
+            output={filledTemplate}
+            provider={null}
+            copied={copied}
+            onCopy={() => copyText(filledTemplate)}
+            extraMeta="template preview"
+          />
+
+          <Link
+            href={`/duo?hints=${encodeURIComponent(filledTemplate)}`}
+            className="ui-btn-primary inline-flex w-fit"
+          >
+            Open in Duo generator
+          </Link>
             </>
           )}
-        </section>
+        </ToolSection>
       )}
 
       {tab === "presets" && (
-        <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+        <ToolSection>
           <p className="text-sm text-zinc-400">
             Save named bundles of hints and shared locks (kit, location, seed) for
             quick reuse across Character, Duo, and Random Scene.
@@ -862,27 +1073,29 @@ export default function StudioTool() {
 
           <div className="grid gap-3 border-t border-zinc-800 pt-4 sm:grid-cols-2">
             <div className="space-y-1">
-              <label className="text-xs text-zinc-400">Preset name</label>
+              <FieldLabel htmlFor="studio-preset-name">Preset name</FieldLabel>
               <input
+                id="studio-preset-name"
                 value={presetName}
                 onChange={(event) => setPresetName(event.target.value)}
                 placeholder="Gravel duo night race"
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+                className="ui-input w-full px-[var(--input-padding-x)] py-[var(--input-padding-y)] type-body"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs text-zinc-400">Hints (optional)</label>
+              <FieldLabel htmlFor="studio-preset-hints">Hints (optional)</FieldLabel>
               <input
+                id="studio-preset-hints"
                 value={presetHints}
                 onChange={(event) => setPresetHints(event.target.value)}
                 placeholder={compareHints}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+                className="ui-input w-full px-[var(--input-padding-x)] py-[var(--input-padding-y)] type-body"
               />
             </div>
           </div>
 
-          <button
-            type="button"
+          <PrimaryButton
+            accentClassName={accentButtonClass(ACCENT)}
             disabled={!presetName.trim()}
             onClick={() => {
               const preset = buildScenePresetFromCurrent({
@@ -896,32 +1109,41 @@ export default function StudioTool() {
               setPresetName("");
               setBackupStatus(`Saved preset “${preset.name}”.`);
             }}
-            className="rounded-xl bg-violet-600 px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
           >
             Save current locks as preset
-          </button>
+          </PrimaryButton>
 
           {scenePresets.length === 0 ? (
-            <p className="text-sm text-zinc-500">No scene presets saved yet.</p>
+            <EmptyState
+              icon="preset"
+              title="No scene presets saved"
+              description="Enter a name and optional hints above, then save your current locks as a reusable preset you can apply or share with Duo."
+              action={{
+                label: "Name a preset",
+                onClick: () => {
+                  document.getElementById("studio-preset-name")?.focus();
+                },
+              }}
+            />
           ) : (
-            <ul className="space-y-2">
+            <DataList scrollable={false} className="mt-[var(--block-gap)]">
               {scenePresets.map((preset) => (
-                <li
-                  key={preset.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm"
-                >
-                  <div>
-                    <p className="font-medium text-zinc-200">{preset.name}</p>
-                    <p className="text-xs text-zinc-500">
-                      {preset.hints ? preset.hints.slice(0, 80) : "No hints"}
-                      {preset.sharedLocks?.lockedLocation
-                        ? ` · location: ${preset.sharedLocks.lockedLocation}`
-                        : ""}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2 text-xs">
-                    <button
-                      type="button"
+                <DataListRow key={preset.id} className="!items-start !py-4">
+                  <DataListPrimary
+                    title={preset.name}
+                    subtitle={
+                      <>
+                        {preset.hints ? preset.hints : "No hints"}
+                        {preset.sharedLocks?.lockedLocation
+                          ? ` · location: ${preset.sharedLocks.lockedLocation}`
+                          : ""}
+                      </>
+                    }
+                  />
+                  <DataListActions>
+                    <Button
+                      variant="ghost"
+                      className="!min-h-8 px-3 type-caption"
                       onClick={() => {
                         updateShared(applyScenePresetLocks(preset));
                         if (preset.hints) {
@@ -929,12 +1151,12 @@ export default function StudioTool() {
                         }
                         setBackupStatus(`Applied preset “${preset.name}”.`);
                       }}
-                      className="text-emerald-400 hover:text-emerald-300"
                     >
                       Apply locks
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="!min-h-8 px-3 type-caption"
                       onClick={() => {
                         const url = buildScenePresetShareUrl(
                           "/duo",
@@ -958,12 +1180,11 @@ export default function StudioTool() {
                         setCopiedPresetShareId(preset.id);
                         window.setTimeout(() => setCopiedPresetShareId(null), 2000);
                       }}
-                      className="text-violet-400 hover:text-violet-300"
                     >
                       {copiedPresetShareId === preset.id
                         ? "Copied link!"
                         : "Copy share link"}
-                    </button>
+                    </Button>
                     <a
                       href={buildScenePresetShareUrl(
                         "/duo",
@@ -978,41 +1199,53 @@ export default function StudioTool() {
                           },
                         }),
                       )}
-                      className="text-zinc-400 hover:text-zinc-200"
+                      className="ui-btn-ghost !min-h-8 px-3 type-caption"
                     >
                       Open Duo
                     </a>
-                    <button
-                      type="button"
+                    <Button
+                      variant="danger"
+                      className="!min-h-8 px-3 type-caption"
                       onClick={() => {
                         deleteScenePreset(preset.id);
                         setScenePresets(loadScenePresets());
                       }}
-                      className="text-rose-400 hover:text-rose-300"
                     >
                       Delete
-                    </button>
-                  </div>
-                </li>
+                    </Button>
+                  </DataListActions>
+                </DataListRow>
               ))}
-            </ul>
+            </DataList>
           )}
-        </section>
+        </ToolSection>
       )}
 
       {tab === "diff" && (
-        <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <p className="text-sm text-zinc-400">
-            Compare two saved prompts word-by-word. Pick entries from history or use
-            the Diff A / Diff B buttons on history cards.
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1">
-              <label className="text-xs text-zinc-500">Left (before)</label>
+        <ToolSection title="Prompt diff">
+          {entries.length === 0 ? (
+            <EmptyState
+              icon="diff"
+              title="Save prompts before diffing"
+              description="Diff compares two history entries word-by-word. Generate prompts elsewhere, save them to history, then pick left and right entries here."
+              action={{ label: "Open Duo", href: "/duo" }}
+            />
+          ) : (
+            <>
+          <ToolMetaPanel>
+            <p className="type-body">
+              Compare two saved prompts word-by-word. Pick entries from history or use
+              the Diff A / Diff B buttons on history cards.
+            </p>
+          </ToolMetaPanel>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <FieldLabel htmlFor="diff-left">Left (before)</FieldLabel>
               <select
+                id="diff-left"
                 value={diffLeftId}
                 onChange={(event) => setDiffLeftId(event.target.value)}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+                className="ui-input px-3 py-[var(--input-padding-y)] type-body"
               >
                 <option value="">Select entry…</option>
                 {entries.map((entry) => (
@@ -1022,12 +1255,13 @@ export default function StudioTool() {
                 ))}
               </select>
             </div>
-            <div className="space-y-1">
-              <label className="text-xs text-zinc-500">Right (after)</label>
+            <div className="space-y-2">
+              <FieldLabel htmlFor="diff-right">Right (after)</FieldLabel>
               <select
+                id="diff-right"
                 value={diffRightId}
                 onChange={(event) => setDiffRightId(event.target.value)}
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+                className="ui-input px-3 py-[var(--input-padding-y)] type-body"
               >
                 <option value="">Select entry…</option>
                 {entries.map((entry) => (
@@ -1039,41 +1273,58 @@ export default function StudioTool() {
             </div>
           </div>
 
-          {promptDiff && (
+          {!promptDiff ? (
+            <EmptyState
+              compact
+              icon="diff"
+              title="Select two history entries"
+              description="Choose a left and right prompt above to preview additions, removals, and unchanged text."
+              action={{
+                label: "Browse history",
+                onClick: () => setTab("history"),
+              }}
+            />
+          ) : (
             <>
-              <p className="text-xs text-zinc-500">
+              <p className="type-caption">
                 {promptDiff.beforeChars} → {promptDiff.afterChars} chars
                 {promptDiff.changed ? "" : " · identical"}
               </p>
-              <p className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-sm leading-relaxed">
+              <ToolContentPanel className="type-body-lg leading-relaxed">
                 {promptDiff.segments.map((segment, index) => (
                   <span
                     key={`${index}-${segment.type}-${segment.text.slice(0, 12)}`}
                     className={
                       segment.type === "remove"
-                        ? "bg-rose-500/20 text-rose-200 line-through"
+                        ? "bg-[var(--tint-danger-bg)] text-[var(--tint-danger-text)] line-through"
                         : segment.type === "add"
-                          ? "bg-emerald-500/20 text-emerald-200"
-                          : "text-zinc-300"
+                          ? "bg-[var(--tint-success-bg)] text-[var(--tint-success-text)]"
+                          : "text-[var(--text-secondary)]"
                     }
                   >
                     {segment.text}{" "}
                   </span>
                 ))}
-              </p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <pre className="whitespace-pre-wrap rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 font-mono text-xs text-zinc-400">
-                  {diffLeft?.prompt}
-                </pre>
-                <pre className="whitespace-pre-wrap rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 font-mono text-xs text-emerald-300">
-                  {diffRight?.prompt}
-                </pre>
+              </ToolContentPanel>
+              <div className="grid gap-[var(--group-gap)] sm:grid-cols-2">
+                <ToolContentPanel>
+                  <pre className="type-code max-h-72 overflow-auto whitespace-pre-wrap !bg-transparent !p-0 !text-[var(--text-secondary)]">
+                    {diffLeft?.prompt}
+                  </pre>
+                </ToolContentPanel>
+                <ToolContentPanel>
+                  <pre className="type-code max-h-72 overflow-auto whitespace-pre-wrap !bg-transparent !p-0 !text-[var(--tint-success-text)]">
+                    {diffRight?.prompt}
+                  </pre>
+                </ToolContentPanel>
               </div>
             </>
           )}
-        </section>
+            </>
+          )}
+        </ToolSection>
       )}
-    </div>
+    </ToolLayout>
   );
 }
 
@@ -1109,110 +1360,107 @@ function HistoryCard({
     !entry.prompt.toLowerCase().includes(entry.hints.trim().slice(0, 40).toLowerCase());
 
   return (
-    <article className="space-y-2 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
-        <span>
-          {entry.tool} · {entry.model} · {new Date(entry.timestamp).toLocaleString()}
-        </span>
-        <div className="flex gap-2">
-          <a
-            href={regenerateUrl}
-            className="text-emerald-400 hover:text-emerald-300"
-          >
-            Regenerate
-          </a>
-          <button type="button" onClick={onToggleFavorite} className="hover:text-zinc-300">
-            {entry.favorite ? "★" : "☆"}
-          </button>
-          <button type="button" onClick={onCopy} className="hover:text-zinc-300">
-            Copy
-          </button>
-          <button type="button" onClick={onExportSidecar} className="hover:text-violet-300">
-            Sidecar
-          </button>
-          <button
-            type="button"
-            onClick={() => onRequeue(false)}
-            className="hover:text-violet-300"
-          >
-            Re-queue
-          </button>
-          <button
-            type="button"
-            onClick={() => onRequeue(true)}
-            className="hover:text-violet-300"
-          >
-            Re-queue (new seed)
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              const tag = window.prompt("Add tag");
-              if (tag?.trim()) {
-                onAddTag(tag.trim());
-              }
-            }}
-            className="hover:text-sky-300"
-          >
-            Tag
-          </button>
-          <button type="button" onClick={onDiffLeft} className="hover:text-amber-300">
-            Diff A
-          </button>
-          <button type="button" onClick={onDiffRight} className="hover:text-amber-300">
-            Diff B
-          </button>
-          <button type="button" onClick={onSaveTemplate} className="hover:text-violet-300">
-            Template
-          </button>
-          <button type="button" onClick={onRemove} className="hover:text-rose-300">
-            Remove
-          </button>
-        </div>
-      </div>
-      {entry.hints?.trim() && (
-        <p className="text-xs text-zinc-500">
-          Hints: <span className="text-zinc-400">{entry.hints}</span>
-        </p>
-      )}
-      {(entry.tags?.length ?? 0) > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {entry.tags!.map((tag) => (
-            <span
-              key={tag}
-              className="rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400"
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
-      )}
-      <pre className="whitespace-pre-wrap font-mono text-xs text-emerald-300">
+    <ToolContentPanel className="ui-block-group">
+      <pre className="type-code max-h-56 overflow-auto whitespace-pre-wrap border border-[var(--border-subtle)] bg-[var(--bg-muted)] p-5 !text-[var(--tint-success-text)]">
         {entry.prompt}
       </pre>
-      {showHintDiff && (
-        <p className="text-xs text-amber-400/80">
-          Prompt expanded beyond the saved hints — use Regenerate to roll again with the same inputs.
-        </p>
-      )}
-      <div className="flex gap-1">
-        {[1, 2, 3, 4, 5].map((value) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => onRate(value as PromptHistoryEntry["rating"])}
-            className={`h-6 w-6 rounded text-xs ${
-              entry.rating === value
-                ? "bg-violet-500/30 text-violet-200"
-                : "bg-zinc-800 text-zinc-500"
-            }`}
-          >
-            {value}
-          </button>
-        ))}
-      </div>
-      {entry.diagnostics && <PromptDiagnosticsPanel diagnostics={entry.diagnostics} />}
-    </article>
+
+      <ToolMetaPanel>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="type-caption ui-truncate">
+            {entry.tool} · {entry.model} ·{" "}
+            {new Date(entry.timestamp).toLocaleString()}
+          </p>
+          <div className="ui-list-actions">
+            <a href={regenerateUrl} className="ui-btn-ghost !min-h-8 px-3 type-caption">
+              Regenerate
+            </a>
+            <Button variant="ghost" className="!min-h-8 px-3 type-caption" onClick={onToggleFavorite}>
+              {entry.favorite ? "★" : "☆"}
+            </Button>
+            <Button variant="ghost" className="!min-h-8 px-3 type-caption" onClick={onCopy}>
+              Copy
+            </Button>
+            <Button variant="ghost" className="!min-h-8 px-3 type-caption" onClick={onExportSidecar}>
+              Sidecar
+            </Button>
+            <Button variant="accent-outline" className="!min-h-8 px-3 type-caption" onClick={() => onRequeue(false)}>
+              Re-queue
+            </Button>
+            <Button variant="accent-outline" className="!min-h-8 px-3 type-caption" onClick={() => onRequeue(true)}>
+              Re-queue (new seed)
+            </Button>
+            <Button
+              variant="ghost"
+              className="!min-h-8 px-3 type-caption"
+              onClick={() => {
+                const tag = window.prompt("Add tag");
+                if (tag?.trim()) {
+                  onAddTag(tag.trim());
+                }
+              }}
+            >
+              Tag
+            </Button>
+            <Button variant="ghost" className="!min-h-8 px-3 type-caption" onClick={onDiffLeft}>
+              Diff A
+            </Button>
+            <Button variant="ghost" className="!min-h-8 px-3 type-caption" onClick={onDiffRight}>
+              Diff B
+            </Button>
+            <Button variant="ghost" className="!min-h-8 px-3 type-caption" onClick={onSaveTemplate}>
+              Template
+            </Button>
+            <Button variant="danger" className="!min-h-8 px-3 type-caption" onClick={onRemove}>
+              Remove
+            </Button>
+          </div>
+        </div>
+
+        {entry.hints?.trim() && (
+          <p className="type-caption ui-truncate-2">
+            Hints: <span className="text-[var(--text-secondary)]">{entry.hints}</span>
+          </p>
+        )}
+
+        {(entry.tags?.length ?? 0) > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {entry.tags!.map((tag) => (
+              <span
+                key={tag}
+                className="type-overline rounded-[var(--radius-full)] border border-[var(--border-default)] bg-[var(--bg-subtle)] px-2.5 py-1"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {showHintDiff && (
+          <p className="type-caption text-[var(--tint-warning-text)]">
+            Prompt expanded beyond the saved hints — use Regenerate to roll again with the same inputs.
+          </p>
+        )}
+
+        <div className="flex gap-2">
+          {[1, 2, 3, 4, 5].map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => onRate(value as PromptHistoryEntry["rating"])}
+              className={`ui-chip !min-h-8 !min-w-8 justify-center px-0 ${
+                entry.rating === value ? "" : ""
+              }`}
+              data-active={entry.rating === value ? "true" : "false"}
+            >
+              {value}
+            </button>
+          ))}
+        </div>
+
+        {entry.diagnostics && <PromptDiagnosticsPanel diagnostics={entry.diagnostics} />}
+      </ToolMetaPanel>
+    </ToolContentPanel>
   );
 }
 
@@ -1224,12 +1472,12 @@ function CompareCard({
   result: EnrichedToolGenerateResult;
 }) {
   return (
-    <div className="space-y-2 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
-      <h3 className="text-sm font-medium text-zinc-200">{title}</h3>
-      <pre className="whitespace-pre-wrap font-mono text-xs text-emerald-300">
+    <ToolContentPanel className="ui-block-group">
+      <h3 className="type-title ui-truncate">{title}</h3>
+      <pre className="type-code max-h-72 overflow-auto whitespace-pre-wrap border border-[var(--border-subtle)] bg-[var(--bg-muted)] p-5 !text-[var(--tint-success-text)]">
         {result.prompt}
       </pre>
       <PromptDiagnosticsPanel diagnostics={result.diagnostics ?? null} />
-    </div>
+    </ToolContentPanel>
   );
 }

@@ -7,6 +7,10 @@ import type { DetailLevel } from "@/lib/detail-level";
 import { getDetailLimits } from "@/lib/detail-level";
 import { getComfyModelDefinition } from "@/lib/comfy-models";
 import type { SharedToolSettings } from "@/lib/settings-cache";
+import { accentRingClass } from "@/lib/tool-theme";
+import { CollapsibleSection } from "@/components/ui/ToolPageShell";
+import { ChipButton, FieldDivider, FieldLabel } from "@/components/ui/Field";
+import { Button } from "@/components/ui/Button";
 
 type SharedToolControlsProps = {
   shared: SharedToolSettings;
@@ -52,27 +56,28 @@ export default function SharedToolControls({
   const selectedModel = getComfyModelDefinition(shared.model);
   const activeLimits = getDetailLimits(shared.detail, shared.model);
   const workflowSelection = useComfyWorkflowSelection();
+  const checkboxClass = `mt-1 h-4 w-4 rounded-[var(--radius-sm)] border-[var(--border-default)] bg-[var(--bg-muted)] ${accentRingClass()}`;
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-3">
-        <div>
-          <p className="text-sm font-medium text-zinc-200">Target model</p>
-          <p className="mt-1 text-xs text-zinc-500">
-            Shared across tools and remembered between page reloads.
-          </p>
-        </div>
+    <div className="space-y-6">
+      <div className="space-y-4">
+        <FieldLabel hint="Shared across tools and remembered between page reloads.">
+          Target model
+        </FieldLabel>
         <ModelSelector value={shared.model} onChange={onModelChange} />
       </div>
 
-      <div className="space-y-3 border-t border-zinc-800 pt-4">
-        <div>
-          <p className="text-sm font-medium text-zinc-200">Prompt detail</p>
-          <p className="mt-1 text-xs text-zinc-500">
-            {detailHelp ??
-              `Limits for ${selectedModel.label}: up to ${activeLimits.maxSentences} sentences, ~${activeLimits.maxChars} chars.`}
-          </p>
-        </div>
+      <FieldDivider />
+
+      <div className="space-y-3">
+        <FieldLabel
+          hint={
+            detailHelp ??
+            `Limits for ${selectedModel.label}: up to ${activeLimits.maxSentences} sentences, ~${activeLimits.maxChars} chars.`
+          }
+        >
+          Prompt detail
+        </FieldLabel>
         <div className="flex flex-wrap gap-2">
           {(
             [
@@ -81,18 +86,13 @@ export default function SharedToolControls({
               { label: "Rich", value: "rich" },
             ] as const
           ).map((preset) => (
-            <button
+            <ChipButton
               key={preset.value}
-              type="button"
+              active={shared.detail === preset.value}
               onClick={() => onDetailChange(preset.value)}
-              className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
-                shared.detail === preset.value
-                  ? "border-violet-500 bg-violet-500/15 text-violet-200"
-                  : "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
-              }`}
             >
               {preset.label}
-            </button>
+            </ChipButton>
           ))}
         </div>
       </div>
@@ -115,102 +115,99 @@ export default function SharedToolControls({
       )}
 
       {showWardrobeOption && onAlwaysIncludeClothingChange && (
-        <div className="space-y-3 border-t border-zinc-800 pt-4">
+        <>
+          <FieldDivider />
           <label className="flex cursor-pointer items-start gap-3">
             <input
               type="checkbox"
               checked={alwaysIncludeClothing}
               onChange={(e) => onAlwaysIncludeClothingChange(e.target.checked)}
-              className="mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-violet-500"
+              className={checkboxClass}
             />
             <span className="space-y-1">
-              <span className="text-sm font-medium text-zinc-200">
-                Always include wardrobe
-              </span>
-              <span className="block text-xs leading-relaxed text-zinc-500">
+              <span className="type-heading block">Always include wardrobe</span>
+              <span className="type-caption block">
                 {wardrobeHelp ??
-                  "Rolls catalog outfits for people in the prompt and appends assigned clothing if the model omits it. Shared across Generate, Character, and Random Scene."}
+                  "Rolls catalog outfits for people in the prompt and appends assigned clothing if the model omits it."}
               </span>
             </span>
           </label>
-        </div>
+        </>
       )}
 
-      {lockedWardrobeId && (
-        <div className="flex flex-wrap items-center gap-2 border-t border-zinc-800 pt-4 text-xs">
-          <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-1 text-sky-200">
-            Locked kit: {lockedWardrobeLabel ?? lockedWardrobeId}
-          </span>
-          {onClearLockedWardrobe && (
-            <button
-              type="button"
-              onClick={onClearLockedWardrobe}
-              className="text-zinc-500 hover:text-zinc-300"
-            >
-              Clear
-            </button>
+      {(lockedWardrobeId ||
+        lockedLocation ||
+        lockedVariationSeed ||
+        onAutoFixRulesChange) && (
+        <CollapsibleSection
+          title="Pins & automation"
+          summary="Locked scene ingredients and post-generation fixes."
+          defaultOpen={Boolean(
+            lockedWardrobeId || lockedLocation || lockedVariationSeed,
           )}
-        </div>
-      )}
-
-      {lockedLocation && (
-        <div className="flex flex-wrap items-center gap-2 border-t border-zinc-800 pt-4 text-xs">
-          <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-amber-200">
-            Locked location: {lockedLocation}
-          </span>
-          {onClearLockedLocation && (
-            <button
-              type="button"
-              onClick={onClearLockedLocation}
-              className="text-zinc-500 hover:text-zinc-300"
-            >
-              Clear
-            </button>
-          )}
-        </div>
-      )}
-
-      {lockedVariationSeed && (
-        <div className="flex flex-wrap items-center gap-2 border-t border-zinc-800 pt-4 text-xs">
-          <span
-            className="max-w-full truncate rounded-full border border-violet-500/40 bg-violet-500/10 px-2 py-1 text-violet-200"
-            title={lockedVariationSeed}
-          >
-            Locked seed: {lockedVariationSeed.length > 48
-              ? `${lockedVariationSeed.slice(0, 48)}…`
-              : lockedVariationSeed}
-          </span>
-          {onClearLockedVariationSeed && (
-            <button
-              type="button"
-              onClick={onClearLockedVariationSeed}
-              className="text-zinc-500 hover:text-zinc-300"
-            >
-              Clear
-            </button>
-          )}
-        </div>
-      )}
-
-      {onAutoFixRulesChange && (
-        <div className="space-y-3 border-t border-zinc-800 pt-4">
-          <label className="flex cursor-pointer items-start gap-3">
-            <input
-              type="checkbox"
-              checked={autoFixRules}
-              onChange={(e) => onAutoFixRulesChange(e.target.checked)}
-              className="mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-violet-500"
-            />
-            <span className="space-y-1">
-              <span className="text-sm font-medium text-zinc-200">
-                Auto-fix lint errors
+        >
+          {lockedWardrobeId && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="type-caption rounded-[var(--radius-full)] border border-[var(--tint-info-border)] bg-[var(--tint-info-bg)] px-2.5 py-1 text-[var(--tint-info-text)]">
+                Locked kit: {lockedWardrobeLabel ?? lockedWardrobeId}
               </span>
-              <span className="block text-xs leading-relaxed text-zinc-500">
-                After generation, apply rule-based fixes when lint reports errors.
+              {onClearLockedWardrobe && (
+                <Button variant="ghost" onClick={onClearLockedWardrobe} className="!min-h-8 px-2 type-caption">
+                  Clear
+                </Button>
+              )}
+            </div>
+          )}
+
+          {lockedLocation && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="type-caption rounded-[var(--radius-full)] border border-[var(--tint-warning-border)] bg-[var(--tint-warning-bg)] px-2.5 py-1 text-[var(--tint-warning-text)]">
+                Locked location: {lockedLocation}
               </span>
-            </span>
-          </label>
-        </div>
+              {onClearLockedLocation && (
+                <Button variant="ghost" onClick={onClearLockedLocation} className="!min-h-8 px-2 type-caption">
+                  Clear
+                </Button>
+              )}
+            </div>
+          )}
+
+          {lockedVariationSeed && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className="type-caption max-w-full truncate rounded-[var(--radius-full)] border border-[var(--accent-border)] bg-[var(--accent-muted)] px-2.5 py-1 text-[var(--accent-text)]"
+                title={lockedVariationSeed}
+              >
+                Locked seed:{" "}
+                {lockedVariationSeed.length > 48
+                  ? `${lockedVariationSeed.slice(0, 48)}…`
+                  : lockedVariationSeed}
+              </span>
+              {onClearLockedVariationSeed && (
+                <Button variant="ghost" onClick={onClearLockedVariationSeed} className="!min-h-8 px-2 type-caption">
+                  Clear
+                </Button>
+              )}
+            </div>
+          )}
+
+          {onAutoFixRulesChange && (
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={autoFixRules}
+                onChange={(e) => onAutoFixRulesChange(e.target.checked)}
+                className={checkboxClass}
+              />
+              <span className="space-y-1">
+                <span className="type-heading block">Auto-fix lint errors</span>
+                <span className="type-caption block">
+                  After generation, apply rule-based fixes when lint reports errors.
+                </span>
+              </span>
+            </label>
+          )}
+        </CollapsibleSection>
       )}
     </div>
   );

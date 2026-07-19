@@ -29,6 +29,45 @@ export function buildSinglePersonUserDirective(): string {
   return "SOLO SUBJECT (mandatory): exactly one person in frame. No other people, faces, silhouettes, or crowd anywhere.";
 }
 
+export function buildSoloSubjectLockDirective(hints?: string): string | null {
+  const trimmed = hints?.trim() ?? "";
+  if (!trimmed) {
+    return null;
+  }
+
+  const parts = [
+    buildSinglePersonUserDirective(),
+    "One unified photograph—no diptych, split screen, side-by-side panels, collage, or comparison layout.",
+  ];
+
+  const woman =
+    /\b(?:woman|women|girl|girls|female|lady|ladies|mother|daughter|sister|wife|girlfriend|feminine)\b/i.test(
+      trimmed,
+    );
+  const man =
+    /\b(?:man|men|boy|boys|male|guy|guys|father|son|brother|husband|boyfriend|masculine)\b/i.test(
+      trimmed,
+    );
+
+  if (woman && !man) {
+    parts.push(
+      "The subject must be a woman as described in the brief—no men, no second person, no unrelated elderly faces.",
+    );
+  } else if (man && !woman) {
+    parts.push(
+      "The subject must be a man as described in the brief—no women, no second person, no unrelated elderly faces.",
+    );
+  }
+
+  if (/\b(?:elderly|retired|teenage|teen|twenties|thirties|forties|fifties|marathon runner|sprinter)\b/i.test(trimmed)) {
+    parts.push(
+      "Keep the subject identity and age read from the brief—do not substitute a different person or add a second figure.",
+    );
+  }
+
+  return parts.join(" ");
+}
+
 function sentenceMentionsExtraPeople(sentence: string): boolean {
   return (
     MULTI_PERSON_SENTENCE.test(sentence) ||

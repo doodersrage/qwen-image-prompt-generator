@@ -13,7 +13,19 @@ import {
   type ComfyImageModel,
 } from "@/lib/comfy-models";
 import { getReformatTargetLabel, getReformatTargetModel } from "@/lib/reformat-target";
+import {
+  ToolBadge,
+  ToolLayout,
+  ToolSection,
+  accentButtonClass,
+  accentFocusClass,
+  accentRingClass,
+} from "@/components/ui/ToolPageShell";
+import { FieldDivider, FieldError, FieldLabel, TextArea } from "@/components/ui/Field";
+import { Button, PrimaryButton } from "@/components/ui/Button";
 import { DEFAULT_FORMAT_TOOL_CACHE } from "@/lib/settings-cache";
+
+const ACCENT = "emerald" as const;
 
 type FormatMode = "positive" | "negative";
 
@@ -170,39 +182,119 @@ export default function PromptFormatter() {
   }, [output]);
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
-      <header className="space-y-3">
-        <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-emerald-300">
-          Prompt formatter
-        </div>
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-50 sm:text-4xl">
-          Format for your model
-        </h1>
-        <p className="max-w-2xl text-base leading-relaxed text-zinc-400">
+    <ToolLayout
+      accent={ACCENT}
+      badge={<ToolBadge accent={ACCENT}>Prompt formatter</ToolBadge>}
+      title="Format for your model"
+      description={
+        <>
           Paste an existing prompt—tag soup, a rough sentence, or a draft from
           another model. This tool restructures and trims it for{" "}
           <code className="rounded bg-zinc-800 px-1.5 py-0.5 text-sm text-emerald-300">
             {selectedModel.comfyNode}
           </code>
           .
-        </p>
-      </header>
+        </>
+      }
+      sidebarTitle="Format settings"
+      sidebarDescription="Model, detail, and formatting options."
+      sidebar={
+        <>
+          <div className="space-y-4">
+            <FieldLabel hint="Prompt style and size limits depend on the model and detail level you choose.">
+              Target model
+            </FieldLabel>
+            <ModelSelector value={targetModel} onChange={setTargetModel} />
+          </div>
 
-      <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-xl shadow-black/20 backdrop-blur">
-        <div className="space-y-3">
-          <p className="text-sm font-medium text-zinc-200">Target model</p>
-          <ModelSelector value={targetModel} onChange={setTargetModel} />
-        </div>
+          <FieldDivider />
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800 pt-4">
-          <label htmlFor="format-input" className="text-sm font-medium text-zinc-200">
-            Prompt draft
+          <div className="space-y-3">
+            <FieldLabel hint="Controls length limits for the formatted output.">
+              Detail level
+            </FieldLabel>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  { label: "Concise", value: "concise" },
+                  { label: "Balanced", value: "balanced" },
+                  { label: "Rich", value: "rich" },
+                ] as const
+              ).map((preset) => (
+                <button
+                  key={preset.value}
+                  type="button"
+                  onClick={() => setDetail(preset.value)}
+                  className={`rounded-xl border px-3.5 py-2 text-xs font-medium transition ${
+                    detail === preset.value
+                      ? "border-emerald-500/70 bg-emerald-500/15 text-emerald-100"
+                      : "border-zinc-700/80 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs leading-relaxed text-zinc-500">
+              {activeLimits.minChars
+                ? `${activeLimits.minSentences}–${activeLimits.maxSentences} sentences, ${activeLimits.minChars}–${activeLimits.maxChars} chars`
+                : `Up to ${activeLimits.maxSentences} sentences, ~${activeLimits.maxChars} chars`}
+            </p>
+          </div>
+
+          <FieldDivider />
+
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={smartFormat}
+              onChange={(e) => setSmartFormat(e.target.checked)}
+              className={`mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-950 ${accentRingClass(ACCENT)}`}
+            />
+            <span className="space-y-1">
+              <span className="text-sm font-medium text-zinc-100">
+                Smart format (LLM)
+              </span>
+              <span className="block text-xs leading-relaxed text-zinc-500">
+                Rewrites your draft for the target model while preserving content.
+                Off uses instant rules-only cleanup.
+              </span>
+            </span>
           </label>
-          <div className="flex rounded-lg border border-zinc-700 p-0.5">
+
+          {mode === "positive" && (
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={autoFixRules}
+                onChange={(e) =>
+                  updateShared({ autoFixRules: e.target.checked })
+                }
+                className={`mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-950 ${accentRingClass(ACCENT)}`}
+              />
+              <span className="space-y-1">
+                <span className="text-sm font-medium text-zinc-100">
+                  Auto-fix lint errors
+                </span>
+                <span className="block text-xs leading-relaxed text-zinc-500">
+                  Apply rule-based fixes when lint reports errors after formatting.
+                </span>
+              </span>
+            </label>
+          )}
+        </>
+      }
+    >
+      <ToolSection>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <FieldLabel htmlFor="format-input" hint="Tags, rough prose, or a draft from another tool.">
+            Prompt draft
+          </FieldLabel>
+          <div className="flex rounded-xl border border-zinc-700/80 p-0.5">
             <button
               type="button"
               onClick={() => setModeAndCache("positive")}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`rounded-lg px-3.5 py-1.5 text-xs font-medium transition ${
                 mode === "positive"
                   ? "bg-emerald-600 text-white"
                   : "text-zinc-400 hover:text-zinc-200"
@@ -213,7 +305,7 @@ export default function PromptFormatter() {
             <button
               type="button"
               onClick={() => setModeAndCache("negative")}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`rounded-lg px-3.5 py-1.5 text-xs font-medium transition ${
                 mode === "negative"
                   ? "bg-rose-600 text-white"
                   : "text-zinc-400 hover:text-zinc-200"
@@ -224,7 +316,7 @@ export default function PromptFormatter() {
           </div>
         </div>
 
-        <textarea
+        <TextArea
           id="format-input"
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -235,8 +327,8 @@ export default function PromptFormatter() {
             }
           }}
           placeholder="Paste your prompt here—tags, rough prose, or a draft from another tool…"
-          rows={6}
-          className="w-full resize-y rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-base text-zinc-100 placeholder:text-zinc-600 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+          rows={7}
+          className={`text-base ${accentFocusClass(ACCENT)}`}
         />
 
         <div className="flex flex-wrap gap-2">
@@ -245,101 +337,25 @@ export default function PromptFormatter() {
               key={example}
               type="button"
               onClick={() => setInput(example)}
-              className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-400 transition hover:border-zinc-500 hover:text-zinc-200"
+              className="rounded-full border border-zinc-700/80 px-3 py-1 text-xs text-zinc-400 transition hover:border-zinc-500 hover:text-zinc-200"
             >
               {example.length > 48 ? `${example.slice(0, 48)}…` : example}
             </button>
           ))}
         </div>
 
-        <div className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
-          <div>
-            <p className="text-sm font-medium text-zinc-200">Detail level</p>
-            <p className="mt-1 text-xs text-zinc-500">
-              Controls length limits for the formatted output.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                { label: "Concise", value: "concise" },
-                { label: "Balanced", value: "balanced" },
-                { label: "Rich", value: "rich" },
-              ] as const
-            ).map((preset) => (
-              <button
-                key={preset.value}
-                type="button"
-                onClick={() => setDetail(preset.value)}
-                className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
-                  detail === preset.value
-                    ? "border-emerald-500 bg-emerald-500/15 text-emerald-200"
-                    : "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
-                }`}
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-zinc-500">
-            {activeLimits.minChars
-              ? `${activeLimits.minSentences}–${activeLimits.maxSentences} sentences, ${activeLimits.minChars}–${activeLimits.maxChars} chars`
-              : `Up to ${activeLimits.maxSentences} sentences, ~${activeLimits.maxChars} chars`}
-          </p>
-        </div>
-
-        {mode === "positive" && (
-          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
-            <input
-              type="checkbox"
-              checked={autoFixRules}
-              onChange={(e) => updateShared({ autoFixRules: e.target.checked })}
-              className="mt-0.5 h-4 w-4 rounded border-zinc-600 bg-zinc-900 text-emerald-600"
-            />
-            <span>
-              <span className="block text-sm font-medium text-zinc-200">
-                Auto-fix lint errors
-              </span>
-              <span className="mt-1 block text-xs leading-relaxed text-zinc-500">
-                After formatting, apply rule-based fixes when lint reports errors.
-              </span>
-            </span>
-          </label>
-        )}
-
-        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
-          <input
-            type="checkbox"
-            checked={smartFormat}
-            onChange={(e) => setSmartFormat(e.target.checked)}
-            className="mt-0.5 h-4 w-4 rounded border-zinc-600 bg-zinc-900 text-emerald-600 focus:ring-emerald-500/30"
-          />
-          <span>
-            <span className="block text-sm font-medium text-zinc-200">
-              Smart format (LLM)
-            </span>
-            <span className="mt-1 block text-xs leading-relaxed text-zinc-500">
-              Rewrites your draft for the target model while preserving content.
-              Off uses instant rules-only cleanup (tag conversion, trimming, limits).
-            </span>
-          </span>
-        </label>
-
-        <button
-          type="button"
+        <PrimaryButton
+          accentClassName={accentButtonClass(ACCENT)}
           onClick={() => void runFormat()}
-          disabled={submitDisabled}
-          className="inline-flex h-11 items-center justify-center rounded-xl bg-emerald-600 px-6 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={!mounted || !input.trim()}
+          loading={loading}
+          loadingLabel="Formatting prompt"
         >
-          {loading ? "Formatting…" : "Format prompt"}
-        </button>
+          Format prompt
+        </PrimaryButton>
 
-        {error && (
-          <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
-            {error}
-          </p>
-        )}
-      </section>
+        <FieldError>{error}</FieldError>
+      </ToolSection>
 
       {output && mode === "positive" && (
         <EnhancedPromptResult
@@ -389,22 +405,17 @@ export default function PromptFormatter() {
       )}
 
       {output && mode === "negative" && (
-        <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-xl shadow-black/20">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-sm font-medium text-zinc-200">Formatted preserve prompt</h2>
-            <button
-              type="button"
-              onClick={() => void copyOutput()}
-              className="inline-flex h-9 items-center gap-2 rounded-lg border border-zinc-700 px-4 text-sm font-medium text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800"
-            >
+        <ToolSection title="Formatted preserve prompt">
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <Button onClick={() => void copyOutput()}>
               {copied ? "Copied!" : "Copy for ComfyUI"}
-            </button>
+            </Button>
           </div>
-          <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl border border-zinc-800 bg-zinc-950 p-4 font-mono text-sm leading-relaxed text-emerald-300">
+          <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl border border-zinc-800/90 bg-zinc-950/80 p-5 font-mono text-sm leading-relaxed text-emerald-300">
             {output}
           </pre>
-        </section>
+        </ToolSection>
       )}
-    </div>
+    </ToolLayout>
   );
 }

@@ -1,0 +1,5 @@
+When writing or refactoring UI components:
+1. Prioritize a modern, spacious, premium look with robust whitespace and defensive layout design.
+2. Never leave interactive elements without custom focus-visible, hover, and active transition states.
+3. Avoid generic AI aesthetics (e.g., hyper-saturated primary colors, generic solid borders, lack of text hierarchy).
+4. Utilize soft ambient lighting techniques (subtle gradients, layered drop shadows, translucent backgrounds) rather than flat solid colors.

@@ -27,8 +27,18 @@ import {
   applyShareableSceneParams,
   parseScenePresetFromSearch,
 } from "@/lib/scene-preset-url";
+import {
+  ToolBadge,
+  ToolLayout,
+  ToolSection,
+  accentButtonClass,
+  accentFocusClass,
+  accentRingClass,
+} from "@/components/ui/ToolPageShell";
+import { FieldDivider, FieldError, FieldLabel, TextArea } from "@/components/ui/Field";
+import { Button, PrimaryButton } from "@/components/ui/Button";
 
-const labelClassName = "text-sm font-medium text-zinc-200";
+const ACCENT = "emerald" as const;
 
 export default function DuoTool() {
   const { mounted, shared, toolSettings, updateShared, updateToolSettings } =
@@ -204,22 +214,22 @@ export default function DuoTool() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8 sm:px-6">
-      <header className="space-y-3">
-        <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-emerald-300">
+    <ToolLayout
+      accent={ACCENT}
+      badge={
+        <ToolBadge accent={ACCENT}>
           Duo · {selectedModel.comfyNode}
-        </div>
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-50 sm:text-4xl">
-          Duo & Sport Generator
-        </h1>
-        <p className="max-w-2xl text-base leading-relaxed text-zinc-400">
+        </ToolBadge>
+      }
+      title="Duo & Sport Generator"
+      description={
+        <>
           Two-person action scenes with sport-aware wardrobe, competition kits,
           helmets, and distinct identities. Use presets for gravel, road, team
           sports, and more.
-        </p>
-      </header>
-
-      <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-xl shadow-black/20">
+        </>
+      }
+      sidebar={
         <SharedToolControls
           shared={shared}
           onModelChange={(model) => updateShared({ model })}
@@ -247,7 +257,9 @@ export default function DuoTool() {
           autoFixRules={shared.autoFixRules !== false}
           onAutoFixRulesChange={(value) => updateShared({ autoFixRules: value })}
         />
-
+      }
+    >
+      <ToolSection>
         <SportPresetChips
           mode="duo"
           selectedId={toolSettings.sportPresetId}
@@ -261,21 +273,17 @@ export default function DuoTool() {
           }}
         />
 
-        <div className="space-y-2">
-          <label className={labelClassName} htmlFor="duo-hints">
-            Scene hints
-          </label>
-          <textarea
-            id="duo-hints"
-            rows={4}
-            value={toolSettings.hints ?? ""}
-            onChange={(event) =>
-              updateToolSettings({ hints: event.target.value })
-            }
-            placeholder="two female gravel cyclists in a fierce competition on a muddy doubletrack"
-            className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-emerald-500 focus:outline-none"
-          />
-        </div>
+        <FieldLabel htmlFor="duo-hints">Scene hints</FieldLabel>
+        <TextArea
+          id="duo-hints"
+          rows={4}
+          value={toolSettings.hints ?? ""}
+          onChange={(event) =>
+            updateToolSettings({ hints: event.target.value })
+          }
+          placeholder="two female gravel cyclists in a fierce competition on a muddy doubletrack"
+          className={accentFocusClass(ACCENT)}
+        />
 
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-800 p-3">
@@ -285,7 +293,7 @@ export default function DuoTool() {
               onChange={(event) =>
                 updateToolSettings({ teamKit: event.target.checked })
               }
-              className="mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-950 accent-emerald-500"
+              className={`mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-950 ${accentRingClass(ACCENT)}`}
             />
             <span className="space-y-1">
               <span className="text-sm font-medium text-zinc-200">Team kit</span>
@@ -296,9 +304,7 @@ export default function DuoTool() {
           </label>
 
           <div className="space-y-2">
-            <label className={labelClassName} htmlFor="batch-count">
-              Batch count
-            </label>
+            <FieldLabel htmlFor="batch-count">Batch count</FieldLabel>
             <input
               id="batch-count"
               type="number"
@@ -313,16 +319,14 @@ export default function DuoTool() {
                   ),
                 })
               }
-              className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm text-zinc-100"
+              className="ui-input w-full px-4 py-2 text-sm"
             />
           </div>
         </div>
 
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-3">
-            <label className={labelClassName} htmlFor="duo-variation">
-              Variation strength
-            </label>
+            <FieldLabel htmlFor="duo-variation">Variation strength</FieldLabel>
             <span className="text-xs text-zinc-500">
               {variationStrengthLabel(toolSettings.variationStrength ?? 50)}
             </span>
@@ -338,7 +342,7 @@ export default function DuoTool() {
                 variationStrength: Number(event.target.value),
               })
             }
-            className="w-full accent-emerald-500"
+            className={`w-full ${accentRingClass(ACCENT)}`}
           />
         </div>
 
@@ -348,31 +352,27 @@ export default function DuoTool() {
           onChange={updateToolSettings}
         />
 
-        <div className="flex flex-wrap gap-3 pt-2">
-          <button
-            type="button"
+        <div className="flex flex-wrap gap-3">
+          <PrimaryButton
+            accentClassName={accentButtonClass(ACCENT)}
             onClick={() => void generate(false)}
-            disabled={loading}
-            className="inline-flex h-11 items-center rounded-xl bg-emerald-600 px-5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50"
+            loading={loading}
+            loadingLabel="Generating duo prompt"
           >
-            {loading ? "Generating…" : "Generate duo"}
-          </button>
-          <button
-            type="button"
+            Generate duo
+          </PrimaryButton>
+          <Button
+            variant="secondary"
+            loading={loading}
+            loadingLabel="Rolling duo batch"
             onClick={() => void generate(true)}
-            disabled={loading}
-            className="inline-flex h-11 items-center rounded-xl border border-zinc-700 px-5 text-sm font-semibold text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800 disabled:opacity-50"
           >
             Roll {toolSettings.batchCount ?? 3}
-          </button>
+          </Button>
         </div>
 
-        {error && (
-          <p className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
-            {error}
-          </p>
-        )}
-      </section>
+        <FieldError>{error}</FieldError>
+      </ToolSection>
 
       <EnhancedPromptResult
         output={output}
@@ -445,6 +445,6 @@ export default function DuoTool() {
             : undefined
         }
       />
-    </div>
+    </ToolLayout>
   );
 }

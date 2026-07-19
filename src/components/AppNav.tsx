@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 type NavLink = {
   href: string;
@@ -53,68 +54,112 @@ const settingsLink: NavLink = {
   description: "Health & ComfyUI",
 };
 
-function NavItem({ link, active }: { link: NavLink; active: boolean }) {
+function SidebarLink({ link, active }: { link: NavLink; active: boolean }) {
   return (
     <Link
       href={link.href}
       title={link.description}
-      className={`rounded-md px-2.5 py-1.5 text-sm font-medium transition ${
-        active
-          ? "bg-zinc-800 text-white"
-          : "text-zinc-300 hover:bg-zinc-900/70 hover:text-white"
-      }`}
+      data-active={active ? "true" : "false"}
+      className="ui-nav-link"
     >
       {link.label}
     </Link>
   );
 }
 
-export default function AppNav() {
+function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
 
   return (
-    <nav className="overflow-x-hidden border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur">
-      <div className="mx-auto max-w-6xl px-3 py-2 sm:px-6">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-          <Link
-            href="/"
-            className="mr-1 shrink-0 rounded-md px-2 py-1.5 text-sm font-semibold text-zinc-100 hover:text-white"
-          >
-            Prompt Tools
-          </Link>
+    <div className="flex h-full flex-col gap-6">
+      <div className="px-2">
+        <Link
+          href="/"
+          onClick={onNavigate}
+          className="ui-nav-link type-title block px-3 py-2 !font-semibold !text-[var(--text-primary)] hover:!bg-[var(--bg-hover)]"
+        >
+          Prompt Tools
+        </Link>
+        <p className="type-caption mt-1 px-3">
+          ComfyUI prompt studio for image models
+        </p>
+      </div>
 
-          {navGroups.map((group, index) => (
-            <div
-              key={group.label}
-              className="flex min-w-0 flex-wrap items-center gap-1"
-            >
-              {index > 0 && (
-                <span
-                  aria-hidden
-                  className="mx-0.5 hidden h-4 w-px shrink-0 bg-zinc-800 sm:block"
-                />
-              )}
-              <span className="hidden shrink-0 px-1 text-[10px] font-medium uppercase tracking-wider text-zinc-600 lg:inline">
-                {group.label}
-              </span>
+      <div className="sidebar-scroll flex-1 space-y-6 overflow-y-auto px-2 pb-2">
+        {navGroups.map((group) => (
+          <div key={group.label} className="space-y-2">
+            <p className="type-overline px-3">{group.label}</p>
+            <div className="space-y-1">
               {group.links.map((link) => (
-                <NavItem
-                  key={link.href}
-                  link={link}
-                  active={pathname === link.href}
-                />
+                <div key={link.href} onClick={onNavigate}>
+                  <SidebarLink link={link} active={pathname === link.href} />
+                </div>
               ))}
             </div>
-          ))}
-
-          <div className="ml-auto flex shrink-0 items-center">
-            <NavItem
-              link={settingsLink}
-              active={pathname === settingsLink.href}
-            />
           </div>
+        ))}
+      </div>
+
+      <div className="border-t border-[var(--border-subtle)] px-2 pt-4">
+        <div onClick={onNavigate}>
+          <SidebarLink
+            link={settingsLink}
+            active={pathname === settingsLink.href}
+          />
         </div>
       </div>
-    </nav>
+    </div>
+  );
+}
+
+export default function AppNav() {
+  const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    document.body.style.overflow = mobileOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileOpen]);
+
+  return (
+    <>
+      <header className="sticky top-0 z-40 flex items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--bg-muted)] px-4 py-3 backdrop-blur-md lg:hidden">
+        <Link href="/" className="type-heading">
+          Prompt Tools
+        </Link>
+        <button
+          type="button"
+          aria-expanded={mobileOpen}
+          aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
+          onClick={() => setMobileOpen((open) => !open)}
+          className="ui-btn-secondary px-3 py-2"
+        >
+          {mobileOpen ? "Close" : "Menu"}
+        </button>
+      </header>
+
+      {mobileOpen ? (
+        <button
+          type="button"
+          aria-label="Close navigation overlay"
+          className="ui-overlay fixed inset-0 z-40 lg:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      ) : null}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-[var(--sidebar-width)] border-r border-[var(--border-subtle)] bg-[var(--bg-muted)] py-5 backdrop-blur-md transition-transform duration-200 lg:translate-x-0 ${
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <SidebarContent onNavigate={() => setMobileOpen(false)} />
+      </aside>
+    </>
   );
 }

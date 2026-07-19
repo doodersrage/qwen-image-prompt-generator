@@ -8,15 +8,27 @@ import { useCachedSettings } from "@/hooks/useCachedSettings";
 import { useLocationBlocklist } from "@/hooks/useLocationBlocklist";
 import { useRecentClothing } from "@/hooks/useRecentClothing";
 import {
-  pollComfyGalleryJob,
   registerComfyGalleryJob,
 } from "@/lib/comfyui-gallery-client";
+import { scheduleComfyGalleryPoll } from "@/lib/comfyui-gallery-poller";
 import { modelUsesNegativePrompt } from "@/lib/prompt-pair";
 import { resolveComfyUiRuntime } from "@/lib/comfyui-runtime";
 import { DEFAULT_VARIATIONS_TOOL_CACHE } from "@/lib/settings-cache";
 import SidecarImportButton from "@/components/SidecarImportButton";
 import { variationStrengthLabel } from "@/lib/variation-settings";
 import type { PromptSidecar } from "@/lib/prompt-sidecar";
+import {
+  ToolBadge,
+  ToolLayout,
+  ToolSection,
+  accentButtonClass,
+  accentFocusClass,
+  accentRingClass,
+} from "@/components/ui/ToolPageShell";
+import { FieldError, FieldLabel, TextArea } from "@/components/ui/Field";
+import { Button, PrimaryButton } from "@/components/ui/Button";
+
+const ACCENT = "violet" as const;
 
 type VariationResult = {
   prompt: string;
@@ -157,10 +169,15 @@ export default function VariationGridTool() {
     try {
       let negativePrompt: string | undefined;
       if (modelUsesNegativePrompt(shared.model)) {
+        const hints = toolSettings.hints?.trim() ?? "";
         const negativeResponse = await fetch("/api/negative", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ model: shared.model }),
+          body: JSON.stringify({
+            model: shared.model,
+            hints,
+            soloSubject: !/\b(?:two|duo|couple|pair|both)\b/i.test(hints),
+          }),
         });
         const negativeData = (await negativeResponse.json()) as { prompt?: string };
         negativePrompt = negativeData.prompt;
@@ -203,7 +220,9 @@ export default function VariationGridTool() {
           model: shared.model,
           comfyUrl: result.comfyUrl ?? data.comfyUrl ?? "http://127.0.0.1:8188",
         });
-        void pollComfyGalleryJob(result.promptId);
+        void scheduleComfyGalleryPoll(result.promptId, {
+          comfyUrl: result.comfyUrl ?? data.comfyUrl ?? "http://127.0.0.1:8188",
+        });
       }
 
       setComfyStatus(
@@ -221,43 +240,42 @@ export default function VariationGridTool() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8 sm:px-6">
-      <header className="space-y-3">
-        <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-violet-300">
-          Variation grid
-        </div>
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-50 sm:text-4xl">
-          Variation Grid
-        </h1>
-        <p className="max-w-2xl text-base leading-relaxed text-zinc-400">
+    <ToolLayout
+      accent={ACCENT}
+      width="wide"
+      badge={<ToolBadge accent={ACCENT}>Variation grid</ToolBadge>}
+      title="Variation Grid"
+      description={
+        <>
           Roll several prompt variations from the same hints, then batch-queue them to
           ComfyUI with unique seeds per job. Track outputs in the{" "}
           <Link href="/gallery" className="text-violet-300 hover:text-violet-200">
             gallery
           </Link>
           .
-        </p>
-      </header>
-
-      <SharedToolControls
-        shared={shared}
-        onModelChange={(model) => updateShared({ model })}
-        onDetailChange={(detail) => updateShared({ detail })}
+        </>
+      }
+      sidebar={
+        <SharedToolControls
+          shared={shared}
+          onModelChange={(model) => updateShared({ model })}
+          onDetailChange={(detail) => updateShared({ detail })}
           onWorkflowPresetChange={(id) => updateShared({ selectedWorkflowFileId: id })}
-        lockedWardrobeId={shared.lockedWardrobeId}
-        lockedLocation={shared.lockedLocation}
-        lockedVariationSeed={shared.lockedVariationSeed}
-        onClearLockedWardrobe={() => updateShared({ lockedWardrobeId: undefined })}
-        onClearLockedLocation={() => updateShared({ lockedLocation: undefined })}
-        onClearLockedVariationSeed={() =>
-          updateShared({ lockedVariationSeed: undefined })
-        }
-      />
-
-      <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+          lockedWardrobeId={shared.lockedWardrobeId}
+          lockedLocation={shared.lockedLocation}
+          lockedVariationSeed={shared.lockedVariationSeed}
+          onClearLockedWardrobe={() => updateShared({ lockedWardrobeId: undefined })}
+          onClearLockedLocation={() => updateShared({ lockedLocation: undefined })}
+          onClearLockedVariationSeed={() =>
+            updateShared({ lockedVariationSeed: undefined })
+          }
+        />
+      }
+    >
+      <ToolSection>
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="space-y-1 text-sm text-zinc-300">
-            Generator
+          <div className="space-y-1">
+            <FieldLabel>Generator</FieldLabel>
             <select
               value={target}
               onChange={(event) =>
@@ -265,16 +283,16 @@ export default function VariationGridTool() {
                   target: event.target.value as "generate" | "character" | "duo",
                 })
               }
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+              className="ui-input w-full px-3 py-2 text-sm"
             >
               <option value="generate">Generate (keywords)</option>
               <option value="character">Character</option>
               <option value="duo">Duo</option>
             </select>
-          </label>
+          </div>
 
-          <label className="space-y-1 text-sm text-zinc-300">
-            Count ({count})
+          <div className="space-y-1">
+            <FieldLabel>Count ({count})</FieldLabel>
             <input
               type="range"
               min={2}
@@ -283,14 +301,14 @@ export default function VariationGridTool() {
               onChange={(event) =>
                 updateToolSettings({ count: Number(event.target.value) })
               }
-              className="w-full accent-violet-500"
+              className={`w-full ${accentRingClass(ACCENT)}`}
             />
-          </label>
+          </div>
         </div>
 
         {(target === "character" || target === "duo") && (
-          <label className="space-y-1 text-sm text-zinc-300">
-            Portrait style
+          <div className="space-y-1">
+            <FieldLabel>Portrait style</FieldLabel>
             <select
               value={toolSettings.portraitStyle ?? "action"}
               onChange={(event) =>
@@ -301,13 +319,13 @@ export default function VariationGridTool() {
                     | "action",
                 })
               }
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+              className="ui-input w-full px-3 py-2 text-sm"
             >
               <option value="portrait">Portrait</option>
               <option value="full-body">Full body</option>
               <option value="action">Action</option>
             </select>
-          </label>
+          </div>
         )}
 
         {target === "duo" && (
@@ -318,8 +336,10 @@ export default function VariationGridTool() {
           />
         )}
 
-        <label className="space-y-1 text-sm text-zinc-300">
-          Variation strength ({variationStrengthLabel(toolSettings.variationStrength ?? 65)})
+        <div className="space-y-1">
+          <FieldLabel>
+            Variation strength ({variationStrengthLabel(toolSettings.variationStrength ?? 65)})
+          </FieldLabel>
           <input
             type="range"
             min={0}
@@ -328,38 +348,37 @@ export default function VariationGridTool() {
             onChange={(event) =>
               updateToolSettings({ variationStrength: Number(event.target.value) })
             }
-            className="w-full accent-violet-500"
+            className={`w-full ${accentRingClass(ACCENT)}`}
           />
-        </label>
+        </div>
 
-        <label className="space-y-1 text-sm text-zinc-300">
-          Hints / base input
-          <textarea
-            value={toolSettings.hints ?? ""}
-            onChange={(event) => updateToolSettings({ hints: event.target.value })}
-            rows={4}
-            placeholder="neon alley, rain, black cat"
-            className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
-          />
-        </label>
+        <FieldLabel>Hints / base input</FieldLabel>
+        <TextArea
+          value={toolSettings.hints ?? ""}
+          onChange={(event) => updateToolSettings({ hints: event.target.value })}
+          rows={4}
+          placeholder="neon alley, rain, black cat"
+          className={accentFocusClass(ACCENT)}
+        />
 
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={loading}
+          <PrimaryButton
+            accentClassName={accentButtonClass(ACCENT)}
+            loading={loading}
+            loadingLabel="Rolling variations"
             onClick={() => void rollGrid()}
-            className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
           >
-            {loading ? "Rolling…" : `Roll ${count} variations`}
-          </button>
-          <button
-            type="button"
-            disabled={queueLoading || results.every((entry) => !entry.prompt)}
+            {`Roll ${count} variations`}
+          </PrimaryButton>
+          <Button
+            variant="accent-outline"
+            loading={queueLoading}
+            loadingLabel="Queueing variations"
+            disabled={results.every((entry) => !entry.prompt)}
             onClick={() => void queueGrid()}
-            className="rounded-lg border border-violet-700/60 px-4 py-2 text-sm text-violet-200 hover:border-violet-500 disabled:opacity-50"
           >
-            {queueLoading ? "Queueing…" : "Queue grid to ComfyUI"}
-          </button>
+            Queue grid to ComfyUI
+          </Button>
           <SidecarImportButton
             label="Import sidecar hints"
             className="cursor-pointer rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:border-zinc-500"
@@ -379,15 +398,13 @@ export default function VariationGridTool() {
         </div>
 
         {importStatus && <p className="text-sm text-zinc-500">{importStatus}</p>}
-
         {status && <p className="text-sm text-zinc-500">{status}</p>}
         {comfyStatus && <p className="text-sm text-violet-300/90">{comfyStatus}</p>}
-        {error && <p className="text-sm text-rose-300">{error}</p>}
-      </section>
+        <FieldError>{error}</FieldError>
+      </ToolSection>
 
       {results.length > 0 && (
-        <section className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-sm font-medium text-zinc-200">Rolled prompts</h2>
+        <ToolSection title="Rolled prompts">
           <ol className="space-y-3">
             {results.map((entry, index) => (
               <li
@@ -408,8 +425,8 @@ export default function VariationGridTool() {
               </li>
             ))}
           </ol>
-        </section>
+        </ToolSection>
       )}
-    </div>
+    </ToolLayout>
   );
 }

@@ -10,6 +10,17 @@ import { getComfyModelDefinition } from "@/lib/comfy-models";
 import { getReformatTargetLabel, getReformatTargetModel } from "@/lib/reformat-target";
 import { DEFAULT_IMAGE_PROMPT_TOOL_CACHE } from "@/lib/settings-cache";
 import type { EnrichedToolGenerateResult, ImagePromptFocus, ToolGenerateResult } from "@/lib/specialized/types";
+import {
+  ToolBadge,
+  ToolLayout,
+  ToolSection,
+  accentButtonClass,
+  accentFocusClass,
+} from "@/components/ui/ToolPageShell";
+import { FieldDivider, FieldError, FieldLabel, TextArea } from "@/components/ui/Field";
+import { Button, PrimaryButton } from "@/components/ui/Button";
+
+const ACCENT = "fuchsia" as const;
 
 export default function ImagePromptTool() {
   const { mounted, shared, toolSettings, updateShared, updateToolSettings } =
@@ -144,21 +155,21 @@ export default function ImagePromptTool() {
   }, [file, refineIntent, output, shared, actions]);
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8 sm:px-6">
-      <header className="space-y-3">
-        <div className="inline-flex items-center gap-2 rounded-full border border-fuchsia-500/30 bg-fuchsia-500/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-fuchsia-300">
+    <ToolLayout
+      accent={ACCENT}
+      badge={
+        <ToolBadge accent={ACCENT}>
           Vision · {selectedModel.comfyNode}
-        </div>
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-50 sm:text-4xl">
-          Image → Prompt
-        </h1>
-        <p className="max-w-2xl text-base leading-relaxed text-zinc-400">
+        </ToolBadge>
+      }
+      title="Image → Prompt"
+      description={
+        <>
           Upload a reference image and convert it into a model-ready prompt using
           a vision-capable LLM (`LLM_VISION_MODEL`).
-        </p>
-      </header>
-
-      <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-xl shadow-black/20">
+        </>
+      }
+      sidebar={
         <SharedToolControls
           shared={shared}
           onModelChange={(model) => updateShared({ model })}
@@ -167,102 +178,97 @@ export default function ImagePromptTool() {
           autoFixRules={shared.autoFixRules !== false}
           onAutoFixRulesChange={(value) => updateShared({ autoFixRules: value })}
         />
-
-        <div className="space-y-3 border-t border-zinc-800 pt-4">
-          <label className="text-sm font-medium text-zinc-200">Upload image</label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => onFileChange(e.target.files?.[0] ?? null)}
-            className="block w-full text-sm text-zinc-400 file:mr-4 file:rounded-lg file:border-0 file:bg-fuchsia-600 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white"
+      }
+    >
+      <ToolSection>
+        <FieldLabel>Upload image</FieldLabel>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(e) => onFileChange(e.target.files?.[0] ?? null)}
+          className="block w-full text-sm text-zinc-400 file:mr-4 file:rounded-lg file:border-0 file:bg-fuchsia-600 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white"
+        />
+        {previewUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={previewUrl}
+            alt="Upload preview"
+            className="max-h-64 rounded-xl border border-zinc-800 object-contain"
           />
-          {previewUrl && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={previewUrl}
-              alt="Upload preview"
-              className="max-h-64 rounded-xl border border-zinc-800 object-contain"
-            />
-          )}
-        </div>
-
-        <div className="space-y-3 border-t border-zinc-800 pt-4">
-          <p className="text-sm font-medium text-zinc-200">Describe focus</p>
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                { label: "Full image", value: "full" },
-                { label: "Subject", value: "subject" },
-                { label: "Background", value: "background" },
-                { label: "Style", value: "style" },
-              ] as const
-            ).map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() =>
-                  updateToolSettings({ focus: option.value as ImagePromptFocus })
-                }
-                className={`rounded-lg border px-3 py-2 text-xs font-medium ${
-                  (toolSettings.focus ?? "full") === option.value
-                    ? "border-fuchsia-500 bg-fuchsia-500/15 text-fuchsia-200"
-                    : "border-zinc-700 text-zinc-400"
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-3 border-t border-zinc-800 pt-4">
-          <label className="text-sm font-medium text-zinc-200">
-            Extra notes (optional)
-          </label>
-          <textarea
-            value={toolSettings.extraHints ?? ""}
-            onChange={(e) => updateToolSettings({ extraHints: e.target.value })}
-            placeholder="e.g. emphasize the lighting, ignore the watermark"
-            rows={2}
-            className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-fuchsia-500"
-          />
-        </div>
-
-        <button
-          type="button"
-          onClick={() => void generate()}
-          disabled={!mounted || loading || !file}
-          className="inline-flex h-11 items-center justify-center rounded-xl bg-fuchsia-600 px-6 text-sm font-semibold text-white hover:bg-fuchsia-500 disabled:opacity-50"
-        >
-          {loading ? "Analyzing image…" : "Generate prompt from image"}
-        </button>
-
-        {error && (
-          <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
-            {error}
-          </p>
         )}
-      </section>
+
+        <FieldDivider />
+
+        <FieldLabel>Describe focus</FieldLabel>
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              { label: "Full image", value: "full" },
+              { label: "Subject", value: "subject" },
+              { label: "Background", value: "background" },
+              { label: "Style", value: "style" },
+            ] as const
+          ).map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() =>
+                updateToolSettings({ focus: option.value as ImagePromptFocus })
+              }
+              className={`rounded-lg border px-3 py-2 text-xs font-medium ${
+                (toolSettings.focus ?? "full") === option.value
+                  ? "border-fuchsia-500 bg-fuchsia-500/15 text-fuchsia-200"
+                  : "border-zinc-700 text-zinc-400"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
+        <FieldDivider />
+
+        <FieldLabel>Extra notes (optional)</FieldLabel>
+        <TextArea
+          value={toolSettings.extraHints ?? ""}
+          onChange={(e) => updateToolSettings({ extraHints: e.target.value })}
+          placeholder="e.g. emphasize the lighting, ignore the watermark"
+          rows={2}
+          className={accentFocusClass(ACCENT)}
+        />
+
+        <PrimaryButton
+          accentClassName={accentButtonClass(ACCENT)}
+          onClick={() => void generate()}
+          disabled={!mounted || !file}
+          loading={loading}
+          loadingLabel="Analyzing image"
+        >
+          Generate prompt from image
+        </PrimaryButton>
+
+        <FieldError>{error}</FieldError>
+      </ToolSection>
 
       {output && (
-        <section className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-sm font-medium text-zinc-200">Refine against intent</h2>
-          <textarea
+        <ToolSection title="Refine against intent">
+          <TextArea
             rows={2}
             value={refineIntent}
             onChange={(event) => setRefineIntent(event.target.value)}
             placeholder="What you wanted: two gravel cyclists with helmets, not street clothes…"
-            className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-zinc-100"
+            className={accentFocusClass(ACCENT)}
           />
-          <button
-            type="button"
+          <Button
+            variant="accent-outline"
+            loading={loading}
+            loadingLabel="Refining prompt from image"
+            disabled={!file}
             onClick={() => void refine()}
-            disabled={loading || !file}
-            className="rounded-xl border border-fuchsia-700/60 px-4 py-2 text-sm font-medium text-fuchsia-200 hover:bg-fuchsia-500/10 disabled:opacity-50"
           >
-            {loading ? "Refining…" : "Refine prompt from image"}
-          </button>
-        </section>
+            Refine prompt from image
+          </Button>
+        </ToolSection>
       )}
 
       <EnhancedPromptResult
@@ -315,6 +321,6 @@ export default function ImagePromptTool() {
         historySaved={actions.historySaved}
         pairCopied={actions.pairCopied}
       />
-    </div>
+    </ToolLayout>
   );
 }

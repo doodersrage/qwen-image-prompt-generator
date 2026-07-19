@@ -27,6 +27,17 @@ import ComfyUiGalleryPanel from "@/components/ComfyUiGalleryPanel";
 import ComfyWorkflowLibraryPanel from "@/components/ComfyWorkflowLibraryPanel";
 import WorkflowPreviewPanel from "@/components/WorkflowPreviewPanel";
 import { fetchWorkflowPreview } from "@/lib/comfyui-requeue";
+import {
+  ToolBadge,
+  ToolLayout,
+  ToolSection,
+  accentButtonClass,
+  accentFocusClass,
+} from "@/components/ui/ToolPageShell";
+import { FieldError, FieldLabel, TextArea } from "@/components/ui/Field";
+import { Button, PrimaryButton } from "@/components/ui/Button";
+
+const ACCENT = "neutral" as const;
 
 type HealthResponse = {
   llm: {
@@ -243,31 +254,28 @@ export default function SettingsTool() {
   }, [previewPrompt, settings]);
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8 sm:px-6">
-      <header className="space-y-3">
-        <div className="inline-flex items-center gap-2 rounded-full border border-zinc-500/30 bg-zinc-500/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-zinc-300">
-          Settings
-        </div>
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-50 sm:text-4xl">
-          Settings & Health
-        </h1>
-        <p className="max-w-2xl text-base leading-relaxed text-zinc-400">
+    <ToolLayout
+      accent={ACCENT}
+      badge={<ToolBadge accent={ACCENT}>Settings</ToolBadge>}
+      title="Settings & Health"
+      description={
+        <>
           Service connectivity, ComfyUI workflow overrides, local data backup, and
           reset tools. LLM settings still come from server environment variables.
-        </p>
-      </header>
-
-      <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-sm font-medium text-zinc-200">Service health</h2>
-          <button
-            type="button"
+        </>
+      }
+    >
+      <ToolSection title="Service health">
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <Button
+            variant="ghost"
+            loading={loading}
+            loadingLabel="Checking service health"
             onClick={() => void refreshHealth()}
-            disabled={loading}
-            className="text-xs text-zinc-500 hover:text-zinc-300 disabled:opacity-50"
+            className="!min-h-8 px-2 type-caption"
           >
-            {loading ? "Checking…" : "Refresh"}
-          </button>
+            Refresh
+          </Button>
         </div>
 
         {health && (
@@ -317,25 +325,22 @@ export default function SettingsTool() {
             )}
           </ul>
         )}
-      </section>
+      </ToolSection>
 
       <ComfyWorkflowLibraryPanel
         placeholderTokens={placeholderTokensFromSettings(settings)}
         onStatus={setStatus}
       />
 
-      <section className="space-y-4 rounded-2xl border border-violet-900/40 bg-zinc-900/60 p-6">
-        <div className="space-y-1">
-          <h2 className="text-sm font-medium text-zinc-200">ComfyUI connection & injection</h2>
-          <p className="text-sm text-zinc-400">
-            Override the server&apos;s{" "}
-            <code className="rounded bg-zinc-800 px-1 text-violet-300">
-              COMFYUI_*
-            </code>{" "}
-            env vars for this browser: API URL, placeholder tokens, queue params, and
-            an optional fallback workflow when no library file is selected.
-          </p>
-        </div>
+      <ToolSection title="ComfyUI connection & injection">
+        <p className="text-sm text-zinc-400">
+          Override the server&apos;s{" "}
+          <code className="rounded bg-zinc-800 px-1 text-violet-300">
+            COMFYUI_*
+          </code>{" "}
+          env vars for this browser: API URL, placeholder tokens, queue params, and
+          an optional fallback workflow when no library file is selected.
+        </p>
 
         <label className="flex items-center gap-2 text-sm text-zinc-300">
           <input
@@ -534,11 +539,9 @@ export default function SettingsTool() {
               rows={12}
               spellCheck={false}
               placeholder={`Paste exported ComfyUI API JSON here.\nUse ${settings.positiveToken ?? "{{POSITIVE}}"} and ${settings.negativeToken ?? "{{NEGATIVE}}"} anywhere prompts should be injected.`}
-              className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-xs leading-relaxed text-emerald-200"
+              className={`ui-input w-full font-mono text-xs leading-relaxed text-emerald-200 ${accentFocusClass(ACCENT)}`}
             />
-            {workflowError && (
-              <p className="text-xs text-rose-300">{workflowError}</p>
-            )}
+            <FieldError>{workflowError}</FieldError>
             {workflowValidation && (
               <p className="text-xs text-zinc-500">
                 {workflowValidation.ok ? (
@@ -569,11 +572,11 @@ export default function SettingsTool() {
                 current settings above (save first if you changed them recently).
               </p>
             </div>
-            <textarea
+            <TextArea
               value={previewPrompt}
               onChange={(event) => setPreviewPrompt(event.target.value)}
               rows={3}
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+              className={accentFocusClass(ACCENT)}
             />
             <button
               type="button"
@@ -620,14 +623,13 @@ export default function SettingsTool() {
         )}
 
         <div className="flex flex-wrap gap-2 text-sm">
-          <button
-            type="button"
+          <PrimaryButton
+            accentClassName={accentButtonClass(ACCENT)}
             disabled={!mounted}
             onClick={handleSaveComfySettings}
-            className="rounded-lg bg-violet-600 px-4 py-2 font-medium text-white hover:bg-violet-500 disabled:opacity-50"
           >
             Save ComfyUI settings
-          </button>
+          </PrimaryButton>
           <button
             type="button"
             onClick={() => void refreshHealth()}
@@ -656,14 +658,13 @@ export default function SettingsTool() {
           ) in any string field where prompts should land—CLIP text inputs, custom node
           fields, filenames, etc.
         </p>
-      </section>
+      </ToolSection>
 
-      <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+      <ToolSection>
         <ComfyUiGalleryPanel limit={6} compact showHeader />
-      </section>
+      </ToolSection>
 
-      <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-        <h2 className="text-sm font-medium text-zinc-200">Local data</h2>
+      <ToolSection title="Local data">
         <p className="text-sm text-zinc-400">
           Backup includes history, settings, scene presets, user templates, location
           blocklist, ComfyUI settings, gallery entries, and workflow JSON files (v2).
@@ -716,10 +717,10 @@ export default function SettingsTool() {
         <p className="text-xs text-zinc-600">
           Keys: {LOCAL_DATA_KEYS.join(", ")}
         </p>
-      </section>
+      </ToolSection>
 
       {status && <p className="text-sm text-zinc-500">{status}</p>}
-    </div>
+    </ToolLayout>
   );
 }
 

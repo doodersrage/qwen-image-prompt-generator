@@ -5,6 +5,11 @@ import PromptDiagnosticsPanel from "@/components/PromptDiagnosticsPanel";
 import WorkflowPreviewPanel from "@/components/WorkflowPreviewPanel";
 import ComfyWorkflowSelector from "@/components/ComfyWorkflowSelector";
 import { useComfyWorkflowSelection } from "@/hooks/useComfyWorkflowSelection";
+import {
+  ActionButtonBar,
+  ToolSection,
+} from "@/components/ui/ToolPageShell";
+import { Button } from "@/components/ui/Button";
 import type { GenerationDiagnostics } from "@/lib/generation-diagnostics";
 
 type EnhancedPromptResultProps = {
@@ -104,10 +109,10 @@ export default function EnhancedPromptResult({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {preDiagnostics && (
         <section className="space-y-2">
-          <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">
+          <p className="type-overline">
             Pre-generation lint
           </p>
           <PromptDiagnosticsPanel diagnostics={preDiagnostics} />
@@ -115,28 +120,20 @@ export default function EnhancedPromptResult({
       )}
 
       {batchOutputs && batchOutputs.length > 0 ? (
-        <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-xl shadow-black/20">
+        <section className="ui-card space-y-4 p-[var(--card-padding)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-sm font-medium text-zinc-200">
+            <h2 className="type-heading">
               Batch results ({batchOutputs.length})
             </h2>
             {onExportBatch && (
-              <button
-                type="button"
-                onClick={onExportBatch}
-                className="inline-flex h-9 items-center rounded-lg border border-zinc-700 px-4 text-sm font-medium text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800"
-              >
+              <Button variant="secondary" onClick={onExportBatch}>
                 Export batch
-              </button>
+              </Button>
             )}
             {onQueueBatchComfyUi && (
-              <button
-                type="button"
-                onClick={onQueueBatchComfyUi}
-                className="inline-flex h-9 items-center rounded-lg border border-violet-700/60 px-4 text-sm font-medium text-violet-200 transition hover:border-violet-500 hover:bg-violet-500/10"
-              >
+              <Button variant="accent-outline" onClick={onQueueBatchComfyUi}>
                 Queue batch to ComfyUI
-              </button>
+              </Button>
             )}
           </div>
           {workflowSelection.mounted && (
@@ -153,7 +150,7 @@ export default function EnhancedPromptResult({
             {batchOutputs.map((prompt, index) => (
               <pre
                 key={`batch-${index}`}
-                className="overflow-x-auto whitespace-pre-wrap rounded-xl border border-zinc-800 bg-zinc-950 p-4 font-mono text-sm leading-relaxed text-emerald-300"
+                className="type-code overflow-x-auto whitespace-pre-wrap rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--bg-muted)] p-4 !text-[var(--tint-success-text)]"
               >
                 {prompt}
               </pre>
@@ -177,7 +174,7 @@ export default function EnhancedPromptResult({
         onExportSidecar ||
         onPreviewWorkflow) &&
         panelProps.output && (
-        <div className="space-y-3">
+        <ToolSection className="space-y-5">
           {showComfyActions && workflowSelection.mounted && (
             <ComfyWorkflowSelector
               compact
@@ -189,102 +186,62 @@ export default function EnhancedPromptResult({
               helpText="Workflow JSON used by Send to ComfyUI and Preview workflow below."
             />
           )}
-        <div className="flex flex-wrap gap-2">
+        <ActionButtonBar>
           {onRunPipeline && (
-            <button
-              type="button"
-              onClick={onRunPipeline}
-              className="inline-flex h-9 items-center rounded-lg border border-cyan-700/60 px-4 text-sm font-semibold text-cyan-200 transition hover:border-cyan-500 hover:bg-cyan-500/10"
-            >
+            <Button variant="info" fullWidth onClick={onRunPipeline} className="font-semibold">
               Prepare for ComfyUI
-            </button>
+            </Button>
           )}
           {onCompact && (
-              <button
-                type="button"
-                onClick={onCompact}
-                className="inline-flex h-9 items-center rounded-lg border border-rose-700/60 px-4 text-sm font-medium text-rose-200 transition hover:border-rose-500 hover:bg-rose-500/10"
-              >
-                {panelProps.limits &&
-                panelProps.output.length > panelProps.limits.maxChars
-                  ? "Compact to limit"
-                  : "Compact prompt"}
-              </button>
-            )}
+            <Button variant="danger" fullWidth onClick={onCompact}>
+              {panelProps.limits &&
+              panelProps.output.length > panelProps.limits.maxChars
+                ? "Compact to limit"
+                : "Compact prompt"}
+            </Button>
+          )}
           {onReformat && reformatTargetLabel && (
-            <button
-              type="button"
-              onClick={onReformat}
-              className="inline-flex h-9 items-center rounded-lg border border-emerald-700/60 px-4 text-sm font-medium text-emerald-200 transition hover:border-emerald-500 hover:bg-emerald-500/10"
-            >
+            <Button variant="secondary" fullWidth onClick={onReformat}>
               Reformat for {reformatTargetLabel}
-            </button>
+            </Button>
           )}
           {onLockSeed && variationSeed && (
-            <button
-              type="button"
-              onClick={onLockSeed}
-              className="inline-flex h-9 items-center rounded-lg border border-violet-700/60 px-4 text-sm font-medium text-violet-200 transition hover:border-violet-500 hover:bg-violet-500/10"
-            >
+            <Button variant="accent-outline" fullWidth onClick={onLockSeed}>
               {seedLocked ? "Seed locked" : "Lock variation seed"}
-            </button>
+            </Button>
           )}
           {onCopyPair && (
-            <button
-              type="button"
-              onClick={onCopyPair}
-              className="inline-flex h-9 items-center rounded-lg border border-zinc-700 px-4 text-sm font-medium text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800"
-            >
+            <Button variant="secondary" fullWidth onClick={onCopyPair}>
               {pairCopied ? "Pair copied!" : "Copy prompt pair"}
-            </button>
+            </Button>
           )}
           {onFixPrompt && (
-            <button
-              type="button"
-              onClick={onFixPrompt}
-              className="inline-flex h-9 items-center rounded-lg border border-amber-700/60 px-4 text-sm font-medium text-amber-200 transition hover:border-amber-500 hover:bg-amber-500/10"
-            >
+            <Button variant="secondary" fullWidth onClick={onFixPrompt}>
               Fix prompt (rules)
-            </button>
+            </Button>
           )}
           {onSaveHistory && (
-            <button
-              type="button"
-              onClick={onSaveHistory}
-              className="inline-flex h-9 items-center rounded-lg border border-zinc-700 px-4 text-sm font-medium text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800"
-            >
+            <Button variant="secondary" fullWidth onClick={onSaveHistory}>
               {historySaved ? "Saved to history" : "Save to history"}
-            </button>
+            </Button>
           )}
           {onPreviewWorkflow && (
-            <button
-              type="button"
-              onClick={onPreviewWorkflow}
-              className="inline-flex h-9 items-center rounded-lg border border-cyan-700/60 px-4 text-sm font-medium text-cyan-200 transition hover:border-cyan-500 hover:bg-cyan-500/10"
-            >
+            <Button variant="info" fullWidth onClick={onPreviewWorkflow}>
               Preview workflow
-            </button>
+            </Button>
           )}
           {onSendComfyUi && (
-            <button
-              type="button"
-              onClick={onSendComfyUi}
-              className="inline-flex h-9 items-center rounded-lg border border-violet-700/60 px-4 text-sm font-medium text-violet-200 transition hover:border-violet-500 hover:bg-violet-500/10"
-            >
+            <Button variant="accent-outline" fullWidth onClick={onSendComfyUi}>
               Send to ComfyUI
-            </button>
+            </Button>
           )}
           {onExportSidecar && (
-            <button
-              type="button"
-              onClick={onExportSidecar}
-              className="inline-flex h-9 items-center rounded-lg border border-zinc-700 px-4 text-sm font-medium text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800"
-            >
+            <Button variant="secondary" fullWidth onClick={onExportSidecar}>
               Export sidecar JSON
-            </button>
+            </Button>
           )}
-        </div>
-        </div>
+        </ActionButtonBar>
+        </ToolSection>
       )}
 
       {(fixStatus ||
@@ -294,7 +251,7 @@ export default function EnhancedPromptResult({
         pipelineStatus ||
         previewStatus ||
         variationSeed) && (
-        <p className="text-xs text-zinc-500">
+        <p className="type-caption">
           {pipelineStatus ||
             previewStatus ||
             fixStatus ||
@@ -312,25 +269,30 @@ export default function EnhancedPromptResult({
       )}
 
       {comfyUiPreviewUrl && (
-        <div className="overflow-hidden rounded-xl border border-violet-900/40 bg-zinc-950/60">
+        <div className="ui-card overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={comfyUiPreviewUrl}
             alt="ComfyUI output preview"
-            className="max-h-80 w-full object-contain bg-zinc-900"
+            className="max-h-80 w-full bg-[var(--bg-subtle)] object-contain"
           />
-          <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs">
-            <span className="text-emerald-400">ComfyUI output ready</span>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-subtle)] px-3 py-2">
+            <span className="type-caption text-[var(--tint-success-text)]">
+              ComfyUI output ready
+            </span>
             <div className="flex gap-3">
               <a
                 href={comfyUiPreviewUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="text-violet-300 hover:text-violet-200"
+                className="type-caption text-[var(--accent-text)] transition hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)]"
               >
                 Open full size
               </a>
-              <a href="/gallery" className="text-zinc-400 hover:text-zinc-200">
+              <a
+                href="/gallery"
+                className="type-caption transition hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)]"
+              >
                 Gallery
               </a>
             </div>
