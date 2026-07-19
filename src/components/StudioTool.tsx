@@ -570,8 +570,8 @@ export default function StudioTool() {
             <EmptyState
               icon="inbox"
               title="No saved prompts yet"
-              description="Generate a scene in Duo or another tool, then use Save to history on the result panel. Your prompts will appear here for re-queue, export, and diff."
-              action={{ label: "Open Character", href: "/character?mode=duo" }}
+              description="Generate a scene in Character or another tool, then use Save to history on the result panel. Your prompts will appear here for re-queue, export, and diff."
+              action={{ label: "Open Character", href: "/character" }}
             />
           ) : filteredEntries.length === 0 ? (
             <EmptyState
@@ -1049,7 +1049,7 @@ export default function StudioTool() {
         <ToolSection>
           <p className="text-sm text-zinc-400">
             Save named bundles of hints and shared locks (kit, location, seed) for
-            quick reuse across Character, Duo, and Random Scene.
+            quick reuse across Generate, Character, and Background.
           </p>
 
           <SharedToolControls

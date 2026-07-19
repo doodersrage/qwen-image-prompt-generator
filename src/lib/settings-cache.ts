@@ -43,12 +43,6 @@ export type FormatToolCache = {
   smartFormat?: boolean;
 };
 
-export type RandomSceneToolCache = {
-  genre?: string;
-  includePeople?: boolean;
-  wildness?: number;
-};
-
 import type { CharacterPresetOptions } from "./character-options";
 
 export type CharacterSceneMode = "solo" | "duo" | "compose";
@@ -120,35 +114,11 @@ export type TopicToolCache = {
   batchTarget?: "generate" | "duo";
 };
 
-export type DuoToolCache = {
-  hints?: string;
-  portraitStyle?: "portrait" | "full-body" | "action";
-  variationStrength?: number;
-  sportPresetId?: string;
-  teamKit?: boolean;
-  batchCount?: number;
-};
-
 export type NegativeToolCache = {
   sport?: string;
   preserveSubject?: boolean;
   extra?: string;
 };
-
-export type ComposeToolCache = {
-  hints?: string;
-  subjectMode?: "character" | "duo";
-  portraitStyle?: "portrait" | "full-body" | "action";
-  variationStrength?: number;
-  teamKit?: boolean;
-  composeStyle?: "layered" | "inline";
-  settingType?: string;
-  timeOfDay?: string;
-  mood?: string;
-} & Partial<CharacterPresetOptions> &
-  Partial<Omit<BackgroundPresetOptions, "surfaceMaterials">> & {
-    surfaceMaterials?: string;
-  };
 
 export type StudioToolCache = {
   compareModelB?: string;
@@ -170,18 +140,45 @@ export type VariationsToolCache = {
 export type ToolSettingsCache = {
   generate?: GenerateToolCache;
   format?: FormatToolCache;
-  randomScene?: RandomSceneToolCache;
   background?: BackgroundToolCache;
   pet?: PetToolCache;
   fantasy?: FantasyToolCache;
   character?: CharacterToolCache;
   imagePrompt?: ImagePromptToolCache;
   topics?: TopicToolCache;
-  duo?: DuoToolCache;
   negative?: NegativeToolCache;
-  compose?: ComposeToolCache;
   studio?: StudioToolCache;
   variations?: VariationsToolCache;
+};
+
+/** @internal Legacy keys merged into character/generate on load. */
+type LegacyToolSettingsCache = ToolSettingsCache & {
+  randomScene?: Pick<GenerateToolCache, "genre" | "includePeople" | "wildness">;
+  duo?: Pick<
+    CharacterToolCache,
+    | "hints"
+    | "portraitStyle"
+    | "variationStrength"
+    | "sportPresetId"
+    | "teamKit"
+    | "batchCount"
+  >;
+  compose?: Pick<
+    CharacterToolCache,
+    | "hints"
+    | "portraitStyle"
+    | "variationStrength"
+    | "teamKit"
+    | "composeStyle"
+    | "settingType"
+    | "timeOfDay"
+    | "mood"
+    | "surfaceMaterials"
+  > &
+    Partial<CharacterPresetOptions> &
+    Partial<Omit<BackgroundPresetOptions, "surfaceMaterials">> & {
+      subjectMode?: "character" | "duo";
+    };
 };
 
 export type SettingsCache = {
@@ -210,12 +207,6 @@ export const DEFAULT_GENERATE_TOOL_CACHE: GenerateToolCache = {
 export const DEFAULT_FORMAT_TOOL_CACHE: FormatToolCache = {
   mode: "positive",
   smartFormat: true,
-};
-
-export const DEFAULT_RANDOM_SCENE_TOOL_CACHE: RandomSceneToolCache = {
-  genre: "",
-  includePeople: true,
-  wildness: 65,
 };
 
 export const DEFAULT_CHARACTER_TOOL_CACHE: CharacterToolCache = {
@@ -264,31 +255,10 @@ export const DEFAULT_TOPIC_TOOL_CACHE: TopicToolCache = {
   batchTarget: "generate",
 };
 
-export const DEFAULT_DUO_TOOL_CACHE: DuoToolCache = {
-  hints: "",
-  portraitStyle: "action",
-  variationStrength: 50,
-  sportPresetId: "",
-  teamKit: false,
-  batchCount: 3,
-};
-
 export const DEFAULT_NEGATIVE_TOOL_CACHE: NegativeToolCache = {
   sport: "",
   preserveSubject: false,
   extra: "",
-};
-
-export const DEFAULT_COMPOSE_TOOL_CACHE: ComposeToolCache = {
-  hints: "",
-  subjectMode: "duo",
-  portraitStyle: "action",
-  variationStrength: 50,
-  teamKit: false,
-  composeStyle: "layered",
-  settingType: "",
-  timeOfDay: "",
-  mood: "",
 };
 
 export const DEFAULT_STUDIO_TOOL_CACHE: StudioToolCache = {
@@ -312,6 +282,59 @@ function isDetailLevel(value: unknown): value is DetailLevel {
   return value === "concise" || value === "balanced" || value === "rich";
 }
 
+export function migrateLegacyToolSettings(
+  tools: ToolSettingsCache,
+): { tools: ToolSettingsCache; changed: boolean } {
+  const legacy = tools as LegacyToolSettingsCache;
+  const { randomScene, duo, compose, ...rest } = legacy;
+
+  if (!randomScene && !duo && !compose) {
+    return { tools, changed: false };
+  }
+
+  let changed = false;
+  let character = { ...(rest.character ?? {}) } as CharacterToolCache;
+  let generate = { ...(rest.generate ?? {}) } as GenerateToolCache;
+
+  if (duo) {
+    changed = true;
+    character = {
+      ...character,
+      ...duo,
+      sceneMode: "duo",
+    };
+  }
+
+  if (compose) {
+    changed = true;
+    const { subjectMode, ...composeRest } = compose;
+    character = {
+      ...character,
+      ...composeRest,
+      composeSubjectMode: subjectMode ?? character.composeSubjectMode,
+      sceneMode: "compose",
+    };
+  }
+
+  if (randomScene) {
+    changed = true;
+    generate = {
+      ...generate,
+      ...randomScene,
+      generateSource: "random",
+    };
+  }
+
+  return {
+    tools: {
+      ...rest,
+      character,
+      generate,
+    },
+    changed,
+  };
+}
+
 export function loadSettingsCache(): SettingsCache {
   if (typeof window === "undefined") {
     return { shared: DEFAULT_SHARED_SETTINGS, tools: {} };
@@ -333,9 +356,15 @@ export function loadSettingsCache(): SettingsCache {
       shared.detail = DEFAULT_SHARED_SETTINGS.detail;
     }
 
+    const rawTools = parsed.tools ?? {};
+    const migrated = migrateLegacyToolSettings(rawTools);
+    if (migrated.changed && typeof window !== "undefined") {
+      saveSettingsCache({ shared, tools: migrated.tools });
+    }
+
     return {
       shared,
-      tools: parsed.tools ?? {},
+      tools: migrated.tools,
     };
   } catch {
     return { shared: DEFAULT_SHARED_SETTINGS, tools: {} };

@@ -25,21 +25,20 @@ Video, audio, and 3D-only architectures (WAN, Hunyuan Video, Stable Audio, etc.)
 
 | Page | Route | Purpose |
 |------|-------|---------|
-| **Generate** | `/` | Turn keywords into a model-ready prompt |
+| **Generate** | `/` | Keywords or random surprise → model-ready prompt |
 | **Format** | `/format` | Adapt an existing prompt draft for a selected model |
-| **Random Scene** | `/random-scene` | Roll random ingredients into a cohesive scene |
-| **Character** | `/character` | Highly detailed single-person prompt |
-| **Duo** | `/duo` | Two-person sport/action scenes with presets |
+| **Character** | `/character` | Solo person, duo/sport, or subject + background compose |
 | **Background** | `/background` | Environment-only prompt with no people |
 | **Image → Prompt** | `/image-prompt` | Upload an image; vision LLM writes the prompt |
 | **Negative** | `/negative` | Sport-aware negative/preserve prompts for SD models |
 | **Studio** | `/studio` | History, model compare, catalog browser, templates |
-| **Compose** | `/compose` | Background + subject merged into one scene prompt |
 | **Lint** | `/lint` | Paste prompts for diagnostics, fix, compact, reformat |
 | **Refine** | `/refine` | Refine an existing prompt with image + intent hints |
 | **Settings** | `/settings` | LLM/ComfyUI health, backup import/export, reset local data |
 | **Gallery** | `/gallery` | ComfyUI queue history and completed outputs |
 | **Variations** | `/variations` | Roll N prompt variations and batch-queue to ComfyUI |
+
+Legacy URLs `/duo`, `/compose`, and `/random-scene` redirect to the merged Character and Generate pages.
 
 ## Features
 
@@ -53,16 +52,16 @@ Video, audio, and 3D-only architectures (WAN, Hunyuan Video, Stable Audio, etc.)
 - LLM-powered generation/formatting with rules fallback
 - **Settings cache** — target model, detail level, and per-tool options persist in `localStorage` across reloads and pages
 - **Prompt diagnostics** — lint sport/duo/helmet conflicts before or after generation
-- **Duo generator** — sport presets, team kit toggle, batch roll, ComfyUI queue
+- **Character generator** — solo, duo/sport, and compose-with-background modes; sport presets, team kit, batch roll, ComfyUI queue
 - **Studio** — prompt history with ratings, model compare, catalog browser, templates
 - **Location blocklist** — block locations in Studio catalog; all generators respect the list
-- **Locked wardrobe** — pin a catalog outfit from Studio; Character/Duo/Batch reuse it
+- **Locked wardrobe** — pin a catalog outfit from Studio; Character and batch tools reuse it
 - **Locked location & variation seed** — pin scene place and environment seed for reproducible rolls
-- **Scene composer** — `/compose` merges background + character/duo prompts
+- **Scene compose mode** — Character tool merges background + subject into one scene prompt
 - **Lint playground** — `/lint` for paste-and-fix without generating a new scene
 - **Compact & cross-model reformat** — trim to model limits or reformat for the alternate model from any result panel
 - **Studio presets & diff** — named scene lock bundles, history search/filters/tags, word-level prompt diff, custom templates, shareable `?scene=` preset URLs
-- **Topics batch build** — turn a topic list into full Generate or Duo prompts via `/api/topics/batch`; queue the whole batch to ComfyUI
+- **Topics batch build** — turn a topic list into full Generate or Character (duo) prompts via `/api/topics/batch`; queue the whole batch to ComfyUI
 - **Export pipeline** — “Prepare for ComfyUI” runs lint → fix → compact → copy pair → optional ComfyUI queue from any result panel
 - **Prompt sidecar** — download JSON sidecar (prompt, model, diagnostics, seed) from result panels or Studio history
 - **ComfyUI job status** — polls ComfyUI history after queue and shows pending/running/completed in the UI
@@ -213,7 +212,7 @@ curl -sS "http://localhost:47832/api/models?id=sdxl" | jq .
 | `/api/generate` | POST | Keywords → model-ready prompt |
 | `/api/format` | POST | Existing draft → model-ready prompt |
 | `/api/topics` | POST | Seed theme (optional) → list of topic ideas |
-| `/api/random-scene` | POST | Random cohesive scene prompt |
+| `/api/random-scene` | POST | Random cohesive scene prompt (also available via Generate → Random surprise) |
 | `/api/character` | POST | Detailed single-person prompt |
 | `/api/background` | POST | People-free environment prompt |
 | `/api/image-prompt` | POST | Image upload/base64 → prompt (vision LLM) |
@@ -259,7 +258,7 @@ Model IDs match the registry in `src/lib/comfy-models/registry.ts`.
 
 ## Random location pool
 
-Named scene locations power Random Scene, Background, Character, and Topics seeds. The pool is split across batch files under `src/lib/` and merged at build time.
+Named scene locations power random scene rolls, Background, Character, and Topics seeds. The pool is split across batch files under `src/lib/` and merged at build time.
 
 | Command | Purpose |
 |---------|---------|

@@ -9,6 +9,7 @@ import { applyPromptTemplate, getPromptTemplate } from "./prompt-templates";
 import { getSportPreset, sportPresetsForMode } from "./sport-presets";
 import { formatPromptPair, modelUsesNegativePrompt } from "./prompt-pair";
 import { buildRegenerateUrl } from "./regenerate-url";
+import { migrateLegacyToolSettings } from "./settings-cache";
 import { applyLockedLocation } from "./locked-location";
 import { applyLockedVariationSeed } from "./locked-variation-seed";
 import { composeScenePrompt } from "./scene-composer";
@@ -259,6 +260,72 @@ describe("regenerate url", () => {
     assert.match(url, /^\/\?/);
     assert.match(url, /source=random/);
     assert.match(url, /hints=noir/);
+  });
+});
+
+describe("legacy tool settings migration", () => {
+  it("merges duo cache into character with duo mode", () => {
+    const { tools, changed } = migrateLegacyToolSettings({
+      character: { hints: "solo hint", sceneMode: "solo" },
+      duo: {
+        hints: "duo hint",
+        sportPresetId: "gravel-duo",
+        teamKit: true,
+      },
+    });
+
+    assert.equal(changed, true);
+    assert.equal(tools.character?.sceneMode, "duo");
+    assert.equal(tools.character?.hints, "duo hint");
+    assert.equal(tools.character?.sportPresetId, "gravel-duo");
+    assert.equal(tools.character?.teamKit, true);
+    assert.equal("duo" in tools, false);
+  });
+
+  it("merges compose cache into character with compose mode", () => {
+    const { tools, changed } = migrateLegacyToolSettings({
+      compose: {
+        hints: "cyclists racing",
+        subjectMode: "duo",
+        composeStyle: "inline",
+        mood: "tense",
+      },
+    });
+
+    assert.equal(changed, true);
+    assert.equal(tools.character?.sceneMode, "compose");
+    assert.equal(tools.character?.composeSubjectMode, "duo");
+    assert.equal(tools.character?.composeStyle, "inline");
+    assert.equal(tools.character?.mood, "tense");
+    assert.equal("compose" in tools, false);
+  });
+
+  it("merges random scene cache into generate with random source", () => {
+    const { tools, changed } = migrateLegacyToolSettings({
+      generate: { mode: "positive" },
+      randomScene: {
+        genre: "noir",
+        includePeople: false,
+        wildness: 80,
+      },
+    });
+
+    assert.equal(changed, true);
+    assert.equal(tools.generate?.generateSource, "random");
+    assert.equal(tools.generate?.genre, "noir");
+    assert.equal(tools.generate?.includePeople, false);
+    assert.equal(tools.generate?.wildness, 80);
+    assert.equal("randomScene" in tools, false);
+  });
+
+  it("leaves cache unchanged when no legacy keys exist", () => {
+    const input = {
+      character: { hints: "solo" },
+      generate: { generateSource: "keywords" as const },
+    };
+    const { tools, changed } = migrateLegacyToolSettings(input);
+    assert.equal(changed, false);
+    assert.deepEqual(tools, input);
   });
 });
 

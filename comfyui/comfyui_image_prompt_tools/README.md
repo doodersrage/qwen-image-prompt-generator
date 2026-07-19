@@ -81,7 +81,7 @@ If the API runs in Docker and ComfyUI on the host, point to the published port. 
 |------|-----|--------|
 | **Prompt Tools · Generate** | `POST /api/generate` | Keywords → model-ready prompt |
 | **Prompt Tools · Format** | `POST /api/format` | Draft → model-ready prompt |
-| **Prompt Tools · Random Scene** | `POST /api/random-scene` | Random cohesive scene |
+| **Prompt Tools · Random Scene** | `POST /api/random-scene` | Random cohesive scene (same as Generate → Random surprise) |
 | **Prompt Tools · Character** | `POST /api/character` | Single-person character prompt |
 | **Prompt Tools · Background** | `POST /api/background` | People-free environment |
 | **Prompt Tools · Image → Prompt** | `POST /api/image-prompt` | Reference image → prompt |

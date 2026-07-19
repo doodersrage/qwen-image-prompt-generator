@@ -326,7 +326,7 @@ export default function TopicTool() {
                   className="ui-input min-h-11 w-full px-3 py-[var(--input-padding-y)] type-body sm:min-w-[15rem] sm:flex-1 lg:w-auto lg:flex-none"
                 >
                   <option value="generate">Batch → Generate prompts</option>
-                  <option value="duo">Batch → Duo prompts</option>
+                  <option value="duo">Batch → Character (duo) prompts</option>
                 </select>
                 <Button
                   variant="secondary"
@@ -434,7 +434,7 @@ function TopicCard({
           href={`/character?mode=duo&hints=${encodeURIComponent(topic)}`}
           className="ui-btn-ghost !min-h-9 px-4 type-caption"
         >
-          Duo
+          Character (duo)
         </Link>
         <Link
           href={`/character?hints=${encodeURIComponent(topic)}`}
