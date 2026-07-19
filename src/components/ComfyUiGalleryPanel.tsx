@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import ImageLightbox, { type ImageLightboxState } from "@/components/ui/ImageLightbox";
+import { Button } from "@/components/ui/Button";
 import { useComfyUiGallery } from "@/hooks/useComfyUiGallery";
 import {
   downloadGalleryImage,
@@ -12,9 +14,24 @@ import {
 import { requeueComfyJob, requeueComfyJobs } from "@/lib/comfyui-requeue";
 import {
   galleryEntryViewUrls,
+  GALLERY_PAGE_SIZE_OPTIONS,
+  loadGalleryViewPreferences,
+  paginateGalleryEntries,
+  saveGalleryViewPreferences,
+  sortGalleryEntries,
   type ComfyGalleryEntry,
   type ComfyGalleryJobStatus,
+  type ComfyGallerySort,
+  type GalleryPageSize,
 } from "@/lib/comfyui-gallery";
+
+const GALLERY_SORT_OPTIONS: { value: ComfyGallerySort; label: string }[] = [
+  { value: "queued-desc", label: "Newest queued" },
+  { value: "queued-asc", label: "Oldest queued" },
+  { value: "completed-desc", label: "Recently completed" },
+  { value: "tool-asc", label: "Tool (A–Z)" },
+  { value: "favorites-first", label: "Favorites first" },
+];
 
 type ComfyUiGalleryPanelProps = {
   limit?: number;
@@ -48,13 +65,67 @@ export default function ComfyUiGalleryPanel({
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [requeueStatus, setRequeueStatus] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [lightbox, setLightbox] = useState<ImageLightboxState | null>(null);
+  const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<ComfyGallerySort>("queued-desc");
+  const [pageSize, setPageSize] = useState<GalleryPageSize>(12);
+  const [viewPrefsLoaded, setViewPrefsLoaded] = useState(false);
 
   const bulkEnabled = showFilters && !compact;
+  const paginationEnabled = showFilters && !compact && !limit;
 
-  const visibleEntries = useMemo(() => {
-    const source = showFilters ? filteredEntries : entries;
-    return limit ? source.slice(0, limit) : source;
-  }, [entries, filteredEntries, limit, showFilters]);
+  const filteredSource = showFilters ? filteredEntries : entries;
+  const sortedSource = useMemo(
+    () => (paginationEnabled ? sortGalleryEntries(filteredSource, sort) : filteredSource),
+    [filteredSource, paginationEnabled, sort],
+  );
+
+  useEffect(() => {
+    if (!mounted) {
+      return;
+    }
+    const preferences = loadGalleryViewPreferences();
+    setSort(preferences.sort);
+    setPageSize(preferences.pageSize);
+    setViewPrefsLoaded(true);
+  }, [mounted]);
+
+  useEffect(() => {
+    if (!viewPrefsLoaded || !paginationEnabled) {
+      return;
+    }
+    saveGalleryViewPreferences({ sort, pageSize });
+  }, [sort, pageSize, viewPrefsLoaded, paginationEnabled]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filter.status, filter.tool, filter.favoritesOnly, filter.query, sort, pageSize]);
+
+  const pagination = useMemo(() => {
+    if (!paginationEnabled) {
+      const items = limit ? sortedSource.slice(0, limit) : sortedSource;
+      return {
+        items,
+        page: 1,
+        totalPages: 1,
+        totalItems: sortedSource.length,
+      };
+    }
+
+    return paginateGalleryEntries(sortedSource, page, pageSize);
+  }, [sortedSource, limit, page, pageSize, paginationEnabled]);
+
+  const visibleEntries = pagination.items;
+  const totalPages = pagination.totalPages;
+  const currentPage = pagination.page;
+  const totalFiltered = pagination.totalItems;
+
+  useEffect(() => {
+    if (!paginationEnabled || page === currentPage) {
+      return;
+    }
+    setPage(currentPage);
+  }, [currentPage, page, paginationEnabled]);
 
   const selectedEntries = useMemo(
     () => visibleEntries.filter((entry) => selectedIds.includes(entry.id)),
@@ -75,6 +146,15 @@ export default function ComfyUiGalleryPanel({
 
   return (
     <section className="space-y-4">
+      <ImageLightbox
+        state={lightbox}
+        onClose={() => setLightbox(null)}
+        onIndexChange={(index) =>
+          setLightbox((previous) =>
+            previous ? { ...previous, index } : previous,
+          )
+        }
+      />
       {showHeader && (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -117,7 +197,24 @@ export default function ComfyUiGalleryPanel({
       )}
 
       {showFilters && (
-        <div className="flex flex-wrap items-end gap-3 rounded-xl border border-zinc-800 bg-zinc-950/40 p-3">
+        <div className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-950/40 p-3">
+          <label className="block space-y-1 text-xs text-zinc-400">
+            Search gallery
+            <input
+              type="search"
+              value={filter.query ?? ""}
+              onChange={(event) =>
+                setFilter({
+                  ...filter,
+                  query: event.target.value.trim() ? event.target.value : undefined,
+                })
+              }
+              placeholder="Prompt, tool, model, prompt id…"
+              className="ui-input block w-full px-[var(--input-padding-x)] py-[var(--input-padding-y)] type-body"
+            />
+          </label>
+
+          <div className="flex flex-wrap items-end gap-3">
           <label className="space-y-1 text-xs text-zinc-400">
             Status
             <select
@@ -173,10 +270,62 @@ export default function ComfyUiGalleryPanel({
             Favorites only
           </label>
 
+          {paginationEnabled && (
+            <>
+              <label className="space-y-1 text-xs text-zinc-400">
+                Sort
+                <select
+                  value={sort}
+                  onChange={(event) =>
+                    setSort(event.target.value as ComfyGallerySort)
+                  }
+                  className="ui-input block px-3 py-[var(--input-padding-y)] type-body"
+                >
+                  {GALLERY_SORT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="space-y-1 text-xs text-zinc-400">
+                Per page
+                <select
+                  value={pageSize}
+                  onChange={(event) =>
+                    setPageSize(Number(event.target.value) as GalleryPageSize)
+                  }
+                  className="ui-input block px-3 py-[var(--input-padding-y)] type-body"
+                >
+                  {GALLERY_PAGE_SIZE_OPTIONS.map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          )}
+
           <p className="ml-auto text-xs text-zinc-600">
-            {filteredEntries.length}/{entries.length} shown
+            {totalFiltered}/{entries.length} match
+            {paginationEnabled && totalFiltered > pageSize
+              ? ` · page ${currentPage}/${totalPages}`
+              : ""}
           </p>
+          </div>
         </div>
+      )}
+
+      {paginationEnabled && totalFiltered > pageSize && (
+        <GalleryPaginator
+          page={currentPage}
+          totalPages={totalPages}
+          totalItems={totalFiltered}
+          pageSize={pageSize}
+          onPageChange={setPage}
+        />
       )}
 
       {bulkEnabled && visibleEntries.length > 0 && (
@@ -336,11 +485,74 @@ export default function ComfyUiGalleryPanel({
                   );
                 });
               }}
+              onOpenImage={(index) =>
+                setLightbox({
+                  images: galleryEntryViewUrls(entry),
+                  index,
+                  title: entry.prompt.slice(0, 120),
+                })
+              }
             />
           ))}
         </div>
       )}
+
+      {paginationEnabled && totalFiltered > pageSize && visibleEntries.length > 0 && (
+        <GalleryPaginator
+          page={currentPage}
+          totalPages={totalPages}
+          totalItems={totalFiltered}
+          pageSize={pageSize}
+          onPageChange={setPage}
+        />
+      )}
     </section>
+  );
+}
+
+function GalleryPaginator({
+  page,
+  totalPages,
+  totalItems,
+  pageSize,
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  totalItems: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+}) {
+  const rangeStart = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = Math.min(page * pageSize, totalItems);
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/40 p-3">
+      <p className="type-caption text-zinc-500">
+        Showing {rangeStart}–{rangeEnd} of {totalItems}
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="secondary"
+          className="!min-h-9 px-3 type-caption"
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+        >
+          Previous
+        </Button>
+        <span className="type-caption px-1 text-zinc-400">
+          Page {page} of {totalPages}
+        </span>
+        <Button
+          variant="secondary"
+          className="!min-h-9 px-3 type-caption"
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(page + 1)}
+        >
+          Next
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -356,6 +568,7 @@ function GalleryCard({
   onToggleFavorite,
   onDownloadError,
   onRequeue,
+  onOpenImage,
 }: {
   entry: ComfyGalleryEntry;
   compact: boolean;
@@ -368,6 +581,7 @@ function GalleryCard({
   onToggleFavorite: () => void;
   onDownloadError: (message: string | null) => void;
   onRequeue: (newSeed: boolean) => void;
+  onOpenImage: (index: number) => void;
 }) {
   const [promptExpanded, setPromptExpanded] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
@@ -396,12 +610,19 @@ function GalleryCard({
     >
       <div className="relative aspect-square bg-zinc-900/80">
         {previewUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={previewUrl}
-            alt={entry.prompt.slice(0, 80)}
-            className="h-full w-full object-cover"
-          />
+          <button
+            type="button"
+            onClick={() => onOpenImage(0)}
+            className="block h-full w-full cursor-zoom-in"
+            aria-label="Open image preview"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={previewUrl}
+              alt={entry.prompt.slice(0, 80)}
+              className="h-full w-full object-cover"
+            />
+          </button>
         ) : (
           <div className="flex h-full items-center justify-center px-4 text-center text-xs text-zinc-500">
             {entry.status === "pending" || entry.status === "running"
@@ -479,15 +700,21 @@ function GalleryCard({
 
         {!compact && imageUrls.length > 1 && (
           <div className="flex flex-wrap gap-1">
-            {imageUrls.slice(1, 5).map((url) => (
-              <a key={url} href={url} target="_blank" rel="noreferrer">
+            {imageUrls.slice(1, 5).map((url, thumbIndex) => (
+              <button
+                key={url}
+                type="button"
+                onClick={() => onOpenImage(thumbIndex + 1)}
+                className="cursor-zoom-in overflow-hidden rounded border border-zinc-800"
+                aria-label={`Open image ${thumbIndex + 2} preview`}
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={url}
                   alt=""
-                  className="h-10 w-10 rounded border border-zinc-800 object-cover"
+                  className="h-10 w-10 object-cover"
                 />
-              </a>
+              </button>
             ))}
           </div>
         )}
@@ -510,14 +737,13 @@ function GalleryCard({
             </button>
           )}
           {previewUrl && (
-            <a
-              href={previewUrl}
-              target="_blank"
-              rel="noreferrer"
+            <button
+              type="button"
+              onClick={() => onOpenImage(0)}
               className="text-violet-300 hover:text-violet-200"
             >
-              Open full size
-            </a>
+              View image
+            </button>
           )}
           {entry.status === "completed" && previewUrl && (
             <button

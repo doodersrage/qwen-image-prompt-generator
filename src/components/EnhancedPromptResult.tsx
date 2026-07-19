@@ -16,6 +16,7 @@ import {
   BatchPromptCard,
   type BatchPromptCrossLinks,
 } from "@/components/ui/BatchPromptCard";
+import ImageLightbox, { type ImageLightboxState } from "@/components/ui/ImageLightbox";
 import type { GenerationDiagnostics } from "@/lib/generation-diagnostics";
 
 export type BatchPromptItem = {
@@ -142,6 +143,7 @@ export default function EnhancedPromptResult({
   const [pairCopiedBatchIndex, setPairCopiedBatchIndex] = useState<number | null>(
     null,
   );
+  const [lightbox, setLightbox] = useState<ImageLightboxState | null>(null);
 
   const resolvedBatchItems: BatchPromptItem[] =
     batchItems ??
@@ -157,6 +159,20 @@ export default function EnhancedPromptResult({
       // Parent surfaces clipboard errors when using the main copy action.
     }
   }, []);
+
+  const openComfyPreviewLightbox = useCallback(() => {
+    if (!comfyUiPreviewUrl) {
+      return;
+    }
+
+    setLightbox({
+      images: [comfyUiPreviewUrl],
+      index: 0,
+      title: panelProps.output
+        ? panelProps.output.slice(0, 120)
+        : "ComfyUI output preview",
+    });
+  }, [comfyUiPreviewUrl, panelProps.output]);
 
   if (!panelProps.output && resolvedBatchItems.length === 0) {
     return null;
@@ -180,6 +196,15 @@ export default function EnhancedPromptResult({
 
   return (
     <div className="space-y-6">
+      <ImageLightbox
+        state={lightbox}
+        onClose={() => setLightbox(null)}
+        onIndexChange={(index) =>
+          setLightbox((previous) =>
+            previous ? { ...previous, index } : previous,
+          )
+        }
+      />
       {preDiagnostics && (
         <section className="space-y-2">
           <p className="type-overline">
@@ -383,24 +408,38 @@ export default function EnhancedPromptResult({
 
       {comfyUiPreviewUrl && (
         <div className="ui-card overflow-hidden">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={comfyUiPreviewUrl}
-            alt="ComfyUI output preview"
-            className="max-h-80 w-full bg-[var(--bg-subtle)] object-contain"
-          />
+          <button
+            type="button"
+            onClick={openComfyPreviewLightbox}
+            className="block w-full cursor-zoom-in"
+            aria-label="Open image preview"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={comfyUiPreviewUrl}
+              alt="ComfyUI output preview"
+              className="max-h-80 w-full bg-[var(--bg-subtle)] object-contain"
+            />
+          </button>
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-subtle)] px-3 py-2">
             <span className="type-caption text-[var(--tint-success-text)]">
               ComfyUI output ready
             </span>
             <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={openComfyPreviewLightbox}
+                className="type-caption text-[var(--accent-text)] transition hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)]"
+              >
+                View image
+              </button>
               <a
                 href={comfyUiPreviewUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="type-caption text-[var(--accent-text)] transition hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)]"
               >
-                Open full size
+                Open in new tab
               </a>
               <a
                 href="/gallery"

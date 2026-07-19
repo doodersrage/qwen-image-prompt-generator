@@ -18,6 +18,7 @@ import {
   buildClothingPickFilters,
   hintsDescribeCyclingActivity,
   hintsLockPrimaryGarment,
+  hintsSpecifyDress,
   hintsSwimwearOnlyMode,
   hintsWorkWardrobeAllowed,
   inferAthleticSport,
@@ -44,6 +45,13 @@ describe("hintsLockPrimaryGarment", () => {
   it("locks on explicit garment phrases", () => {
     assert.equal(hintsLockPrimaryGarment("woman in a red bikini"), true);
     assert.equal(hintsLockPrimaryGarment("wearing a floor-length evening gown"), true);
+    assert.equal(hintsLockPrimaryGarment("beautiful woman in a dress"), true);
+  });
+
+  it("detects generic dress phrasing", () => {
+    assert.equal(hintsSpecifyDress("beautiful woman in a dress"), true);
+    assert.equal(hintsSpecifyDress("model wearing a red cocktail dress"), true);
+    assert.equal(hintsSpecifyDress("neon alley, rain, black cat"), false);
   });
 
   it("does not lock on generic clothing tokens alone", () => {
@@ -107,6 +115,23 @@ describe("multi-person wardrobe assignments", () => {
       footwearId: "shoe-1",
     });
     assert.deepEqual(ids, ["top-1", "bottom-1", "shoe-1"]);
+  });
+
+  it("assigns a dress when the brief says in a dress", () => {
+    const assignments = buildGenerateWardrobeAssignments(
+      "beautiful woman in a dress",
+      DEFAULT_GENERATION_SETTINGS,
+      { assumePeople: true },
+    );
+
+    assert.ok(assignments && assignments.length === 1);
+    assert.match(assignments[0]?.summary ?? "", /\bdress\b/i);
+    assert.doesNotMatch(assignments[0]?.summary ?? "", /\bblouse\b/i);
+    assert.equal(assignments[0]?.filters.lockPrimaryGarment, true);
+    assert.match(
+      buildGenerateWardrobeUserDirective(assignments) ?? "",
+      /brief requires a dress/i,
+    );
   });
 });
 

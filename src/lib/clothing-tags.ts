@@ -611,6 +611,24 @@ const EXPLICIT_PRIMARY_GARMENT_PHRASE =
 const EXPLICIT_WEARING_PHRASE =
   /\b(?:wearing|dressed in|wears a|wears an|outfit is|outfit:)\s+[^,.\n;]{4,}/i;
 
+/** Generic dress phrasing such as "woman in a dress" or "in a red summer dress". */
+const EXPLICIT_DRESS_PHRASE =
+  /\b(?:in|wearing|wears)\s+(?:a|an|her|his|their)\s+(?:\w+\s+){0,4}dress\b/i;
+
+export function hintsSpecifyDress(hints?: string): boolean {
+  const value = hints?.trim() ?? "";
+  if (!value) {
+    return false;
+  }
+
+  return (
+    EXPLICIT_DRESS_PHRASE.test(value) ||
+    /\b(?:summer dress|maxi dress|mini dress|sheath dress|cocktail dress|evening gown|wrap dress|slip dress|shirt dress|sweater dress)\b/i.test(
+      value,
+    )
+  );
+}
+
 export function hintsMentionClothing(hints?: string): boolean {
   const value = hints?.trim() ?? "";
   return CLOTHING_HINT.test(value) || hintsExplicitUndergarment(value);
@@ -626,6 +644,9 @@ export function hintsLockPrimaryGarment(hints?: string): boolean {
     return true;
   }
   if (EXPLICIT_WEARING_PHRASE.test(value)) {
+    return true;
+  }
+  if (hintsSpecifyDress(value)) {
     return true;
   }
   return EXPLICIT_PRIMARY_GARMENT_PHRASE.test(value);
@@ -874,6 +895,9 @@ export function buildClothingGuardrailLines(
     filters.contexts.includes("hosiery")
       ? "Hosiery is appropriate here—render sheer or opaque texture, seam detail, and fit naturally with the rest of the outfit."
       : null,
+    hintsSpecifyDress(filters.hintCorpus)
+      ? "The brief calls for a dress—keep a dress silhouette; do not substitute blouses, tops, skirt separates, or jumpsuits."
+      : null,
   ].filter((line): line is string => Boolean(line));
 }
 
@@ -887,23 +911,27 @@ export function buildClothingCoherenceUserDirective(
       : filters.gender === "women"
         ? "a woman"
         : "a man";
+  const briefSpecifiesDress = hintsSpecifyDress(filters.hintCorpus);
+  const accentOnlyLock = filters.lockPrimaryGarment && !briefSpecifiesDress;
 
   return [
     "WARDROBE COHERENCE (mandatory):",
     `The subject reads clearly as ${genderLabel}.`,
     `Scene-appropriate clothing context: ${filters.contexts.join(", ")}.`,
-    filters.lockPrimaryGarment
+    accentOnlyLock
       ? `Assigned accent pieces only (footwear/accessories): ${outfitSummary}.`
       : `Assigned wardrobe ingredients: ${outfitSummary}.`,
-    filters.lockPrimaryGarment
+    accentOnlyLock
       ? "The scene brief already specifies what the subject wears—keep that garment. Weave assigned accent pieces only; do not add a second outfit, uniform, outer layer, or extra garment hanging nearby."
-      : "Weave these garments into the subject's description—do not open with a separate wardrobe paragraph.",
+      : briefSpecifiesDress
+        ? "The brief requires a dress—describe her in the assigned dress (or an equivalent dress from the brief). Do not swap to blouses, tops, or skirt separates."
+        : "Weave these garments into the subject's description—do not open with a separate wardrobe paragraph.",
     "Name each garment briefly in the final prompt—short labels only, not long material paragraphs.",
     "Mention each assigned garment once—do not repeat the same piece or stack duplicate garment types.",
-    filters.lockPrimaryGarment
+    accentOnlyLock
       ? "Keep every assigned footwear or accessory in the final prompt."
       : "Keep every assigned garment type in the final prompt.",
-    filters.lockPrimaryGarment
+    accentOnlyLock
       ? null
       : "Adjust fit, layering, or weather-appropriate styling only when needed so clothing matches the subject's gender and the environment—do not swap to unrelated outfits.",
     ...buildClothingGuardrailLines(filters),

@@ -28,7 +28,11 @@ import { buildPromptSidecar, parsePromptSidecar } from "./prompt-sidecar";
 import { previewWorkflowInjection } from "./comfyui-workflow-preview";
 import { validateWorkflowJson, stripEmptyComfyUiRuntime, injectWorkflowPlaceholders } from "./comfyui-config";
 import { extractImagesFromOutputs } from "./comfyui-outputs";
-import { filterComfyGalleryEntries } from "./comfyui-gallery";
+import {
+  filterComfyGalleryEntries,
+  paginateGalleryEntries,
+  sortGalleryEntries,
+} from "./comfyui-gallery";
 import { listServerWorkflowPaths } from "./comfyui-server-workflows";
 import {
   DEFAULT_COMFYUI_SETTINGS,
@@ -763,6 +767,81 @@ describe("comfyui gallery outputs", () => {
     assert.equal(
       filterComfyGalleryEntries(entries, { status: "pending" }).length,
       1,
+    );
+    assert.equal(
+      filterComfyGalleryEntries(entries, { query: "one" }).length,
+      1,
+    );
+    assert.equal(
+      filterComfyGalleryEntries(entries, { query: "duo" }).length,
+      0,
+    );
+  });
+
+  it("paginates gallery entries", () => {
+    const entries = Array.from({ length: 25 }, (_, index) => `entry-${index}`);
+    const page1 = paginateGalleryEntries(entries, 1, 12);
+    assert.equal(page1.items.length, 12);
+    assert.equal(page1.page, 1);
+    assert.equal(page1.totalPages, 3);
+    assert.equal(page1.items[0], "entry-0");
+
+    const page3 = paginateGalleryEntries(entries, 3, 12);
+    assert.equal(page3.items.length, 1);
+    assert.equal(page3.items[0], "entry-24");
+
+    const overflow = paginateGalleryEntries(entries, 99, 12);
+    assert.equal(overflow.page, 3);
+    assert.equal(overflow.items[0], "entry-24");
+  });
+
+  it("sorts gallery entries", () => {
+    const entries = [
+      {
+        id: "1",
+        promptId: "a",
+        prompt: "alpha",
+        tool: "duo",
+        comfyUrl: "http://127.0.0.1:8188",
+        status: "completed" as const,
+        queuedAt: 100,
+        completedAt: 300,
+        favorite: false,
+        images: [],
+      },
+      {
+        id: "2",
+        promptId: "b",
+        prompt: "beta",
+        tool: "character",
+        comfyUrl: "http://127.0.0.1:8188",
+        status: "completed" as const,
+        queuedAt: 200,
+        completedAt: 100,
+        favorite: true,
+        images: [],
+      },
+    ];
+
+    assert.deepEqual(
+      sortGalleryEntries(entries, "queued-desc").map((entry) => entry.id),
+      ["2", "1"],
+    );
+    assert.deepEqual(
+      sortGalleryEntries(entries, "queued-asc").map((entry) => entry.id),
+      ["1", "2"],
+    );
+    assert.deepEqual(
+      sortGalleryEntries(entries, "completed-desc").map((entry) => entry.id),
+      ["1", "2"],
+    );
+    assert.deepEqual(
+      sortGalleryEntries(entries, "tool-asc").map((entry) => entry.id),
+      ["2", "1"],
+    );
+    assert.deepEqual(
+      sortGalleryEntries(entries, "favorites-first").map((entry) => entry.id),
+      ["2", "1"],
     );
   });
 });

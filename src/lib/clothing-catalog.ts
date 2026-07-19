@@ -18,6 +18,7 @@ import {
   clothingMatchesGenderForPick,
   entryHasRestrictedContext,
   hintsMentionClothing,
+  hintsSpecifyDress,
   inferClothingContexts,
   inferClothingGender,
   normalizeClothingContextTags,
@@ -548,6 +549,9 @@ function pickFilterFlags(
 }
 
 function shouldPreferOutfitBundle(filters: ClothingPickFilters): boolean {
+  if (hintsSpecifyDress(filters.hintCorpus)) {
+    return true;
+  }
   if (filters.explicitCostume && filters.contexts.includes("costume")) {
     return true;
   }
@@ -612,6 +616,31 @@ function pickProfessionGarment(
   return null;
 }
 
+function pickDressGarment(
+  filters: ClothingPickFilters,
+): EnrichedClothingEntry | null {
+  const basePool = (BY_CATEGORY.outfit ?? []).filter((entry) =>
+    /\bdress\b/i.test(entry.label),
+  );
+  if (basePool.length === 0) {
+    return null;
+  }
+
+  const genderPool = filterPoolByGender(basePool, filters.gender);
+  const categoryPool = filterPoolByCategory(genderPool, "outfit", filters);
+  const pickFlags = pickFilterFlags(filters);
+
+  return (
+    pickScoredEntry(
+      categoryPool,
+      filters.contexts,
+      filters.excludeIds,
+      pickFlags,
+    ) ??
+    pickScoredEntry(genderPool, filters.contexts, filters.excludeIds, pickFlags)
+  );
+}
+
 function pickWardrobeLayers(
   filters: ClothingPickFilters,
 ): {
@@ -619,6 +648,12 @@ function pickWardrobeLayers(
   bottom: EnrichedClothingEntry | null;
 } {
   if (filters.lockPrimaryGarment) {
+    if (hintsSpecifyDress(filters.hintCorpus)) {
+      const dress = pickDressGarment(filters);
+      if (dress) {
+        return { wardrobe: dress, bottom: null };
+      }
+    }
     return { wardrobe: null, bottom: null };
   }
 
